@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   base: &base
     build:
@@ -12,7 +10,8 @@ services:
         RAILS_SERVE_STATIC_FILES: 'false'
     tty: true
     stdin_open: true
-    image: chatwoot:development
+    #image: chatwoot:development
+    image: click2run/chatwoot:development
     env_file: .env
 
   rails:
@@ -20,7 +19,8 @@ services:
     build:
       context: .
       dockerfile: ./docker/dockerfiles/rails.Dockerfile
-    image: chatwoot-rails:development
+    #image: chatwoot-rails:development
+    image: click2run/chatwoot-rails:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
@@ -30,9 +30,7 @@ services:
     depends_on:
       - postgres
       - redis
-      - vite
       - mailhog
-      - sidekiq
     ports:
       - 3000:3000
     env_file: .env
@@ -45,7 +43,8 @@ services:
 
   sidekiq:
     <<: *base
-    image: chatwoot-rails:development
+    #image: chatwoot-rails:development
+    image: click2run/chatwoot-rails:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
@@ -66,7 +65,8 @@ services:
     build:
       context: .
       dockerfile: ./docker/dockerfiles/vite.Dockerfile
-    image: chatwoot-vite:development
+    #image: chatwoot-vite:development
+    image: click2run/chatwoot-vite:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
@@ -85,14 +85,14 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: always
-    ports:
-      - '5432:5432'
+    # ports:
+    #   - '5432:5432'
     volumes:
       - postgres:/data/postgres
     environment:
       - POSTGRES_DB=chatwoot
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
 
   redis:
     image: redis:alpine
@@ -101,8 +101,8 @@ services:
     env_file: .env
     volumes:
       - redis:/data/redis
-    ports:
-      - '6379:6379'
+    # ports:
+    #   - '6379:6379'
 
   mailhog:
     image: mailhog/mailhog
