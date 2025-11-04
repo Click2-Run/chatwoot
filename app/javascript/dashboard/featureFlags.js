@@ -42,6 +42,11 @@ export const FEATURE_FLAGS = {
   SAML: 'saml',
   QUOTED_EMAIL_REPLY: 'quoted_email_reply',
   CHANNEL_ZAPI: 'channel_zapi',
+  CHANNEL_WHATSAPP_BAILEYS: 'channel_whatsapp_baileys',
+  CHANNEL_WHATSAPP_WHATSMEOW: 'channel_whatsapp_whatsmeow',
+  CHANNEL_TWILIO_SMS: 'channel_twilio_sms',
+  CHANNEL_TWILIO_WHATSAPP: 'channel_twilio_whatsapp',
+  CHANNEL_BANDWIDTH_SMS: 'channel_bandwidth_sms',
 };
 
 export const PREMIUM_FEATURES = [

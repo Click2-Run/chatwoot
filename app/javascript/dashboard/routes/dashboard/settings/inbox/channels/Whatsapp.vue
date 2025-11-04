@@ -8,6 +8,7 @@ import CloudWhatsapp from './CloudWhatsapp.vue';
 import WhatsappEmbeddedSignup from './WhatsappEmbeddedSignup.vue';
 import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import BaileysWhatsapp from './BaileysWhatsapp.vue';
+import WhatsmeowWhatsapp from './WhatsmeowWhatsapp.vue';
 import ZapiWhatsapp from './ZapiWhatsapp.vue';
 import PromoBanner from 'dashboard/components-next/banner/PromoBanner.vue';
 import { usePolicy } from 'dashboard/composables/usePolicy';
@@ -26,6 +27,7 @@ const PROVIDER_TYPES = {
   WHATSAPP_MANUAL: 'whatsapp_manual',
   THREE_SIXTY_DIALOG: '360dialog',
   BAILEYS: 'baileys',
+  WHATSMEOW: 'whatsmeow',
   ZAPI: 'zapi',
 };
 
@@ -50,20 +52,39 @@ const availableProviders = computed(() => {
       description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.WHATSAPP_CLOUD_DESC'),
       icon: 'i-woot-whatsapp',
     },
-    {
+  ];
+
+  // Twilio provider - feature flag controlled
+  if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_TWILIO_WHATSAPP)) {
+    providers.push({
       key: PROVIDER_TYPES.TWILIO,
       title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.TWILIO'),
       description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.TWILIO_DESC'),
       icon: 'i-woot-twilio',
-    },
-    {
+    });
+  }
+
+  // Baileys provider - feature flag controlled
+  if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_BAILEYS)) {
+    providers.push({
       key: PROVIDER_TYPES.BAILEYS,
       title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.BAILEYS'),
       description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.BAILEYS_DESC'),
       icon: 'i-woot-baileys',
-    },
-  ];
+    });
+  }
 
+  // Whatsmeow provider - feature flag controlled
+  if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_WHATSMEOW)) {
+    providers.push({
+      key: PROVIDER_TYPES.WHATSMEOW,
+      title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.WHATSMEOW'),
+      description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.WHATSMEOW_DESC'),
+      icon: 'i-woot-whatsapp',
+    });
+  }
+
+  // Z-API provider - feature flag controlled
   if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI)) {
     providers.push({
       key: PROVIDER_TYPES.ZAPI,
@@ -108,7 +129,7 @@ const handleManualLinkClick = () => {
         </p>
       </div>
 
-      <div class="flex gap-6 justify-start">
+      <div class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 gap-6 sm:grid-cols-3">
         <ChannelSelector
           v-for="provider in availableProviders"
           :key="provider.key"
@@ -196,6 +217,9 @@ const handleManualLinkClick = () => {
         />
         <BaileysWhatsapp
           v-else-if="selectedProvider === PROVIDER_TYPES.BAILEYS"
+        />
+        <WhatsmeowWhatsapp
+          v-else-if="selectedProvider === PROVIDER_TYPES.WHATSMEOW"
         />
         <ZapiWhatsapp v-else-if="selectedProvider === PROVIDER_TYPES.ZAPI" />
       </div>
