@@ -232,7 +232,7 @@
   help_url: https://chwt.app/hc/twilio-sms
 - name: channel_zapi
   display_name: Z-API Channel
-  enabled: true
+  enabled: false
 - name: channel_whatsapp_baileys
   display_name: Baileys WhatsApp Provider
   enabled: true
