@@ -14,6 +14,7 @@ import { useBranding } from 'shared/composables/useBranding';
 import SimpleDivider from '../../components/Divider/SimpleDivider.vue';
 import FormInput from '../../components/Form/Input.vue';
 import GoogleOAuthButton from '../../components/GoogleOauth/Button.vue';
+import LogtoOAuthButton from '../../components/LogtoOauth/Button.vue';
 import Spinner from 'shared/components/Spinner.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
@@ -32,6 +33,7 @@ export default {
   components: {
     FormInput,
     GoogleOAuthButton,
+    LogtoOAuthButton,
     Spinner,
     NextButton,
     SimpleDivider,
@@ -87,6 +89,9 @@ export default {
     ...mapGetters({ globalConfig: 'globalConfig/get' }),
     showGoogleOAuth() {
       return Boolean(window.chatwootConfig.googleOAuthClientId);
+    },
+    showLogtoOAuth() {
+      return Boolean(window.chatwootConfig.logtoClientId);
     },
     showSignupLink() {
       return parseBoolean(window.chatwootConfig.signupEnabled);
@@ -261,6 +266,7 @@ export default {
       <div v-if="!email">
         <div class="flex flex-col">
           <GoogleOAuthButton v-if="showGoogleOAuth" />
+          <LogtoOAuthButton v-if="showLogtoOAuth" class="mt-4" />
           <div v-if="showSamlLogin" class="mt-4 text-center">
             <router-link
               to="/app/login/sso"
@@ -276,7 +282,7 @@ export default {
             </router-link>
           </div>
           <SimpleDivider
-            v-if="showGoogleOAuth || showSamlLogin"
+            v-if="showGoogleOAuth || showLogtoOAuth || showSamlLogin"
             :label="$t('COMMON.OR')"
             class="uppercase"
           />
