@@ -170,6 +170,7 @@
       "SMS": {
         "TITLE": "Canal SMS",
         "DESC": "Comece a oferecer suporte a seus clientes por SMS.",
+        "NO_PROVIDERS_AVAILABLE": "Nenhum provedor de SMS está habilitado para esta conta no momento. Entre em contato com seu administrador.",
         "PROVIDERS": {
           "LABEL": "Provedor de API",
           "TWILIO": "Twilio",
@@ -232,6 +233,8 @@
           "360_DIALOG": "360Dialog",
           "BAILEYS": "Baileys",
           "BAILEYS_DESC": "Conectar via API não-oficial Baileys",
+          "WHATSMEOW": "Whatsmeow",
+          "WHATSMEOW_DESC": "Conectar via API não-oficial Whatsmeow",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar via API não-oficial Z-API"
         },
@@ -357,6 +360,26 @@
             "TITLE": "Ganhe 10% de desconto na sua assinatura Z-API",
             "DESCRIPTION": "Crie sua conta Z-API usando nosso link de afiliado e receba 10% de desconto. Configuração simples, conexões confiáveis e ótimo suporte.",
             "CTA": "Criar Conta Z-API"
+          }
+        },
+        "WHATSMEOW": {
+          "INFO": {
+            "TITLE": "API Multi-Dispositivo Whatsmeow",
+            "DESCRIPTION": "Whatsmeow é uma integração WhatsApp baseada em Go pronta para produção. Oferece melhor desempenho e estabilidade em comparação com alternativas Node.js."
+          },
+          "PROVIDER_URL": {
+            "LABEL": "URL do Provedor",
+            "PLACEHOLDER": "http://localhost:8080/api/v1/whatsmeow (opcional)",
+            "ERROR": "Por favor, insira uma URL válida"
+          },
+          "API_KEY": {
+            "LABEL": "Chave da API",
+            "PLACEHOLDER": "Sua chave API do Whatsmeow (opcional)",
+            "ERROR": "Por favor, insira uma chave API válida"
+          },
+          "SUBMIT_BUTTON": "Criar Canal Whatsmeow",
+          "API": {
+            "ERROR_MESSAGE": "Não foi possível salvar o canal Whatsmeow"
           }
         },
         "API": {
@@ -1079,6 +1102,7 @@
       "TWILIO_SMS": "SMS Twilio",
       "WHATSAPP": "WhatsApp",
       "WHATSAPP_BAILEYS": "WhatsApp - Baileys",
+      "WHATSAPP_WHATSMEOW": "WhatsApp - Whatsmeow",
       "WHATSAPP_ZAPI": "WhatsApp - Z-API",
       "SMS": "SMS",
       "EMAIL": "e-mail",
