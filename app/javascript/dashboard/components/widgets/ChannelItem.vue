@@ -23,6 +23,12 @@ const hasInstagramConfigured = computed(() => {
   return window.chatwootConfig?.instagramAppId;
 });
 
+const hasSmsProviderConfigured = computed(() => {
+  return Object.keys(props.enabledFeatures).some(feature =>
+    feature.match(/^channel_.*_sms$/)
+  );
+});
+
 const isActive = computed(() => {
   const { key } = props.channel;
   if (Object.keys(props.enabledFeatures).length === 0) {
@@ -48,12 +54,15 @@ const isActive = computed(() => {
     return props.enabledFeatures.channel_voice;
   }
 
+  if (key === 'sms') {
+    return hasSmsProviderConfigured.value;
+  }
+
   return [
     'website',
     'twilio',
     'api',
     'whatsapp',
-    'sms',
     'telegram',
     'line',
     'instagram',
