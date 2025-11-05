@@ -32,7 +32,7 @@ const emit = defineEmits([
   'closeMobileSidebar',
 ]);
 
-const { accountScopedRoute } = useAccount();
+const { accountScopedRoute, isCloudFeatureEnabled } = useAccount();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -323,11 +323,16 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.CSAT'),
           to: accountScopedRoute('csat_reports'),
         },
-        {
-          name: 'Reports SLA',
-          label: t('SIDEBAR.REPORTS_SLA'),
-          to: accountScopedRoute('sla_reports'),
-        },
+        // Only show SLA Reports if the feature is enabled (Enterprise feature)
+        ...(isCloudFeatureEnabled('sla')
+          ? [
+              {
+                name: 'Reports SLA',
+                label: t('SIDEBAR.REPORTS_SLA'),
+                to: accountScopedRoute('sla_reports'),
+              },
+            ]
+          : []),
         {
           name: 'Reports Bot',
           label: t('SIDEBAR.REPORTS_BOT'),
