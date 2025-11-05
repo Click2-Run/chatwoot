@@ -2,7 +2,7 @@
 
 # Whatsapp Incoming Message Service for Whatsmeow Provider
 #
-# Processes webhook events from Whatsmeow API service
+# Processes webhook events from Whatsmeow service
 # Events: connection.update, messages.upsert, messages.update
 #
 # Webhook payload format:

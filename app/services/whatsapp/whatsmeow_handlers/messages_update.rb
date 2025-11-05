@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Whatsmeow Messages Update Handler
-# Processes message status updates (sent, delivered, read) from Whatsmeow API
+# Processes message status updates (sent, delivered, read) from Whatsmeow
 #
 # Event payload format from Whatsmeow:
 # {

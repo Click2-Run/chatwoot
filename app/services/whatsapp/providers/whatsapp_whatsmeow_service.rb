@@ -1,16 +1,22 @@
 # frozen_string_literal: true
 
 # Whatsmeow WhatsApp Provider Service for Chatwoot
-# Integrates with the Whatsmeow Multi-Device API
+# Integrates with the Whatsmeow API via Whatsmeow
 #
 # Architecture:
-# - Uses Whatsmeow API (/root/data/development/click2run/delivery.git/whatsmeow/)
+# - Uses Whatsmeow (/root/data/development/click2run/delivery.git/whatsmeow/)
 # - Replaces Baileys with production-ready multi-device protocol support
 # - Supports all critical WhatsApp operations: messages, media, reactions, typing, read receipts
 #
 # Configuration:
-# - WHATSMEOW_PROVIDER_DEFAULT_URL: Whatsmeow API base URL (e.g., http://localhost:8080/api/v1/whatsmeow)
+# - WHATSMEOW_PROVIDER_DEFAULT_URL: Whatsmeow base URL WITHOUT /chatwoot suffix (e.g., http://localhost:8080/api/v1)
 # - WHATSMEOW_PROVIDER_DEFAULT_API_KEY: Tenant API key for authentication
+#
+# API Structure:
+# - Base URL: http://localhost:8080/api/v1 (from env or user config)
+# - All endpoints append: /chatwoot/{account_id}/inboxes/...
+# - Example full URL: http://localhost:8080/api/v1/chatwoot/123/inboxes/456/messages/send/text
+# - Channel ID format: {account_id}_{inbox_id} (not phone number)
 #
 # @see /root/data/development/chatwoot.git/.llm/planning/20251104_whatsmeow_integration_plan.md
 # @see /root/data/development/click2run/delivery.git/whatsmeow/.llm/implementation/20251104140000_all_features_complete.md
@@ -38,73 +44,87 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
 
     unless response.success?
       Rails.logger.error response.body
-      raise ProviderUnavailableError, 'Whatsmeow API is unavailable'
+      raise ProviderUnavailableError, 'Whatsmeow is unavailable'
     end
 
     response.parsed_response.deep_symbolize_keys
   end
 
-  # Setup channel provider (create instance + connect)
-  # Whatsmeow uses two-step process: 1) create instance 2) connect
+  # Setup channel provider (create inbox + connect)
+  # Whatsmeow uses two-step process: 1) create inbox 2) connect
   def setup_channel_provider
-    # Step 1: Create instance if not exists
-    instance_id = normalized_phone_number
+    # Step 1: Create inbox if not exists
+    inbox = whatsapp_channel.inbox
+    admin_user = find_account_admin
+
     create_instance_response = HTTParty.post(
-      "#{provider_url}/instances",
+      "#{provider_url}/chatwoot/#{inbox.account_id}/inboxes",
       headers: api_headers,
       body: {
-        instance_id: instance_id,
-        phone_number: whatsapp_channel.phone_number
+        inbox_id: inbox.id,
+        name: inbox.name,
+        account_id: inbox.account_id,
+        channel_type: inbox.channel_type,
+        channel_id: inbox.channel_id,
+        phone_number: whatsapp_channel.phone_number,
+        provider: whatsapp_channel.provider,
+        admin_id: admin_user.id,
+        admin_token: admin_user.access_token.token,
+        webhook_url: inbox_webhook_url,
+        webhook_token: whatsapp_channel.provider_config['webhook_verify_token'],
+        api_url: chatwoot_api_url
       }.to_json
     )
 
     # 404 or 409 (already exists) is OK, continue to connect
     unless [200, 201, 409].include?(create_instance_response.code)
       Rails.logger.error create_instance_response.body
-      raise ProviderUnavailableError, 'Failed to create Whatsmeow instance'
+      raise ProviderUnavailableError, 'Failed to create Whatsmeow inbox'
     end
 
-    # Step 2: Connect instance (initiates QR code generation)
+    # Step 2: Connect inbox (initiates QR code generation)
     connect_response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/connect",
+      "#{provider_url}/chatwoot/#{inbox.account_id}/inboxes/#{inbox.id}/connect",
       headers: api_headers
     )
 
     unless process_response(connect_response)
-      raise ProviderUnavailableError, 'Failed to connect Whatsmeow instance'
+      raise ProviderUnavailableError, 'Failed to connect Whatsmeow channel'
     end
 
     # TODO: Webhook configuration
-    # Whatsmeow API supports webhook delivery for events
+    # Whatsmeow supports webhook delivery for events
     # Future enhancement: Configure webhook URL and verify token
-    # POST /instances/:id/webhook with {url, secret}
+    # POST /channels/:id/webhook with {url, secret}
 
     true
   end
 
-  # Disconnect channel provider (disconnect + delete instance)
+  # Disconnect channel provider (disconnect + delete channel)
   def disconnect_channel_provider
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
 
-    # Step 1: Disconnect instance (graceful disconnection)
+    # Step 1: Disconnect channel (graceful disconnection)
     disconnect_response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/disconnect",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/disconnect",
       headers: api_headers
     )
 
     # Log error but don't fail if already disconnected
     unless process_response(disconnect_response)
-      Rails.logger.warn "Failed to disconnect Whatsmeow instance (may already be disconnected)"
+      Rails.logger.warn "Failed to disconnect Whatsmeow channel (may already be disconnected)"
     end
 
-    # Step 2: Delete instance
+    # Step 2: Delete channel
     delete_response = HTTParty.delete(
-      "#{provider_url}/instances/#{instance_id}",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}",
       headers: api_headers
     )
 
     unless process_response(delete_response)
-      raise ProviderUnavailableError, 'Failed to delete Whatsmeow instance'
+      raise ProviderUnavailableError, 'Failed to delete Whatsmeow channel'
     end
 
     true
@@ -143,8 +163,10 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   # Get media URL for download
   # Whatsmeow uses message_id to download media
   def media_url(media_id)
-    instance_id = normalized_phone_number
-    "#{provider_url}/instances/#{instance_id}/media/#{media_id}"
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
+    "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/media/#{media_id}"
   end
 
   # API headers for authentication
@@ -153,20 +175,27 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   end
 
   # Validate provider configuration
+  # Called during channel creation (before inbox is saved)
+  # Validates API credentials by listing inboxes for the account
   def validate_provider_config?
-    instance_id = normalized_phone_number
+    account_id = whatsapp_channel.inbox.account_id
+
     response = HTTParty.get(
-      "#{provider_url}/instances/#{instance_id}/status",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes",
       headers: api_headers
     )
 
+    # Accept 200 OK (empty list or existing inboxes)
+    # Reject any error (401 Unauthorized, 403 Forbidden, 500 Server Error, etc.)
     process_response(response)
   end
 
   # Toggle typing status (composing/recording/paused)
   def toggle_typing_status(typing_status, phone_number:, **)
     @phone_number = phone_number
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
 
     # Map Chatwoot events to Whatsmeow presence types
     status_map = {
@@ -176,7 +205,7 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
     }
 
     response = HTTParty.patch(
-      "#{provider_url}/instances/#{instance_id}/presence",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/presence",
       headers: api_headers,
       body: {
         to_jid: format_jid(phone_number),
@@ -192,11 +221,11 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   end
 
   # Update account presence (available/unavailable)
-  # Note: Whatsmeow API doesn't currently expose account-level presence
+  # Note: Whatsmeow doesn't currently expose account-level presence
   # This is chat-level presence (typing indicators) only
   def update_presence(status)
-    # Not implemented in current Whatsmeow API
-    # Whatsmeow API focuses on chat presence (typing) rather than account presence (online/offline)
+    # Not implemented in current Whatsmeow
+    # Whatsmeow focuses on chat presence (typing) rather than account presence (online/offline)
     Rails.logger.debug "Account presence update not supported in Whatsmeow: #{status}"
     true
   end
@@ -204,10 +233,12 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   # Mark messages as read
   def read_messages(messages, phone_number:, **)
     @phone_number = phone_number
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
 
     response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/messages/mark-read",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/mark-read",
       headers: api_headers,
       body: {
         messages: messages.map do |message|
@@ -228,10 +259,10 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   end
 
   # Mark chat as unread
-  # Note: Not currently implemented in Whatsmeow API
+  # Note: Not currently implemented in Whatsmeow
   def unread_message(phone_number, message)
     @phone_number = phone_number
-    # Not implemented in current Whatsmeow API
+    # Not implemented in current Whatsmeow
     Rails.logger.debug "Unread message not supported in Whatsmeow"
     true
   end
@@ -248,9 +279,11 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
 
   # Get profile picture URL
   def get_profile_pic(jid)
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
     response = HTTParty.get(
-      "#{provider_url}/instances/#{instance_id}/profile-picture/#{jid}",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/profile-picture/#{jid}",
       headers: api_headers,
       query: { preview: false } # Get full quality by default
     )
@@ -264,11 +297,13 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
   # Check if phone number is on WhatsApp
   def on_whatsapp(phone_number)
     @phone_number = phone_number
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
 
     # Whatsmeow uses GET endpoint (Baileys uses POST)
     response = HTTParty.get(
-      "#{provider_url}/instances/#{instance_id}/on_whatsapp/#{phone_number}",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/on_whatsapp/#{phone_number}",
       headers: api_headers
     )
 
@@ -298,7 +333,36 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
     whatsapp_channel.provider_config['api_key'].presence || DEFAULT_API_KEY
   end
 
-  # Get normalized phone number (digits only) for instance_id
+  # Find the first administrator user for the account
+  # Chatwoot guarantees at least one undeletable admin per account
+  def find_account_admin
+    account = whatsapp_channel.inbox.account
+    admin_user = account.account_users.find_by(role: :administrator)&.user
+
+    raise ProviderUnavailableError, 'No administrator found for account' unless admin_user
+
+    # Ensure user has an access token
+    admin_user.access_token || admin_user.create_access_token
+
+    admin_user
+  end
+
+  # Generate webhook URL for this inbox
+  # Format: https://chatwoot.example.com/webhooks/whatsapp/{phone_number}
+  def inbox_webhook_url
+    base_url = ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
+    "#{base_url}/webhooks/whatsapp/#{whatsapp_channel.phone_number}"
+  end
+
+  # Get Chatwoot API URL
+  # Format: https://chatwoot.example.com/api/v1
+  def chatwoot_api_url
+    base_url = ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
+    "#{base_url}/api/v1"
+  end
+
+  # Get normalized phone number (digits only)
+  # Used for JID formatting
   def normalized_phone_number
     whatsapp_channel.phone_number.delete('+')
   end
@@ -311,7 +375,9 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
 
   # Send text message
   def send_text_message
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
 
     # Check if this is a reply (quoted message)
     quoted_message_id = nil
@@ -321,7 +387,7 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
     end
 
     response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/messages/send/text",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/text",
       headers: api_headers,
       body: {
         to: format_jid(@phone_number),
@@ -340,7 +406,9 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
 
   # Send media message (image, video, audio, document)
   def send_media_message
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
     attachment = @message.attachments.first
 
     # Download attachment and encode as base64
@@ -363,7 +431,7 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
                  end
 
     response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/messages/send/media",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/media",
       headers: api_headers,
       body: {
         to: format_jid(@phone_number),
@@ -384,11 +452,13 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
 
   # Send reaction message
   def send_reaction_message
-    instance_id = normalized_phone_number
+    inbox = whatsapp_channel.inbox
+    account_id = inbox.account_id
+    inbox_id = inbox.id
     reply_to = Message.find(@message.in_reply_to)
 
     response = HTTParty.post(
-      "#{provider_url}/instances/#{instance_id}/messages/send/reaction",
+      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/reaction",
       headers: api_headers,
       body: {
         to: format_jid(@phone_number),
@@ -417,7 +487,7 @@ class Whatsapp::Providers::WhatsappWhatsmeowService < Whatsapp::Providers::BaseS
       Rails.logger.error "Whatsmeow instance not found: #{response.body}"
       false
     else
-      Rails.logger.error "Whatsmeow API error: #{response.code} - #{response.body}"
+      Rails.logger.error "Whatsmeow error: #{response.code} - #{response.body}"
       false
     end
   end

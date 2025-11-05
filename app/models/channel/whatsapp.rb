@@ -61,8 +61,7 @@ class Channel::Whatsapp < ApplicationRecord
   end
 
   def use_internal_host?
-    (provider == 'baileys' && ENV.fetch('BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL', false)) ||
-      (provider == 'whatsmeow' && ENV.fetch('WHATSMEOW_PROVIDER_USE_INTERNAL_HOST_URL', false))
+    provider == 'baileys' && ENV.fetch('BAILEYS_PROVIDER_USE_INTERNAL_HOST_URL', false)
   end
 
   def mark_message_templates_updated
@@ -151,7 +150,7 @@ class Channel::Whatsapp < ApplicationRecord
   private
 
   def ensure_webhook_verify_token
-    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys])
+    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow])
   end
 
   def validate_provider_config

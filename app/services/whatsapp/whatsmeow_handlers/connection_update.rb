@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Whatsmeow Connection Update Handler
-# Processes connection state changes and QR code updates from Whatsmeow API
+# Processes connection state changes and QR code updates from Whatsmeow
 #
 # Event payload format from Whatsmeow:
 # {

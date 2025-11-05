@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Whatsmeow Messages Upsert Handler
-# Processes incoming and outgoing messages from Whatsmeow API
+# Processes incoming and outgoing messages from Whatsmeow
 #
 # Event payload format from Whatsmeow:
 # {
@@ -168,7 +168,7 @@ module Whatsapp::WhatsmeowHandlers::MessagesUpsert
   end
 
   def download_attachment_file
-    # Whatsmeow API provides media download endpoint
+    # Whatsmeow provides media download endpoint
     media_url = @conversation.inbox.channel.media_url(raw_message_id)
     Down.download(media_url, headers: @conversation.inbox.channel.api_headers)
   end
