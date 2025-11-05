@@ -30,6 +30,14 @@ const hasNoWhatsAppCampaigns = computed(
   () => WhatsAppCampaigns.value?.length === 0 && !isFetchingCampaigns.value
 );
 
+// Check if any WhatsApp inbox exists
+const inboxes = useMapGetter('inboxes/getInboxes');
+const hasWhatsAppInbox = computed(() => {
+  return inboxes.value.some(
+    inbox => inbox.channel_type === 'Channel::Whatsapp'
+  );
+});
+
 const handleDelete = campaign => {
   selectedCampaign.value = campaign;
   confirmDeleteCampaignDialogRef.value.dialogRef.open();
@@ -40,6 +48,7 @@ const handleDelete = campaign => {
   <CampaignLayout
     :header-title="t('CAMPAIGN.WHATSAPP.HEADER_TITLE')"
     :button-label="t('CAMPAIGN.WHATSAPP.NEW_CAMPAIGN')"
+    :is-button-disabled="!hasWhatsAppInbox"
     @click="toggleWhatsAppCampaignDialog()"
     @close="toggleWhatsAppCampaignDialog(false)"
   >
