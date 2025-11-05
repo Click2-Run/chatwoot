@@ -7,18 +7,24 @@ Rails.application.config.middleware.use OmniAuth::Builder do
     provider_ignores_state: true
   }
 
-  # Logto OpenID Connect provider
-  if ENV['LOGTO_ENDPOINT'].present? && ENV['LOGTO_CLIENT_ID'].present?
+  # Click2Run OpenID Connect provider
+  # Supports multiple environment variable names for backward compatibility
+  click2run_issuer = ENV['CLICK2RUN_OPENID_ISSUER'].presence || ENV['LOGTO_ISSUER'].presence || ENV['LOGTO_ENDPOINT']
+  click2run_app_id = ENV['CLICK2RUN_OPENID_APP_ID'].presence || ENV['LOGTO_APP_ID'].presence || ENV['LOGTO_CLIENT_ID']
+  click2run_app_secret = ENV['CLICK2RUN_OPENID_APP_SECRET'].presence || ENV['LOGTO_APP_SECRET'].presence || ENV['LOGTO_CLIENT_SECRET']
+  click2run_scopes = ENV.fetch('CLICK2RUN_OPENID_SCOPES', ENV.fetch('LOGTO_SCOPES', 'openid profile email')).split
+
+  if click2run_issuer.present? && click2run_app_id.present?
     provider :openid_connect, {
-      name: :logto,
-      issuer: ENV.fetch('LOGTO_ENDPOINT'),
+      name: :click2run,
+      issuer: click2run_issuer,
       discovery: true,
-      scope: [:openid, :profile, :email],
+      scope: click2run_scopes,
       response_type: :code,
       client_options: {
-        identifier: ENV.fetch('LOGTO_CLIENT_ID'),
-        secret: ENV.fetch('LOGTO_CLIENT_SECRET'),
-        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3000')}/omniauth/logto/callback"
+        identifier: click2run_app_id,
+        secret: click2run_app_secret,
+        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3000')}/auth/click2run/callback"
       }
     }
   end

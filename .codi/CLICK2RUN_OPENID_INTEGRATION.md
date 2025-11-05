@@ -1,17 +1,19 @@
-# Logto Integration Plan for Chatwoot
+# Click2Run OpenID Connect Integration Plan for Chatwoot
 
-**Branch:** `codi-logto`
+**Branch:** `codi-click2run` (legacy name, now handles Click2Run OpenID)
 **Date:** 2025-11-04
-**Status:** Planning Phase
-**Estimated Timeline:** 4-6 weeks
+**Last Updated:** 2025-11-05
+**Status:** Completed (Simplified OmniAuth Implementation)
 
 ---
 
 ## Executive Summary
 
-This document outlines the plan to integrate Logto as the primary identity provider for Chatwoot while maintaining compatibility with upstream updates and preserving existing authorization logic.
+This document outlines the integration of Click2Run Auth (OpenID Connect) as an identity provider for Chatwoot while maintaining compatibility with upstream updates and preserving existing authorization logic.
 
-### Approach: Official Logto SDK + Custom Devise Strategy
+**Note:** Click2Run Auth is for the Click2Run ecosystem.
+
+### Approach: OmniAuth OpenID Connect Provider
 
 This hybrid approach provides:
 - ✅ Centralized identity management across all applications
@@ -25,33 +27,42 @@ This hybrid approach provides:
 
 ```
 ┌──────────────────────────────────────────┐
-│  LOGTO (Primary Identity Provider)       │
-│  - All applications use this             │
+│  CLICK2RUN AUTH (Identity Provider)      │
+│  - OpenID Connect / OAuth2               │
+│  -              │
 │  - User database, MFA, SSO, etc.         │
 │  - Organizations = Chatwoot Accounts     │
 └────────────┬─────────────────────────────┘
-             │ OIDC/OAuth2 flow
-             │ JWT tokens
+             │ OpenID Connect flow
+             │ ID tokens + user info
              ▼
 ┌──────────────────────────────────────────┐
 │  CHATWOOT (Consumer Application)         │
 │                                           │
 │  ┌────────────────────────────────────┐  │
-│  │ Custom Devise Strategy              │  │
-│  │ lib/devise/strategies/              │  │
-│  │   logto_authenticatable.rb          │  │
+│  │ OmniAuth Middleware                 │  │
+│  │ config/initializers/omniauth.rb     │  │
 │  │                                     │  │
-│  │ - Validates Logto JWT               │  │
-│  │ - Creates shadow User record        │  │
-│  │ - No password, no Devise modules    │  │
+│  │ - OpenID Connect provider           │  │
+│  │ - Provider name: :click2run         │  │
+│  │ - Handles OAuth flow automatically  │  │
 │  └────────────┬───────────────────────┘  │
 │               │                           │
 │  ┌────────────▼───────────────────────┐  │
-│  │ User Model (Minimal)                │  │
-│  │ - email, name, provider='logto'     │  │
-│  │ - uid (Logto user ID)               │  │
-│  │ - NO password, NO MFA fields        │  │
-│  │ - NO Devise modules (stripped down) │  │
+│  │ DeviseOverrides::                   │  │
+│  │   OmniauthCallbacksController       │  │
+│  │                                     │  │
+│  │ - Handles /omniauth/click2run/      │  │
+│  │   callback                          │  │
+│  │ - Creates/updates User record       │  │
+│  │ - Signs in user via Devise          │  │
+│  └────────────┬───────────────────────┘  │
+│               │                           │
+│  ┌────────────▼───────────────────────┐  │
+│  │ User Model                          │  │
+│  │ - email, name, provider             │  │
+│  │ - Uses existing Devise setup        │  │
+│  │ - Standard Chatwoot user model      │  │
 │  └────────────┬───────────────────────┘  │
 │               │                           │
 │  ┌────────────▼───────────────────────┐  │
@@ -66,17 +77,17 @@ This hybrid approach provides:
 ## Key Design Decisions
 
 ### 1. Shadow User Records
-- Chatwoot maintains lightweight User records synchronized from Logto
-- Users authenticate via Logto, but Chatwoot needs local records for:
+- Chatwoot maintains lightweight User records synchronized from Click2Run Auth
+- Users authenticate via Click2Run Auth, but Chatwoot needs local records for:
   - Foreign key relationships (AccountUser, Messages, etc.)
   - Session management
   - Authorization context (Current.user)
 
 ### 2. Organization Mapping
 ```
-Logto Organization → Chatwoot Account
-Logto Org Owner    → Chatwoot Administrator
-Logto Org Member   → Chatwoot Agent
+Click2Run Auth Organization → Chatwoot Account
+Click2Run Auth Org Owner    → Chatwoot Administrator
+Click2Run Auth Org Member   → Chatwoot Agent
 ```
 
 ### 3. Preserved Chatwoot Features
@@ -96,88 +107,88 @@ All existing authorization, multi-tenancy, and business logic remains unchanged:
 
 ## Implementation Timeline
 
-### Phase 1: Logto Setup (Week 1)
+### Phase 1: Click2Run Auth Setup (Week 1)
 
-**Objective:** Configure Logto tenant and application
+**Objective:** Configure Click2Run Auth tenant and application
 
 **Tasks:**
-1. Create Logto Application (Traditional Web App)
+1. Create Click2Run Auth Application (Traditional Web App)
 2. Configure redirect URIs:
-   - Development: `http://localhost:3000/auth/logto/callback`
-   - Production: `https://your-domain.com/auth/logto/callback`
+   - Development: `http://localhost:3000/auth/click2run/callback`
+   - Production: `https://your-domain.com/auth/click2run/callback`
 3. Set up scopes: `openid`, `profile`, `email`, `organizations`
 4. Create initial organizations (mapped to Chatwoot Accounts)
 5. Define organization roles:
    - `owner` → Maps to Chatwoot Administrator
    - `admin` → Maps to Chatwoot Administrator
    - `member` → Maps to Chatwoot Agent
-6. Document Logto application credentials
+6. Document Click2Run Auth application credentials
 
 **Deliverables:**
-- Logto tenant configured
+- Click2Run Auth tenant configured
 - Environment variables documented
-- Test user accounts created in Logto
+- Test user accounts created in Click2Run Auth
 
 **Files Modified:**
-- `.env` (add Logto configuration)
+- `.env` (add Click2Run Auth configuration)
 
 ---
 
 ### Phase 2: Backend Integration (Week 2-3)
 
-**Objective:** Implement Logto authentication strategy and user provisioning
+**Objective:** Implement Click2Run Auth authentication strategy and user provisioning
 
 #### Task 2.1: Custom Devise Strategy
 
-**File:** `lib/devise/strategies/logto_authenticatable.rb` (~80 lines)
+**File:** `lib/devise/strategies/click2run_authenticatable.rb` (~80 lines)
 
-**Purpose:** Validates Logto JWT tokens and creates/finds shadow User records
+**Purpose:** Validates Click2Run Auth JWT tokens and creates/finds shadow User records
 
 **Key Features:**
-- JWT signature validation using Logto's JWKS endpoint
+- JWT signature validation using Click2Run Auth's JWKS endpoint
 - Automatic user provisioning on first login
 - Token caching for performance
 - Error handling for invalid/expired tokens
 
 **Implementation Notes:**
 - Strategy checks for Bearer token in Authorization header
-- Decodes JWT and validates against Logto's public keys
-- Creates User record with `provider: 'logto'` and `uid: claims['sub']`
-- No password stored (authentication happens in Logto)
+- Decodes JWT and validates against Click2Run Auth's public keys
+- Creates User record with `provider: 'click2run'` and `uid: claims['sub']`
+- No password stored (authentication happens in Click2Run Auth)
 
 **Dependencies:**
 - `jwt` gem (already in Gemfile)
 
-#### Task 2.2: Logto Organization Sync Service
+#### Task 2.2: Click2Run Auth Organization Sync Service
 
-**File:** `app/services/logto/organization_sync_service.rb` (~100 lines)
+**File:** `app/services/click2run/organization_sync_service.rb` (~100 lines)
 
-**Purpose:** Synchronizes Logto organizations and user roles to Chatwoot
+**Purpose:** Synchronizes Click2Run Auth organizations and user roles to Chatwoot
 
 **Key Features:**
-- Fetches user's organizations from Logto API
-- Creates/updates Account records mapped to Logto orgs
+- Fetches user's organizations from Click2Run Auth API
+- Creates/updates Account records mapped to Click2Run Auth orgs
 - Creates/updates AccountUser records with correct roles
 - Role mapping: owner/admin → administrator, member → agent
 
 **API Requirements:**
-- Logto Management API access (M2M token)
+- Click2Run Auth Management API access (M2M token)
 - Endpoint: `/api/users/{userId}/organizations`
 
 **Implementation Notes:**
-- Requires machine-to-machine (M2M) application in Logto
+- Requires machine-to-machine (M2M) application in Click2Run Auth
 - Cache M2M tokens (1 hour TTL)
 - Handle API errors gracefully
 - Idempotent sync operations
 
 #### Task 2.3: Callback Controller
 
-**File:** `app/controllers/auth/logto_controller.rb` (~60 lines)
+**File:** `app/controllers/auth/click2run_controller.rb` (~60 lines)
 
-**Purpose:** Handles OAuth2 authorization code callback from Logto
+**Purpose:** Handles OAuth2 authorization code callback from Click2Run Auth
 
 **Flow:**
-1. Receive authorization code from Logto
+1. Receive authorization code from Click2Run Auth
 2. Exchange code for tokens (access, ID, refresh)
 3. Validate ID token
 4. Create/update User record
@@ -192,31 +203,31 @@ All existing authorization, multi-tenancy, and business logic remains unchanged:
 
 #### Task 2.4: Database Migration
 
-**File:** `db/migrate/YYYYMMDDHHMMSS_add_logto_fields.rb` (~10 lines)
+**File:** `db/migrate/YYYYMMDDHHMMSS_add_click2run_fields.rb` (~10 lines)
 
 **Changes:**
 ```ruby
 # accounts table
-add_column :accounts, :logto_org_id, :string
-add_index :accounts, :logto_org_id, unique: true
+add_column :accounts, :click2run_org_id, :string
+add_index :accounts, :click2run_org_id, unique: true
 
 # users table
-add_column :users, :logto_synced_at, :datetime
+add_column :users, :click2run_synced_at, :datetime
 ```
 
 **Purpose:**
-- `logto_org_id`: Links Chatwoot Account to Logto Organization
-- `logto_synced_at`: Tracks last sync timestamp for debugging
+- `click2run_org_id`: Links Chatwoot Account to Click2Run Auth Organization
+- `click2run_synced_at`: Tracks last sync timestamp for debugging
 
 #### Task 2.5: Configuration Updates
 
 **File:** `config/initializers/devise.rb` (+5 lines)
 
-Add Logto strategy to Warden:
+Add Click2Run Auth strategy to Warden:
 ```ruby
 config.warden do |manager|
-  manager.strategies.add(:logto_authenticatable, Devise::Strategies::LogtoAuthenticatable)
-  manager.default_strategies(scope: :user).unshift :logto_authenticatable
+  manager.strategies.add(:click2run_authenticatable, Devise::Strategies::Click2Run AuthAuthenticatable)
+  manager.default_strategies(scope: :user).unshift :click2run_authenticatable
 end
 ```
 
@@ -225,7 +236,7 @@ end
 Add callback route:
 ```ruby
 namespace :auth do
-  get 'logto/callback', to: 'logto#callback'
+  get 'click2run/callback', to: 'click2run#callback'
 end
 ```
 
@@ -237,7 +248,7 @@ end
 - Configuration files updated
 
 **Testing Checklist:**
-- [ ] JWT validation works with Logto tokens
+- [ ] JWT validation works with Click2Run Auth tokens
 - [ ] User record created on first login
 - [ ] Organizations synced correctly
 - [ ] Roles mapped properly (owner → admin, member → agent)
@@ -248,7 +259,7 @@ end
 
 ### Phase 3: Frontend Integration (Week 4)
 
-**Objective:** Replace Chatwoot login UI with Logto authentication
+**Objective:** Replace Chatwoot login UI with Click2Run Auth authentication
 
 #### Task 3.1: Update Login Page
 
@@ -256,21 +267,21 @@ end
 
 **Changes:**
 - Remove password/email form
-- Add "Sign in with Logto" button
+- Add "Sign in with Click2Run Auth" button
 - Implement OIDC authorization redirect
 - Add state parameter for CSRF protection
 - Store state in sessionStorage for validation
 
 **Flow:**
-1. User clicks "Sign in with Logto"
+1. User clicks "Sign in with Click2Run Auth"
 2. Generate random state
 3. Store state in sessionStorage
-4. Redirect to Logto authorization endpoint
-5. Logto handles authentication (MFA, SSO, etc.)
-6. Logto redirects back to callback URL with code
+4. Redirect to Click2Run Auth authorization endpoint
+5. Click2Run Auth handles authentication (MFA, SSO, etc.)
+6. Click2Run Auth redirects back to callback URL with code
 
 **OIDC Parameters:**
-- `client_id`: Logto application ID
+- `client_id`: Click2Run Auth application ID
 - `redirect_uri`: Callback URL
 - `response_type`: code
 - `scope`: openid profile email organizations
@@ -283,46 +294,46 @@ end
 
 Add frontend-accessible variables:
 ```bash
-VITE_LOGTO_ENDPOINT=https://your-tenant.logto.app
-VITE_LOGTO_APP_ID=your_app_id
+VITE_CLICK2RUN_ENDPOINT=https://your-tenant.click2run.app
+VITE_CLICK2RUN_APP_ID=your_app_id
 ```
 
-**Note:** Never expose `LOGTO_APP_SECRET` to frontend
+**Note:** Never expose `CLICK2RUN_APP_SECRET` to frontend
 
 #### Task 3.3: Remove Unused Login Routes (Optional)
 
 **Files to potentially remove/update:**
-- Password reset flow (now handled by Logto)
-- Email confirmation flow (Logto handles verification)
-- Social OAuth buttons (Google, SAML - migrate to Logto connectors)
+- Password reset flow (now handled by Click2Run Auth)
+- Email confirmation flow (Click2Run Auth handles verification)
+- Social OAuth buttons (Google, SAML - migrate to Click2Run Auth connectors)
 
 **Recommendation:** Keep as fallback during migration, remove after stable
 
 **Deliverables:**
-- Login page redirects to Logto
+- Login page redirects to Click2Run Auth
 - State parameter validation working
 - Successful authentication redirects to dashboard
 - Error handling for failed authentication
 
 **Testing Checklist:**
-- [ ] Login button redirects to Logto
+- [ ] Login button redirects to Click2Run Auth
 - [ ] State parameter generated and validated
 - [ ] Successful login redirects to dashboard
 - [ ] Failed login shows error message
-- [ ] MFA flow works (if enabled in Logto)
-- [ ] SSO flow works (if configured in Logto)
+- [ ] MFA flow works (if enabled in Click2Run Auth)
+- [ ] SSO flow works (if configured in Click2Run Auth)
 
 ---
 
 ### Phase 4: Organization Management (Week 5)
 
-**Objective:** Implement bi-directional sync between Logto and Chatwoot
+**Objective:** Implement bi-directional sync between Click2Run Auth and Chatwoot
 
-#### Task 4.1: Webhook Handler for Logto Events
+#### Task 4.1: Webhook Handler for Click2Run Auth Events
 
-**File:** `app/controllers/webhooks/logto_controller.rb` (~80 lines)
+**File:** `app/controllers/webhooks/click2run_controller.rb` (~80 lines)
 
-**Purpose:** Handle events from Logto (user created/updated, org membership changed)
+**Purpose:** Handle events from Click2Run Auth (user created/updated, org membership changed)
 
 **Supported Events:**
 - `User.Created`: Provision new user in Chatwoot
@@ -333,24 +344,24 @@ VITE_LOGTO_APP_ID=your_app_id
 - `OrganizationMembership.Deleted`: Remove user from Account
 
 **Security:**
-- Verify webhook signature (Logto signing secret)
+- Verify webhook signature (Click2Run Auth signing secret)
 - Validate payload structure
 - Idempotent processing (handle duplicate events)
 
 **Implementation:**
 ```ruby
-class Webhooks::LogtoController < ApplicationController
+class Webhooks::Click2Run AuthController < ApplicationController
   skip_before_action :verify_authenticity_token
-  before_action :verify_logto_signature
+  before_action :verify_click2run_signature
 
   def handle_event
     case params[:event]
     when 'User.Created'
-      Logto::ProvisioningService.new.create_user(params[:data])
+      Click2Run Auth::ProvisioningService.new.create_user(params[:data])
     when 'User.Updated'
-      Logto::ProvisioningService.new.sync_user(params[:data])
+      Click2Run Auth::ProvisioningService.new.sync_user(params[:data])
     when 'OrganizationMembership.Updated'
-      Logto::OrganizationSyncService.new.sync_membership(params[:data])
+      Click2Run Auth::OrganizationSyncService.new.sync_membership(params[:data])
     end
 
     head :ok
@@ -358,21 +369,21 @@ class Webhooks::LogtoController < ApplicationController
 
   private
 
-  def verify_logto_signature
+  def verify_click2run_signature
     # Verify webhook signature using signing secret
-    # Implementation depends on Logto's webhook signature method
+    # Implementation depends on Click2Run Auth's webhook signature method
   end
 end
 ```
 
 **Routes:**
 ```ruby
-post 'webhooks/logto', to: 'webhooks/logto#handle_event'
+post 'webhooks/click2run', to: 'webhooks/click2run#handle_event'
 ```
 
 #### Task 4.2: Periodic Sync Job (Fallback)
 
-**File:** `app/jobs/logto/sync_organizations_job.rb` (~40 lines)
+**File:** `app/jobs/click2run/sync_organizations_job.rb` (~40 lines)
 
 **Purpose:** Periodic sync as fallback for webhook failures
 
@@ -380,12 +391,12 @@ post 'webhooks/logto', to: 'webhooks/logto#handle_event'
 
 **Implementation:**
 ```ruby
-class Logto::SyncOrganizationsJob < ApplicationJob
+class Click2Run Auth::SyncOrganizationsJob < ApplicationJob
   queue_as :default
 
   def perform
-    User.where(provider: 'logto').find_each do |user|
-      Logto::OrganizationSyncService.new(user).sync_organizations
+    User.where(provider: 'click2run').find_each do |user|
+      Click2Run Auth::OrganizationSyncService.new(user).sync_organizations
     rescue StandardError => e
       Rails.logger.error("Failed to sync orgs for user #{user.id}: #{e.message}")
     end
@@ -397,32 +408,32 @@ end
 ```ruby
 # config/initializers/scheduler.rb (if using Sidekiq Scheduler)
 Sidekiq::Cron::Job.create(
-  name: 'Logto Organization Sync',
+  name: 'Click2Run Auth Organization Sync',
   cron: '0 */6 * * *', # Every 6 hours
-  class: 'Logto::SyncOrganizationsJob'
+  class: 'Click2Run Auth::SyncOrganizationsJob'
 )
 ```
 
-#### Task 4.3: Account Creation in Logto (Optional)
+#### Task 4.3: Account Creation in Click2Run Auth (Optional)
 
-**File:** `app/services/logto/account_provisioning_service.rb` (~60 lines)
+**File:** `app/services/click2run/account_provisioning_service.rb` (~60 lines)
 
-**Purpose:** Create Logto organizations when Chatwoot Accounts are created
+**Purpose:** Create Click2Run Auth organizations when Chatwoot Accounts are created
 
 **Use Case:** If admins create accounts in Chatwoot UI
 
 **Implementation:**
 ```ruby
-class Logto::AccountProvisioningService
+class Click2Run Auth::AccountProvisioningService
   def create_organization(account)
-    # Call Logto Management API to create org
+    # Call Click2Run Auth Management API to create org
     response = http_post("/api/organizations", {
       name: account.name,
       description: "Chatwoot Account: #{account.name}"
     })
 
-    # Store Logto org ID
-    account.update!(logto_org_id: response['id'])
+    # Store Click2Run Auth org ID
+    account.update!(click2run_org_id: response['id'])
   end
 end
 ```
@@ -430,12 +441,12 @@ end
 **Hook:** Add `after_create` callback to Account model
 
 **Deliverables:**
-- Webhook endpoint handling Logto events
+- Webhook endpoint handling Click2Run Auth events
 - Periodic sync job for resilience
-- Optional: Account provisioning in Logto
+- Optional: Account provisioning in Click2Run Auth
 
 **Testing Checklist:**
-- [ ] Webhook receives events from Logto
+- [ ] Webhook receives events from Click2Run Auth
 - [ ] User created event provisions user in Chatwoot
 - [ ] Role update event changes AccountUser role
 - [ ] Periodic sync job runs without errors
@@ -451,7 +462,7 @@ end
 
 **Test Scenarios:**
 1. **First-time login:**
-   - User exists in Logto, not in Chatwoot
+   - User exists in Click2Run Auth, not in Chatwoot
    - User record created
    - Organizations synced
    - Roles assigned correctly
@@ -464,32 +475,32 @@ end
    - Session created
 
 3. **Multi-organization membership:**
-   - User belongs to multiple Logto orgs
+   - User belongs to multiple Click2Run Auth orgs
    - Multiple AccountUser records created
    - Can switch between accounts in Chatwoot
 
 4. **Role changes:**
-   - User promoted from member to owner in Logto
+   - User promoted from member to owner in Click2Run Auth
    - AccountUser role updated to administrator
    - Permissions reflect new role
 
 5. **User removal:**
-   - User removed from Logto org
+   - User removed from Click2Run Auth org
    - AccountUser record deleted
    - User loses access to that account
 
 6. **Error scenarios:**
    - Invalid JWT token → Unauthorized error
-   - Logto API down → Graceful degradation
+   - Click2Run Auth API down → Graceful degradation
    - Webhook signature mismatch → Rejected
    - Sync failures → Logged and retried
 
 #### Task 5.2: Documentation
 
-**File:** `.codi/LOGTO_SETUP_GUIDE.md`
+**File:** `.codi/CLICK2RUN_SETUP_GUIDE.md`
 
 **Contents:**
-- Logto tenant setup instructions
+- Click2Run Auth tenant setup instructions
 - Application configuration
 - Organization and role setup
 - Environment variable reference
@@ -506,7 +517,7 @@ end
 
 **File:** `README.md` (update)
 
-Add section on Logto authentication:
+Add section on Click2Run Auth authentication:
 - Prerequisites
 - Configuration steps
 - Development setup
@@ -539,28 +550,28 @@ Add section on Logto authentication:
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `lib/devise/strategies/logto_authenticatable.rb` | ~80 | Custom Devise strategy for JWT validation |
-| `app/services/logto/organization_sync_service.rb` | ~100 | Sync organizations and roles from Logto |
-| `app/services/logto/account_provisioning_service.rb` | ~60 | Optional: Create Logto orgs from Chatwoot |
-| `app/controllers/auth/logto_controller.rb` | ~60 | OAuth2 callback handler |
-| `app/controllers/webhooks/logto_controller.rb` | ~80 | Webhook event handler |
-| `app/jobs/logto/sync_organizations_job.rb` | ~40 | Periodic sync job |
+| `lib/devise/strategies/click2run_authenticatable.rb` | ~80 | Custom Devise strategy for JWT validation |
+| `app/services/click2run/organization_sync_service.rb` | ~100 | Sync organizations and roles from Click2Run Auth |
+| `app/services/click2run/account_provisioning_service.rb` | ~60 | Optional: Create Click2Run Auth orgs from Chatwoot |
+| `app/controllers/auth/click2run_controller.rb` | ~60 | OAuth2 callback handler |
+| `app/controllers/webhooks/click2run_controller.rb` | ~80 | Webhook event handler |
+| `app/jobs/click2run/sync_organizations_job.rb` | ~40 | Periodic sync job |
 | `app/javascript/v3/views/login/Index.vue` | ~50 | Updated login page |
-| `db/migrate/YYYYMMDDHHMMSS_add_logto_fields.rb` | ~10 | Database migration |
-| `.codi/LOGTO_SETUP_GUIDE.md` | N/A | Setup documentation |
+| `db/migrate/YYYYMMDDHHMMSS_add_click2run_fields.rb` | ~10 | Database migration |
+| `.codi/CLICK2RUN_SETUP_GUIDE.md` | N/A | Setup documentation |
 
 ### Modified Files (3 files, ~20 lines total changes)
 
 | File | Changes | Purpose |
 |------|---------|---------|
-| `config/initializers/devise.rb` | +5 lines | Register Logto strategy |
+| `config/initializers/devise.rb` | +5 lines | Register Click2Run Auth strategy |
 | `config/routes.rb` | +5 lines | Add callback and webhook routes |
-| `.env` | +6 lines | Add Logto configuration |
+| `.env` | +6 lines | Add Click2Run Auth configuration |
 
 ### Unchanged (Core Chatwoot)
 
 - ✅ `app/models/user.rb` - Minimal changes (still shadow records)
-- ✅ `app/models/account.rb` - Only add `logto_org_id` column
+- ✅ `app/models/account.rb` - Only add `click2run_org_id` column
 - ✅ `app/models/account_user.rb` - No changes
 - ✅ `app/policies/*` - No changes (21 files)
 - ✅ `lib/current.rb` - No changes
@@ -573,34 +584,34 @@ Add section on Logto authentication:
 ### Required Variables
 
 ```bash
-# Logto Configuration
-LOGTO_ENDPOINT=https://your-tenant.logto.app
-LOGTO_APP_ID=your_application_id
-LOGTO_APP_SECRET=your_application_secret
-LOGTO_REDIRECT_URI=http://localhost:3000/auth/logto/callback
+# Click2Run Auth Configuration
+CLICK2RUN_ENDPOINT=https://your-tenant.click2run.app
+CLICK2RUN_APP_ID=your_application_id
+CLICK2RUN_APP_SECRET=your_application_secret
+CLICK2RUN_REDIRECT_URI=http://localhost:3000/auth/click2run/callback
 
-# Logto Management API (for M2M access)
-LOGTO_M2M_APP_ID=your_m2m_app_id
-LOGTO_M2M_APP_SECRET=your_m2m_app_secret
+# Click2Run Auth Management API (for M2M access)
+CLICK2RUN_M2M_APP_ID=your_m2m_app_id
+CLICK2RUN_M2M_APP_SECRET=your_m2m_app_secret
 
 # Optional: Webhook signing secret
-LOGTO_WEBHOOK_SECRET=your_webhook_signing_secret
+CLICK2RUN_WEBHOOK_SECRET=your_webhook_signing_secret
 ```
 
 ### Frontend Variables (Vite)
 
 ```bash
-VITE_LOGTO_ENDPOINT=https://your-tenant.logto.app
-VITE_LOGTO_APP_ID=your_application_id
+VITE_CLICK2RUN_ENDPOINT=https://your-tenant.click2run.app
+VITE_CLICK2RUN_APP_ID=your_application_id
 ```
 
 ---
 
-## Logto Configuration Checklist
+## Click2Run Auth Configuration Checklist
 
 ### Application Setup
 
-- [ ] Create Traditional Web Application in Logto
+- [ ] Create Traditional Web Application in Click2Run Auth
 - [ ] Configure redirect URIs (dev + production)
 - [ ] Set allowed scopes: `openid`, `profile`, `email`, `organizations`
 - [ ] Enable "Always issue Refresh Token"
@@ -661,7 +672,7 @@ VITE_LOGTO_APP_ID=your_application_id
    - [ ] Backup database
    - [ ] Run database migration
    - [ ] Deploy code changes
-   - [ ] Configure Logto production application
+   - [ ] Configure Click2Run Auth production application
    - [ ] Update redirect URIs to production URL
    - [ ] Test authentication flow
    - [ ] Monitor error logs
@@ -727,72 +738,72 @@ If issues occur:
 
 **Log Format:**
 ```ruby
-Rails.logger.info "[Logto] User #{user.id} provisioned from Logto ID #{logto_uid}"
-Rails.logger.info "[Logto] Synced #{orgs.count} organizations for user #{user.id}"
-Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
+Rails.logger.info "[Click2Run Auth] User #{user.id} provisioned from Click2Run Auth ID #{click2run_uid}"
+Rails.logger.info "[Click2Run Auth] Synced #{orgs.count} organizations for user #{user.id}"
+Rails.logger.error "[Click2Run Auth] Failed to validate JWT: #{error.message}"
 ```
 
 ### Alerts
 
 **Critical Alerts:**
 - Authentication success rate < 95% for 5 minutes
-- Logto API unavailable (5xx errors)
+- Click2Run Auth API unavailable (5xx errors)
 - Webhook signature validation failures > 10 in 1 hour
 - JWT validation failures > 100 in 1 hour
 
 **Warning Alerts:**
 - Organization sync failures > 5 in 1 hour
-- Logto API latency > 1 second (p95)
+- Click2Run Auth API latency > 1 second (p95)
 - Periodic sync job fails
 
 ---
 
 ## Troubleshooting Guide
 
-### Issue: "Invalid Logto token" error
+### Issue: "Invalid Click2Run Auth token" error
 
 **Symptoms:** Users cannot log in, see "Invalid token" error
 
 **Causes:**
 1. JWT signature validation failing
-2. Logto JWKS endpoint unreachable
+2. Click2Run Auth JWKS endpoint unreachable
 3. Token expired
 4. Wrong issuer validation
 
 **Solutions:**
-1. Check Logto endpoint is accessible
+1. Check Click2Run Auth endpoint is accessible
 2. Verify JWKS caching is working
 3. Check system time is synchronized (NTP)
-4. Verify `LOGTO_ENDPOINT` matches issuer in JWT
+4. Verify `CLICK2RUN_ENDPOINT` matches issuer in JWT
 
 ### Issue: User created but organizations not synced
 
 **Symptoms:** User can log in but has no AccountUser records
 
 **Causes:**
-1. Logto Management API credentials invalid
-2. User has no organization memberships in Logto
+1. Click2Run Auth Management API credentials invalid
+2. User has no organization memberships in Click2Run Auth
 3. Sync service error
 
 **Solutions:**
 1. Verify M2M credentials are correct
-2. Check user's organization memberships in Logto
+2. Check user's organization memberships in Click2Run Auth
 3. Review sync service error logs
-4. Manually trigger sync: `Logto::OrganizationSyncService.new(user).sync_organizations`
+4. Manually trigger sync: `Click2Run Auth::OrganizationSyncService.new(user).sync_organizations`
 
 ### Issue: Webhook events not received
 
-**Symptoms:** Organization changes in Logto not reflected in Chatwoot
+**Symptoms:** Organization changes in Click2Run Auth not reflected in Chatwoot
 
 **Causes:**
-1. Webhook URL not configured in Logto
-2. Firewall blocking Logto webhooks
+1. Webhook URL not configured in Click2Run Auth
+2. Firewall blocking Click2Run Auth webhooks
 3. Webhook signature verification failing
 
 **Solutions:**
-1. Verify webhook URL in Logto console
+1. Verify webhook URL in Click2Run Auth console
 2. Check firewall/network settings
-3. Verify `LOGTO_WEBHOOK_SECRET` is correct
+3. Verify `CLICK2RUN_WEBHOOK_SECRET` is correct
 4. Test webhook endpoint manually with curl
 
 ### Issue: "Organization already exists" error
@@ -800,11 +811,11 @@ Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
 **Symptoms:** Sync fails with duplicate organization error
 
 **Causes:**
-1. Multiple Logto orgs mapped to same Chatwoot Account
+1. Multiple Click2Run Auth orgs mapped to same Chatwoot Account
 2. Race condition in sync process
 
 **Solutions:**
-1. Ensure `logto_org_id` is unique in database
+1. Ensure `click2run_org_id` is unique in database
 2. Add idempotency checks in sync service
 3. Review organization mapping logic
 
@@ -816,31 +827,31 @@ Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
 
 ### Option 1: Parallel Authentication (Recommended)
 
-1. **Phase 1:** Deploy Logto alongside existing auth
-   - Feature flag: `LOGTO_ENABLED=false`
+1. **Phase 1:** Deploy Click2Run Auth alongside existing auth
+   - Feature flag: `CLICK2RUN_ENABLED=false`
    - Existing users continue using Chatwoot auth
-   - New users use Logto
+   - New users use Click2Run Auth
 
 2. **Phase 2:** User migration
-   - Export existing users to Logto
+   - Export existing users to Click2Run Auth
    - Match by email address
-   - Send password reset emails (Logto)
+   - Send password reset emails (Click2Run Auth)
 
 3. **Phase 3:** Cutover
-   - Enable feature flag: `LOGTO_ENABLED=true`
+   - Enable feature flag: `CLICK2RUN_ENABLED=true`
    - Disable Chatwoot native signup/login
-   - All users use Logto
+   - All users use Click2Run Auth
 
 ### Option 2: Big Bang Migration
 
 1. **Pre-migration:**
-   - Export all users to Logto
-   - Create organizations in Logto
+   - Export all users to Click2Run Auth
+   - Create organizations in Click2Run Auth
    - Map roles
 
 2. **Cutover:**
-   - Deploy Logto integration
-   - Force all users to re-authenticate via Logto
+   - Deploy Click2Run Auth integration
+   - Force all users to re-authenticate via Click2Run Auth
    - Disable Chatwoot native auth
 
 **Risk:** Higher risk, requires coordinated deployment
@@ -851,9 +862,9 @@ Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
 
 ### MVP (Minimum Viable Product)
 
-- [ ] Users can authenticate via Logto
+- [ ] Users can authenticate via Click2Run Auth
 - [ ] User records created in Chatwoot
-- [ ] Organizations synced from Logto
+- [ ] Organizations synced from Click2Run Auth
 - [ ] Roles mapped correctly (owner → admin, member → agent)
 - [ ] Users can access appropriate accounts
 - [ ] Existing Chatwoot authorization works unchanged
@@ -874,7 +885,7 @@ Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
 - [ ] Real-time role updates (via websockets)
 - [ ] Self-service organization creation
 - [ ] Custom role mapping (Enterprise)
-- [ ] SSO configuration via Logto connectors
+- [ ] SSO configuration via Click2Run Auth connectors
 - [ ] MFA enforcement policies
 
 ---
@@ -883,35 +894,35 @@ Rails.logger.error "[Logto] Failed to validate JWT: #{error.message}"
 
 ### Documentation
 
-- [Logto Documentation](https://docs.logto.io/)
-- [Logto Ruby SDK](https://github.com/logto-io/ruby)
+- [Click2Run Auth Documentation](https://docs.click2run.io/)
+- [Click2Run Auth SDK](https://docs.click2.run)
 - [Devise Documentation](https://github.com/heartcombo/devise)
 - [Pundit Authorization](https://github.com/varvet/pundit)
 
 ### API Endpoints
 
-- **Logto OIDC Discovery:** `https://your-tenant.logto.app/oidc/.well-known/openid-configuration`
-- **Logto JWKS:** `https://your-tenant.logto.app/oidc/jwks`
-- **Logto Management API:** `https://your-tenant.logto.app/api`
+- **Click2Run Auth OIDC Discovery:** `https://your-tenant.click2run.app/oidc/.well-known/openid-configuration`
+- **Click2Run Auth JWKS:** `https://your-tenant.click2run.app/oidc/jwks`
+- **Click2Run Auth Management API:** `https://your-tenant.click2run.app/api`
 
 ### Support
 
-- **Logto Community:** [Discord](https://discord.gg/UEPaF3j5e6)
-- **Logto GitHub Issues:** [logto-io/logto](https://github.com/logto-io/logto/issues)
+- **Click2Run Auth Community:** [Click2Run Support)
+- **Click2Run Auth GitHub Issues:** [click2run-io/click2run](https://click2.run/support)
 
 ---
 
 ## Conclusion
 
-This plan provides a clear path to integrate Logto as the primary identity provider for Chatwoot while:
+This plan provides a clear path to integrate Click2Run Auth as the primary identity provider for Chatwoot while:
 
 1. **Maintaining upstream compatibility** - Minimal code changes, isolated custom code
 2. **Preserving authorization logic** - Pundit policies and multi-tenancy unchanged
-3. **Enabling centralized identity** - Logto as single source of truth
+3. **Enabling centralized identity** - Click2Run Auth as single source of truth
 4. **Supporting gradual rollout** - Feature flags and phased deployment
 
 **Total Effort:** 4-6 weeks
 **Custom Code:** ~450 lines
 **Risk Level:** Low (isolated changes, rollback capability)
 
-**Next Step:** Begin Phase 1 - Logto tenant setup
+**Next Step:** Begin Phase 1 - Click2Run Auth tenant setup
