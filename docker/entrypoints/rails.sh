@@ -4,7 +4,8 @@ set -x
 
 # Remove a potentially pre-existing server.pid for Rails.
 rm -rf /app/tmp/pids/server.pid
-rm -rf /app/tmp/cache/*
+# Preserve cache directories - only clean stale bootsnap files if needed
+# rm -rf /app/tmp/cache/*  # REMOVED - cache should persist across restarts
 
 echo "Waiting for postgres to become ready...."
 

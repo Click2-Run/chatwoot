@@ -1,8 +1,10 @@
 #!/bin/sh
 set -x
 
+# Only remove PID files, preserve cache directories
 rm -rf /app/tmp/pids/server.pid
-rm -rf /app/tmp/cache/*
+rm -rf /app/tmp/cache/bootsnap/compile-cache-iseq 2>/dev/null || true
+rm -rf /app/tmp/cache/bootsnap/compile-cache-yaml 2>/dev/null || true
 
 # Install gems first (required for bin/vite which is called by husky during pnpm install)
 # Configure git to avoid hardlink errors in shared Docker volumes
@@ -20,8 +22,9 @@ bundle install || {
 }
 
 echo "Installing pnpm dependencies..."
-pnpm store prune
-pnpm install --force
+# Don't prune store - preserve cached packages
+# Use cached installations instead of --force
+pnpm install
 
 echo "Ready to run Vite development server."
 

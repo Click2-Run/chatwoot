@@ -27,6 +27,7 @@ services:
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     depends_on:
       - postgres
       - redis
@@ -51,6 +52,7 @@ services:
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     depends_on:
       - postgres
       - redis
@@ -73,6 +75,8 @@ services:
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - pnpm_store:/root/.local/share/pnpm/store
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     ports:
       - "3036:3036" # Vite dev server
     environment:
@@ -118,3 +122,5 @@ volumes:
   node_modules:
   cache:
   bundle:
+  pnpm_store:
+  git_bundler_cache:
