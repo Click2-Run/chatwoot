@@ -34,7 +34,13 @@ Rails.application.configure do
 
   config.active_job.queue_adapter = :sidekiq
 
-  Rails.application.routes.default_url_options = { host: ENV['FRONTEND_URL'].to_s.chomp('/') }
+  # Parse FRONTEND_URL to extract protocol, host, and port for URL generation
+  frontend_uri = URI.parse(ENV['FRONTEND_URL'].to_s)
+  Rails.application.routes.default_url_options = {
+    protocol: frontend_uri.scheme,
+    host: frontend_uri.host,
+    port: frontend_uri.port
+  }
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
