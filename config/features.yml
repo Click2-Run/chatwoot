@@ -224,22 +224,22 @@
   display_name: Quoted Email Reply
 - name: channel_bandwidth_sms
   display_name: Bandwidth SMS Provider
-  enabled: true
+  enabled: false
   help_url: https://chwt.app/hc/bandwidth
 - name: channel_twilio_sms
   display_name: Twilio SMS Provider
-  enabled: true
+  enabled: false
   help_url: https://chwt.app/hc/twilio-sms
 - name: channel_zapi
   display_name: Z-API Channel
   enabled: false
 - name: channel_whatsapp_baileys
   display_name: Baileys WhatsApp Provider
-  enabled: true
+  enabled: false
   help_url: https://chwt.app/hc/baileys
 - name: channel_whatsapp_whatsmeow
   display_name: Whatsmeow WhatsApp Provider
-  enabled: true
+  enabled: false
   help_url: https://chwt.app/hc/whatsmeow
 - name: channel_whatsapp_click2run
   display_name: Click2Run WhatsApp Provider
@@ -247,5 +247,5 @@
   help_url: https://chwt.app/hc/click2run
 - name: channel_twilio_whatsapp
   display_name: Twilio WhatsApp Provider
-  enabled: true
+  enabled: false
   help_url: https://chwt.app/hc/twilio-whatsapp

@@ -158,11 +158,6 @@ const handleManualLinkClick = () => {
         v-if="isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)"
         class="mt-6 relative overflow-visible"
       >
-        <img
-          src="/assets/images/dashboard/channels/whatsapp.png"
-          alt=""
-          class="absolute -top-12 right-4 w-20 h-20 pointer-events-none z-10"
-        />
         <PromoBanner
           :title="
             $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.TITLE')

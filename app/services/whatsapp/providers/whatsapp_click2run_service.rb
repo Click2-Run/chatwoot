@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Click2Run WhatsApp Provider Service for Chatwoot
-# Integrates with the Click2Run API via Click2Run
+# Integrates with the Click2Run API
 #
 # Architecture:
 # - Uses Click2Run (/root/data/development/click2run/delivery.git/click2run/)
