@@ -9,6 +9,7 @@ import WhatsappEmbeddedSignup from './WhatsappEmbeddedSignup.vue';
 import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import BaileysWhatsapp from './BaileysWhatsapp.vue';
 import WhatsmeowWhatsapp from './WhatsmeowWhatsapp.vue';
+import Click2runWhatsapp from './Click2runWhatsapp.vue';
 import ZapiWhatsapp from './ZapiWhatsapp.vue';
 import PromoBanner from 'dashboard/components-next/banner/PromoBanner.vue';
 import { usePolicy } from 'dashboard/composables/usePolicy';
@@ -28,6 +29,7 @@ const PROVIDER_TYPES = {
   THREE_SIXTY_DIALOG: '360dialog',
   BAILEYS: 'baileys',
   WHATSMEOW: 'whatsmeow',
+  CLICK2RUN: 'click2run',
   ZAPI: 'zapi',
 };
 
@@ -84,6 +86,16 @@ const availableProviders = computed(() => {
     });
   }
 
+  // Click2Run provider - feature flag controlled
+  if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)) {
+    providers.push({
+      key: PROVIDER_TYPES.CLICK2RUN,
+      title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN'),
+      description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN_DESC'),
+      icon: 'i-woot-whatsapp',
+    });
+  }
+
   // Z-API provider - feature flag controlled
   if (isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI)) {
     providers.push({
@@ -129,7 +141,9 @@ const handleManualLinkClick = () => {
         </p>
       </div>
 
-      <div class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 gap-6 sm:grid-cols-3">
+      <div
+        class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 gap-6 sm:grid-cols-3"
+      >
         <ChannelSelector
           v-for="provider in availableProviders"
           :key="provider.key"
@@ -137,6 +151,34 @@ const handleManualLinkClick = () => {
           :description="provider.description"
           :icon="provider.icon"
           @click="selectProvider(provider.key)"
+        />
+      </div>
+
+      <div
+        v-if="isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)"
+        class="mt-6 relative overflow-visible"
+      >
+        <img
+          src="/assets/images/dashboard/channels/whatsapp.png"
+          alt=""
+          class="absolute -top-12 right-4 w-20 h-20 pointer-events-none z-10"
+        />
+        <PromoBanner
+          :title="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.TITLE')
+          "
+          :description="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.DESCRIPTION'
+            )
+          "
+          variant="success"
+          logo-src=""
+          logo-alt="Click2Run"
+          :cta-text="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.CTA')
+          "
+          @cta-click="selectProvider(PROVIDER_TYPES.CLICK2RUN)"
         />
       </div>
 
@@ -220,6 +262,9 @@ const handleManualLinkClick = () => {
         />
         <WhatsmeowWhatsapp
           v-else-if="selectedProvider === PROVIDER_TYPES.WHATSMEOW"
+        />
+        <Click2runWhatsapp
+          v-else-if="selectedProvider === PROVIDER_TYPES.CLICK2RUN"
         />
         <ZapiWhatsapp v-else-if="selectedProvider === PROVIDER_TYPES.ZAPI" />
       </div>

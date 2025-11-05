@@ -241,6 +241,10 @@
   display_name: Whatsmeow WhatsApp Provider
   enabled: true
   help_url: https://chwt.app/hc/whatsmeow
+- name: channel_whatsapp_click2run
+  display_name: Click2Run WhatsApp Provider
+  enabled: true
+  help_url: https://chwt.app/hc/click2run
 - name: channel_twilio_whatsapp
   display_name: Twilio WhatsApp Provider
   enabled: true

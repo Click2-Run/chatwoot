@@ -234,13 +234,20 @@
           "BAILEYS": "Baileys",
           "BAILEYS_DESC": "Connect via non-official API Baileys",
           "WHATSMEOW": "Whatsmeow",
-          "WHATSMEOW_DESC": "Connect via non-official Whatsmeow",
+          "WHATSMEOW_DESC": "Connect via non-official API Whatsmeow",
+          "CLICK2RUN": "Click2Run",
+          "CLICK2RUN_DESC": "Connect via non-official API Click2Run",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Connect via non-official API Z-API"
         },
         "SELECT_PROVIDER": {
           "TITLE": "Select your API provider",
           "DESCRIPTION": "Choose your WhatsApp provider. You can connect directly through Meta which requires no setup, or connect through Twilio using your account credentials.",
+          "CLICK2RUN_PROMO": {
+            "TITLE": "Looking for a high-performance WhatsApp solution?",
+            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration offering superior performance and stability compared to Node.js alternatives. Perfect for businesses requiring reliable, scalable WhatsApp connectivity.",
+            "CTA": "Use Click2Run"
+          },
           "ZAPI_PROMO": {
             "TITLE": "Looking for a reliable WhatsApp solution?",
             "DESCRIPTION": "Z-API offers superior stability compared to Baileys and is much simpler to set up than Cloud or Twilio - no complex configuration required. Perfect for businesses that want to get started quickly.",
@@ -363,10 +370,6 @@
           }
         },
         "WHATSMEOW": {
-          "INFO": {
-            "TITLE": "Whatsmeow API",
-            "DESCRIPTION": "Whatsmeow is a production-ready Go-based WhatsApp integration. It offers better performance and stability compared to Node.js alternatives."
-          },
           "PROVIDER_URL": {
             "LABEL": "Provider URL",
             "PLACEHOLDER": "If provider is not running locally, please provide the URL",
@@ -380,6 +383,26 @@
           "SUBMIT_BUTTON": "Create Whatsmeow Channel",
           "API": {
             "ERROR_MESSAGE": "We were not able to save the Whatsmeow channel"
+          }
+        },
+        "CLICK2RUN": {
+          "INFO": {
+            "TITLE": "Click2Run API",
+            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration. It offers better performance and stability compared to Node.js alternatives."
+          },
+          "PROVIDER_URL": {
+            "LABEL": "Provider URL",
+            "PLACEHOLDER": "If provider is not running locally, please provide the URL",
+            "ERROR": "Please enter a valid URL"
+          },
+          "API_KEY": {
+            "LABEL": "API key",
+            "PLACEHOLDER": "API key",
+            "ERROR": "Please enter a valid value."
+          },
+          "SUBMIT_BUTTON": "Create Click2Run Channel",
+          "API": {
+            "ERROR_MESSAGE": "We were not able to save the Click2Run channel"
           }
         },
         "API": {

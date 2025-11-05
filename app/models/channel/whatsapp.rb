@@ -16,7 +16,7 @@
 # Indexes
 #
 #  index_channel_whatsapp_on_phone_number      (phone_number) UNIQUE
-#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'whatsmeow'::character varying])::text[])) USING gin
+#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'whatsmeow'::character varying, 'click2run'::character varying])::text[])) USING gin
 #
 
 class Channel::Whatsapp < ApplicationRecord
@@ -27,7 +27,7 @@ class Channel::Whatsapp < ApplicationRecord
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
-  PROVIDERS = %w[default whatsapp_cloud baileys zapi whatsmeow].freeze
+  PROVIDERS = %w[default whatsapp_cloud baileys zapi whatsmeow click2run].freeze
   before_validation :ensure_webhook_verify_token
 
   validates :provider, inclusion: { in: PROVIDERS }
@@ -55,6 +55,8 @@ class Channel::Whatsapp < ApplicationRecord
       Whatsapp::Providers::WhatsappZapiService.new(whatsapp_channel: self)
     when 'whatsmeow'
       Whatsapp::Providers::WhatsappWhatsmeowService.new(whatsapp_channel: self)
+    when 'click2run'
+      Whatsapp::Providers::WhatsappClick2runService.new(whatsapp_channel: self)
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
     end
@@ -150,7 +152,7 @@ class Channel::Whatsapp < ApplicationRecord
   private
 
   def ensure_webhook_verify_token
-    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow])
+    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow click2run])
   end
 
   def validate_provider_config

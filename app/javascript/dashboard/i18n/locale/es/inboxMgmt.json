@@ -363,19 +363,15 @@
           }
         },
         "WHATSMEOW": {
-          "INFO": {
-            "TITLE": "API Multidispositivo Whatsmeow",
-            "DESCRIPTION": "Whatsmeow es una integración de WhatsApp basada en Go lista para producción. Ofrece mejor rendimiento y estabilidad en comparación con alternativas de Node.js."
-          },
           "PROVIDER_URL": {
             "LABEL": "URL del proveedor",
-            "PLACEHOLDER": "http://localhost:8080/api/v1/whatsmeow (opcional)",
+            "PLACEHOLDER": "Si el proveedor no se ejecuta localmente, proporcione la URL",
             "ERROR": "Por favor, ingrese una URL válida"
           },
           "API_KEY": {
             "LABEL": "Clave API",
-            "PLACEHOLDER": "Su clave API de Whatsmeow (opcional)",
-            "ERROR": "Por favor, ingrese una clave API válida"
+            "PLACEHOLDER": "Clave API",
+            "ERROR": "Por favor, ingrese un valor válido."
           },
           "SUBMIT_BUTTON": "Crear canal Whatsmeow",
           "API": {

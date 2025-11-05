@@ -44,6 +44,7 @@ export const FEATURE_FLAGS = {
   CHANNEL_ZAPI: 'channel_zapi',
   CHANNEL_WHATSAPP_BAILEYS: 'channel_whatsapp_baileys',
   CHANNEL_WHATSAPP_WHATSMEOW: 'channel_whatsapp_whatsmeow',
+  CHANNEL_WHATSAPP_CLICK2RUN: 'channel_whatsapp_click2run',
   CHANNEL_TWILIO_SMS: 'channel_twilio_sms',
   CHANNEL_TWILIO_WHATSAPP: 'channel_twilio_whatsapp',
   CHANNEL_BANDWIDTH_SMS: 'channel_bandwidth_sms',

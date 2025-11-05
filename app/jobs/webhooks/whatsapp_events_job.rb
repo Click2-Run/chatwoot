@@ -17,6 +17,8 @@ class Webhooks::WhatsappEventsJob < ApplicationJob
       Whatsapp::IncomingMessageZapiService.new(inbox: channel.inbox, params: params).perform
     when 'whatsmeow'
       Whatsapp::IncomingMessageWhatsmeowService.new(inbox: channel.inbox, params: params).perform
+    when 'click2run'
+      Whatsapp::IncomingMessageClick2runService.new(inbox: channel.inbox, params: params).perform
     else
       Whatsapp::IncomingMessageService.new(inbox: channel.inbox, params: params).perform
     end
