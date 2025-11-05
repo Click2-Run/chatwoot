@@ -21,6 +21,8 @@ done
 echo "Database ready to accept connections."
 
 #install missing gems for local dev as we are using base image compiled for production
+# Configure git to avoid hardlink errors in shared Docker volumes
+git config --global core.cloneUseHardlinks false
 bundle install
 
 BUNDLE="bundle check"
