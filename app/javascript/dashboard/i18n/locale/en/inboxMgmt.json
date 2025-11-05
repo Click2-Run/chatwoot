@@ -245,7 +245,7 @@
           "DESCRIPTION": "Choose your WhatsApp provider. You can connect directly through Meta which requires no setup, or connect through Twilio using your account credentials.",
           "CLICK2RUN_PROMO": {
             "TITLE": "Looking for a high-performance WhatsApp solution?",
-            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration offering superior performance and stability compared to Node.js alternatives. Perfect for businesses requiring reliable, scalable WhatsApp connectivity.",
+            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration, full-featured, offering superior performance and stability compared to Baileys, Evolution API/Go/Cloud, Z-API and other Node.js based alternatives. Perfect for businesses requiring reliable, scalable WhatsApp connectivity.",
             "CTA": "Use Click2Run"
           },
           "ZAPI_PROMO": {
@@ -388,7 +388,7 @@
         "CLICK2RUN": {
           "INFO": {
             "TITLE": "Click2Run API",
-            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration. It offers better performance and stability compared to Node.js alternatives."
+            "DESCRIPTION": "Click2Run is a production-ready Go-based WhatsApp integration, full-featured, offering superior performance and stability compared to Baileys, Evolution API/Go/Cloud, Z-API and other Node.js based alternatives."
           },
           "PROVIDER_URL": {
             "LABEL": "Provider URL",

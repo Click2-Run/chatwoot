@@ -235,12 +235,19 @@
           "BAILEYS_DESC": "Conectar via API não-oficial Baileys",
           "WHATSMEOW": "Whatsmeow",
           "WHATSMEOW_DESC": "Conectar via API não-oficial Whatsmeow",
+          "CLICK2RUN": "Click2Run",
+          "CLICK2RUN_DESC": "Conectar via API Click2Run baseada em Go",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar via API não-oficial Z-API"
         },
         "SELECT_PROVIDER": {
           "TITLE": "Selecione seu provedor de API",
           "DESCRIPTION": "Escolha seu provedor do WhatsApp. Você pode se conectar diretamente através de metade, que não requer nenhuma configuração ou se conectar pelo Twilio usando as credenciais da sua conta.",
+          "CLICK2RUN_PROMO": {
+            "TITLE": "Procurando uma solução WhatsApp de alto desempenho?",
+            "DESCRIPTION": "Click2Run é uma integração WhatsApp baseada em Go pronta para produção, com recursos completos, oferecendo desempenho e estabilidade superiores em comparação com Baileys, Evolution API/Go/Cloud, Z-API e outras alternativas baseadas em Node.js. Perfeito para empresas que exigem conectividade WhatsApp confiável e escalável.",
+            "CTA": "Usar Click2Run"
+          },
           "ZAPI_PROMO": {
             "TITLE": "Procurando uma solução WhatsApp confiável?",
             "DESCRIPTION": "Z-API oferece estabilidade superior comparado ao Baileys e é muito mais simples de configurar que Cloud ou Twilio - sem necessidade de configuração complexa. Perfeito para empresas que querem começar rapidamente.",
@@ -376,6 +383,26 @@
           "SUBMIT_BUTTON": "Criar Canal Whatsmeow",
           "API": {
             "ERROR_MESSAGE": "Não foi possível salvar o canal Whatsmeow"
+          }
+        },
+        "CLICK2RUN": {
+          "INFO": {
+            "TITLE": "API Click2Run",
+            "DESCRIPTION": "Click2Run é uma integração WhatsApp baseada em Go pronta para produção, com recursos completos, oferecendo desempenho e estabilidade superiores em comparação com Baileys, Evolution API/Go/Cloud, Z-API e outras alternativas baseadas em Node.js."
+          },
+          "PROVIDER_URL": {
+            "LABEL": "URL do Provedor",
+            "PLACEHOLDER": "Se o provedor não estiver rodando localmente, forneça a URL",
+            "ERROR": "Por favor, insira uma URL válida"
+          },
+          "API_KEY": {
+            "LABEL": "Chave da API",
+            "PLACEHOLDER": "Chave da API",
+            "ERROR": "Por favor, insira um valor válido."
+          },
+          "SUBMIT_BUTTON": "Criar Canal Click2Run",
+          "API": {
+            "ERROR_MESSAGE": "Não foi possível salvar o canal Click2Run"
           }
         },
         "API": {
