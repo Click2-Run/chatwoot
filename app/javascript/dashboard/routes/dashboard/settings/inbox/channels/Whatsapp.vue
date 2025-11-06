@@ -92,7 +92,7 @@ const availableProviders = computed(() => {
       key: PROVIDER_TYPES.CLICK2RUN,
       title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN'),
       description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN_DESC'),
-      icon: 'i-woot-whatsapp',
+      icon: 'i-lucide-qr-code',
     });
   }
 
@@ -146,6 +146,15 @@ const shouldShowClick2RunPromo = computed(() => {
   // Show promo only if there are other providers besides WhatsApp Cloud and Click2Run
   return otherProvidersEnabled > 0;
 });
+
+// Show Z-API promo only if Z-API is enabled AND Click2Run is disabled
+// This prevents promoting Z-API when Click2Run (superior alternative) is available
+const shouldShowZApiPromo = computed(() => {
+  return (
+    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI) &&
+    !isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)
+  );
+});
 </script>
 
 <template>
@@ -196,10 +205,7 @@ const shouldShowClick2RunPromo = computed(() => {
         />
       </div>
 
-      <div
-        v-if="isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI)"
-        class="mt-6 relative overflow-visible"
-      >
+      <div v-if="shouldShowZApiPromo" class="mt-6 relative overflow-visible">
         <img
           src="~dashboard/assets/images/curved-arrow-red.svg"
           alt=""
