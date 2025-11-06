@@ -11,7 +11,7 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
 
   helper_method :render_vue_component, :settings_open?, :settings_pages
   # authenticiation done via devise : SuperAdmin Model
-  before_action :authenticate_super_admin!
+  before_action :authenticate_super_admin_or_redirect!
 
   # Override this value to specify the number of elements to display at a time
   # on index pages. Defaults to 20.
@@ -27,6 +27,25 @@ class SuperAdmin::ApplicationController < Administrate::ApplicationController
   end
 
   private
+
+  def authenticate_super_admin_or_redirect!
+    # Check if already authenticated as super_admin via Devise
+    return if super_admin_signed_in?
+
+    # Allow Super Admin access via existing user session if enabled
+    # This is useful when using SSO/OpenID/OAuth providers where users don't have passwords
+    if ENV.fetch('AUTH_SUPERADMIN_SAME_SESSION', 'false') == 'true'
+      # Check if user is authenticated in regular session and is a SuperAdmin type
+      if current_user&.is_a?(SuperAdmin)
+        # Sign in the user as super_admin in the super_admin scope
+        sign_in(:super_admin, current_user)
+        return
+      end
+    end
+
+    # Neither authenticated - redirect to super admin login
+    redirect_to new_super_admin_session_path unless super_admin_signed_in?
+  end
 
   def render_vue_component(component_name, props = {})
     html_options = {
