@@ -141,6 +141,20 @@ rails server
 pnpm dev
 ```
 
+### 5. Upgrade First OAuth User to SuperAdmin (Optional)
+
+**Important:** The first user created via OAuth is **NOT** a SuperAdmin by default. They are created as a regular User with Account Administrator role (can manage their specific account only).
+
+To upgrade a user to SuperAdmin (installation-wide access to Super Admin Console):
+
+```bash
+docker compose exec rails bundle exec rails runner "user = User.find_by(email: 'your-email@example.com'); user.type = 'SuperAdmin'; user.save!"
+```
+
+**SuperAdmin vs Account Administrator:**
+- **SuperAdmin**: Installation-wide access, can manage all accounts, global settings, installation config
+- **Account Administrator**: Can only manage their specific account (users, inboxes, settings within that account)
+
 ---
 
 ## How It Works

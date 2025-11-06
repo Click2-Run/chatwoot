@@ -32,8 +32,8 @@ services:
       - postgres
       - redis
       - mailhog
-    ports:
-      - 3000:3000
+    # ports:
+    #   - 3000:3000
     env_file: .env
     environment:
       - VITE_DEV_SERVER_HOST=vite
@@ -115,6 +115,24 @@ services:
       - 1025:1025
       - 8025:8025
 
+  # Caddy reverse proxy - Provides HTTPS for local development
+  # Listens on https://localhost:3000 and proxies to Rails container on port 3000
+  # Automatically generates and manages self-signed TLS certificates
+  # See Caddyfile for configuration
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      # - "443:443"
+      # - "80:80"
+      - "3000:3000"  # HTTPS on port 3000
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - rails
+
 volumes:
   postgres:
   redis:
@@ -124,3 +142,5 @@ volumes:
   bundle:
   pnpm_store:
   git_bundler_cache:
+  caddy_data:
+  caddy_config:

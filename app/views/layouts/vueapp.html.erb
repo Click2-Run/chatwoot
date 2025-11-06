@@ -44,6 +44,7 @@
         whatsappConfigurationId: '<%= @global_config['WHATSAPP_CONFIGURATION_ID'] %>',
         whatsappApiVersion: '<%= @global_config['WHATSAPP_API_VERSION'] %>',
         signupEnabled: '<%= @global_config['ENABLE_ACCOUNT_SIGNUP'] %>',
+        authDisableDefault: '<%= ENV.fetch('AUTH_DISABLE_DEFAULT', 'false') %>',
         isEnterprise: '<%= @global_config['IS_ENTERPRISE'] %>',
         isMfaEnabled: '<%= Chatwoot.mfa_enabled? %>',
         <% if @global_config['IS_ENTERPRISE'] %>

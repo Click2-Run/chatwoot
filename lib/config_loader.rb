@@ -47,8 +47,14 @@ class ConfigLoader
 
   def save_general_config(existing, latest)
     if existing
+      # If existing config is blank and ENV variable is present, update it
+      if existing.value.blank? && ENV[latest[:name]].present?
+        existing.value = ENV[latest[:name]]
+        existing.save!
       # save config only if reconcile flag is false and existing configs value does not match default value
-      save_as_new_config(latest) if !@reconcile_only_new && compare_values(existing, latest)
+      elsif !@reconcile_only_new && compare_values(existing, latest)
+        save_as_new_config(latest)
+      end
     else
       save_as_new_config(latest)
     end
@@ -61,7 +67,13 @@ class ConfigLoader
 
   def save_as_new_config(latest)
     config = InstallationConfig.find_or_initialize_by(name: latest[:name])
-    config.value = latest[:value]
+    # Use ENV variable if available and YAML value is blank
+    # This allows ENV variables to take precedence over empty YAML defaults
+    config.value = if latest[:value].blank? && ENV[latest[:name]].present?
+                     ENV[latest[:name]]
+                   else
+                     latest[:value]
+                   end
     config.locked = latest[:locked]
     config.save!
   end

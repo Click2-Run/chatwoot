@@ -94,10 +94,17 @@ export default {
       return Boolean(window.chatwootConfig.click2runOpenidAppId);
     },
     showSignupLink() {
-      return parseBoolean(window.chatwootConfig.signupEnabled);
+      return (
+        parseBoolean(window.chatwootConfig.signupEnabled) &&
+        !this.isDefaultAuthDisabled
+      );
     },
     showSamlLogin() {
       return this.globalConfig.isEnterprise;
+    },
+    isDefaultAuthDisabled() {
+      // Check if default Chatwoot authentication is disabled (using external IdP)
+      return parseBoolean(window.chatwootConfig.authDisableDefault);
     },
   },
   created() {
@@ -282,12 +289,19 @@ export default {
             </router-link>
           </div>
           <SimpleDivider
-            v-if="showGoogleOAuth || showClick2RunOpenid || showSamlLogin"
+            v-if="
+              !isDefaultAuthDisabled &&
+              (showGoogleOAuth || showClick2RunOpenid || showSamlLogin)
+            "
             :label="$t('COMMON.OR')"
             class="uppercase"
           />
         </div>
-        <form class="space-y-5" @submit.prevent="submitFormLogin">
+        <form
+          v-if="!isDefaultAuthDisabled"
+          class="space-y-5"
+          @submit.prevent="submitFormLogin"
+        >
           <FormInput
             v-model="credentials.email"
             name="email_address"

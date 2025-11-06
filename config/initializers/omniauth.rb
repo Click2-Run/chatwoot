@@ -21,10 +21,11 @@ Rails.application.config.middleware.use OmniAuth::Builder do
       discovery: true,
       scope: click2run_scopes,
       response_type: :code,
+      provider_ignores_state: true,
       client_options: {
         identifier: click2run_app_id,
         secret: click2run_app_secret,
-        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'http://localhost:3000')}/auth/click2run/callback"
+        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'https://localhost:3000')}/omniauth/click2run/callback"
       }
     }
   end

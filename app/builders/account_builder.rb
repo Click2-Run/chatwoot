@@ -46,6 +46,16 @@ class AccountBuilder
   def create_account
     @account = Account.create!(name: account_name, locale: I18n.locale)
     Current.account = @account
+    enable_default_account_features
+    @account
+  end
+
+  def enable_default_account_features
+    # Enable default features from config/features.yml
+    # This ensures OAuth-created accounts have the same features as UI-created accounts
+    default_features = Featurable::FEATURE_LIST.select { |f| f['enabled'] }.pluck('name')
+    @account.enable_features(*default_features)
+    @account.save!
   end
 
   def create_and_link_user
