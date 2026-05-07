@@ -348,8 +348,8 @@ importers:
         specifier: 5.4.21
         version: 5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0)
       vite-plugin-ruby:
-        specifier: ^5.1.1
-        version: 5.2.2(vite@5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0))
+        specifier: 5.1.1
+        version: 5.1.1(vite@5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0))
       vitest:
         specifier: 3.0.5
         version: 3.0.5(@types/node@22.7.0)(jsdom@27.2.0)(sass@1.79.3)(terser@5.33.0)
@@ -2450,15 +2450,6 @@ packages:
   fastq@1.15.0:
     resolution: {integrity: sha512-wBrocU2LCXXa+lWBt8RoIRD89Fi8OdABODa/kEnyeyjS5aZO5/GNvI5sEINADqP/h8M29UHTHUb53sUu5Ihqdw==}
 
-  fdir@6.5.0:
-    resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
-    engines: {node: '>=12.0.0'}
-    peerDependencies:
-      picomatch: ^3 || ^4
-    peerDependenciesMeta:
-      picomatch:
-        optional: true
-
   fflate@0.4.8:
     resolution: {integrity: sha512-FJqqoDBR00Mdj9ppamLa/Y7vxm+PRmNWA67N846RvsoYVMKB4q3y/de5PA7gUmRMYK/8CMz2GDZQmCRN1wBcWA==}
 
@@ -3413,9 +3404,6 @@ packages:
     resolution: {integrity: sha512-yBYjY9QX2hnRmZHAjG/f13MzmBzxzYgQhFrke06TTyKY5zSTEqkOeukBzIdVA3j3ulu8Qa3MbVFShV7T2RmGtQ==}
     engines: {node: '>= 0.4'}
 
-  obug@2.1.1:
-    resolution: {integrity: sha512-uTqF9MuPraAQ+IsnPf366RG4cP9RtUi7MLO1N3KEc+wb0a6yKpeL0lmk2IB1jY5KHPAlTc6T/JRdC/YqxHNwkQ==}
-
   on-finished@2.3.0:
     resolution: {integrity: sha512-ikqdkGAAyf/X/gPhXGvfgAytDZtDbr+bkNUJ0N9h5MI/dmdgCs3l6hoHrcUv41sRKew3jIwrp4qQDXiK99Utww==}
     engines: {node: '>= 0.8'}
@@ -3550,10 +3538,6 @@ packages:
   picomatch@2.3.1:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
-
-  picomatch@4.0.4:
-    resolution: {integrity: sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A==}
-    engines: {node: '>=12'}
 
   pidtree@0.6.0:
     resolution: {integrity: sha512-eG2dWTVw5bzqGRztnHExczNxt5VGsE6OwTeCG3fdUf9KBsZzO3R5OIIIzWR+iZA0NtZ+RDVdaoE2dK1cn6jH4g==}
@@ -4296,10 +4280,6 @@ packages:
   tinyexec@0.3.2:
     resolution: {integrity: sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA==}
 
-  tinyglobby@0.2.16:
-    resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
-    engines: {node: '>=12.0.0'}
-
   tinykeys@3.0.0:
     resolution: {integrity: sha512-nazawuGv5zx6MuDfDY0rmfXjuOGhD5XU2z0GLURQ1nzl0RUe9OuCJq+0u8xxJZINHe+mr7nw8PWYYZ9WhMFujw==}
 
@@ -4500,8 +4480,8 @@ packages:
     engines: {node: ^18.0.0 || >=20.0.0}
     hasBin: true
 
-  vite-plugin-ruby@5.2.2:
-    resolution: {integrity: sha512-q4UY9Bu0pngcbSmrsJBWbzz35Wzx4vAGMPaOIwZLo6TQ6I2n5/x0BL64GXmOxZ4SeDz+t+nDANKTBpp7CFF9AA==}
+  vite-plugin-ruby@5.1.1:
+    resolution: {integrity: sha512-I1dXJq2ywdvTD2Cz5LYNcYLujqQ3eUxPoCjruRdfm2QBtHBY15NEeb6x5HuPM3T5S+y8S3p9fwRsieQQCjk0gg==}
     peerDependencies:
       vite: 5.4.21
 
@@ -6171,7 +6151,7 @@ snapshots:
 
   agent-base@6.0.2:
     dependencies:
-      debug: 4.4.0
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -7222,10 +7202,6 @@ snapshots:
     dependencies:
       reusify: 1.0.4
 
-  fdir@6.5.0(picomatch@4.0.4):
-    optionalDependencies:
-      picomatch: 4.0.4
-
   fflate@0.4.8: {}
 
   file-entry-cache@6.0.1:
@@ -7573,7 +7549,7 @@ snapshots:
     dependencies:
       '@tootallnate/once': 2.0.0
       agent-base: 6.0.2
-      debug: 4.4.0
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -7587,7 +7563,7 @@ snapshots:
   https-proxy-agent@5.0.1:
     dependencies:
       agent-base: 6.0.2
-      debug: 4.4.0
+      debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
 
@@ -8283,8 +8259,6 @@ snapshots:
       define-properties: 1.2.1
       es-object-atoms: 1.0.0
 
-  obug@2.1.1: {}
-
   on-finished@2.3.0:
     dependencies:
       ee-first: 1.1.1
@@ -8413,8 +8387,6 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@2.3.1: {}
-
-  picomatch@4.0.4: {}
 
   pidtree@0.6.0: {}
 
@@ -9282,11 +9254,6 @@ snapshots:
 
   tinyexec@0.3.2: {}
 
-  tinyglobby@0.2.16:
-    dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
-
   tinykeys@3.0.0: {}
 
   tinypool@1.0.2: {}
@@ -9512,7 +9479,7 @@ snapshots:
   vite-node@2.0.1(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0):
     dependencies:
       cac: 6.7.14
-      debug: 4.4.0
+      debug: 4.4.3
       pathe: 1.1.2
       picocolors: 1.1.1
       vite: 5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0)
@@ -9527,11 +9494,13 @@ snapshots:
       - supports-color
       - terser
 
-  vite-plugin-ruby@5.2.2(vite@5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0)):
+  vite-plugin-ruby@5.1.1(vite@5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0)):
     dependencies:
-      obug: 2.1.1
-      tinyglobby: 0.2.16
+      debug: 4.4.3
+      fast-glob: 3.3.2
       vite: 5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0)
+    transitivePeerDependencies:
+      - supports-color
 
   vite@5.4.21(@types/node@22.7.0)(sass@1.79.3)(terser@5.33.0):
     dependencies:
