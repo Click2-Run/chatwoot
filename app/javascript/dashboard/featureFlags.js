@@ -48,6 +48,7 @@ export const FEATURE_FLAGS = {
   CHANNEL_TWILIO_SMS: 'channel_twilio_sms',
   CHANNEL_TWILIO_WHATSAPP: 'channel_twilio_whatsapp',
   CHANNEL_BANDWIDTH_SMS: 'channel_bandwidth_sms',
+  COMPANIES: 'companies',
 };
 
 export const PREMIUM_FEATURES = [
