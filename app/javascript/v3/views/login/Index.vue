@@ -124,6 +124,16 @@ export default {
       });
     }
   },
+  mounted() {
+    // Auto-redirect to Click2Run OpenID login if enabled
+    const shouldAutoRedirect = parseBoolean(
+      window.chatwootConfig.click2runOpenidLoginRedirect
+    );
+    if (shouldAutoRedirect && this.showClick2RunOpenid && !this.ssoAuthToken) {
+      // Redirect to Click2Run OAuth flow
+      window.location.href = '/auth/click2run';
+    }
+  },
   methods: {
     getTranslatedMessage(key) {
       // Avoid dynamic key warning by handling each case explicitly
