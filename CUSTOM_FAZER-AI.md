@@ -550,6 +550,40 @@ Fazer.AI regularly merges upstream Chatwoot releases:
 - Branding system (Enterprise vs custom)
 - Email configuration initializers
 
+### codi/Click2Run absorption history
+
+The codi fork stepwise-merged fazer-ai tags into branch
+`codi-v4.9.0-fazer-ai.13` (rebased from `codi-v4.7.0-fazer-ai.6`):
+
+| Date (UTC) | Tag | Commit | Notes |
+|---|---|---|---|
+| 2026-05-07 | `v4.7.0-fazer-ai.7` | `cc87a17328` | zapi first-connection fix |
+| 2026-05-07 | `v4.7.0-fazer-ai.8` | `b234757b21` | promo banner |
+| 2026-05-07 | `v4.7.0-fazer-ai.9` | `504cdba4f0` | Baileys v7 upgrade |
+| 2026-05-07 | `v4.8.0-fazer-ai.1` | `2fa448742f` | **Upstream Chatwoot 4.8.0** — agents_bots assignees, INBOUND_EMAIL_DOMAIN gating, etc. |
+| 2026-05-07 | `v4.8.0-fazer-ai.2` | `127333c59f` | message_builder + messages_controller |
+| 2026-05-07 | `v4.8.0-fazer-ai.3` | `9268987339` | heatmap selector |
+| 2026-05-07 | `v4.8.0-fazer-ai.4` | `b3b846f9fb` | image/audio bubble + loadWithRetry |
+| 2026-05-07 | `v4.8.0-fazer-ai.5` | `8a931d445d` | provider service tweaks |
+| 2026-05-07 | `v4.8.0-fazer-ai.6` | `fb8ce5c1bb` | zapi read-message job |
+| 2026-05-07 | `v4.8.0-fazer-ai.7` | `b4ae22434b` | twilio + baileys provider |
+| 2026-05-07 | `v4.9.0-fazer-ai.8` | `b519c7aeb8` | **Upstream Chatwoot 4.9.0** — Voice Channel, TikTok channel, custom-attribute redesign, Year-in-Review |
+| 2026-05-07 | `v4.9.0-fazer-ai.9` | `47d22141bb` | conversations attachments controller |
+| 2026-05-07 | `v4.9.0-fazer-ai.10` | `a6d4a6d3c0` | webhooks error handler + .annotaterb.yml |
+| 2026-05-07 | `v4.9.0-fazer-ai.11` | `9dae4e8fff` | webhook listener |
+| 2026-05-07 | `v4.9.0-fazer-ai.12` | `c8cda81de0` | ReplyBox/Editor + jbuilders |
+| 2026-05-07 | `v4.9.0-fazer-ai.13` | `775f47cd8a` | Dockerfile bundler quoting |
+
+**Conflict areas observed during this codi absorption pass**:
+- `app/views/layouts/vueapp.html.erb` — both sides add new `window.chatwootConfig` keys (ours: `click2runOpenidAppId/Label/LoginRedirect`; theirs: `allowedLoginMethods`).
+- `app/javascript/v3/views/login/Index.vue` — both sides interleave new login methods; required adding `parseBoolean` import.
+- `app/javascript/dashboard/featureFlags.js`, `config/features.yml` — both sides add new feature flags (Click2Run/Whatsmeow/Baileys/Z-API/Bandwidth/SMS vs upstream's `companies` and `channel_tiktok`).
+- `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` — composable destructuring (ours kept `isCloudFeatureEnabled`, theirs added `isOnChatwootCloud`; resolved by destructuring both).
+- `app/javascript/dashboard/components/widgets/ChannelItem.vue` — additive `hasSmsProviderConfigured` / `hasTiktokConfigured`.
+- `db/schema.rb`, `Gemfile.lock`, `pnpm-lock.yaml` — taken from theirs (regenerable artefacts).
+- `package.json` — kept newer of each (vite 5.4.21, vite-plugin-ruby 5.1.1).
+- `docker/Dockerfile` — kept our `BUNDLER_VERSION=2.7.2`, took theirs' quoted form.
+
 ---
 
 ### Testing Coverage
