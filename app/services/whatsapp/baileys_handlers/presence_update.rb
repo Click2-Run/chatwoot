@@ -8,7 +8,7 @@ module Whatsapp::BaileysHandlers::PresenceUpdate
     return if data[:id].blank? || data[:id].include?('@g.us')
 
     lid, phone = extract_presence_identifiers(data)
-    consolidate_contact(lid, phone) if lid && phone
+    consolidate_presence_contact(lid, phone) if lid && phone
 
     data[:presences]&.each_value do |presence_data|
       handle_presence(lid, phone, presence_data)
@@ -50,7 +50,7 @@ module Whatsapp::BaileysHandlers::PresenceUpdate
     inbox.contact_inboxes.find_by(contact_id: contact.id)
   end
 
-  def consolidate_contact(lid, phone)
+  def consolidate_presence_contact(lid, phone)
     Whatsapp::ContactInboxConsolidationService.new(
       inbox: inbox, phone: phone, lid: lid, identifier: "#{lid}@lid"
     ).perform
