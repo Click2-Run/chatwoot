@@ -161,6 +161,7 @@ class Channel::Whatsapp < ApplicationRecord
 
   def ensure_webhook_verify_token
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow click2run])
+    provider_config['instance_id'] ||= SecureRandom.uuid if provider == 'click2run'
   end
 
   def validate_provider_config

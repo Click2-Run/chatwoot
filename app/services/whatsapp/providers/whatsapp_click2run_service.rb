@@ -1,141 +1,120 @@
 # frozen_string_literal: true
 
-# Click2Run WhatsApp Provider Service for Chatwoot
-# Integrates with the Click2Run API
+# Click2Run WhatsApp Provider Service for Chatwoot.
 #
-# Architecture:
-# - Uses Click2Run (/root/data/development/click2run/delivery.git/click2run/)
-# - Replaces Baileys with production-ready multi-device protocol support
-# - Supports all critical WhatsApp operations: messages, media, reactions, typing, read receipts
+# Targets the whatsapp-api OpenAPI 3.1 contract (Propria.Cloud product, Go +
+# whatsmeow). Each Chatwoot WhatsApp inbox maps to one whatsapp-api instance
+# identified by `provider_config['instance_id']` (UUID, seeded by the channel
+# model). The base URL and API key come from env (with backward-compat aliases
+# for the legacy CLICK2RUN_PROVIDER_DEFAULT_* names).
 #
-# Configuration:
-# - CLICK2RUN_PROVIDER_DEFAULT_URL: Click2Run base URL WITHOUT /chatwoot suffix (e.g., http://localhost:8080/api/v1)
-# - CLICK2RUN_PROVIDER_DEFAULT_API_KEY: Tenant API key for authentication
+# Surface (paths used here):
+#   POST   /instances/create                            create instance record
+#   POST   /webhooks?instance_id=...                    register webhook + verify token
+#   POST   /instances/connect?instance_id=...           start pairing (QR generation)
+#   POST   /instances/disconnect?instance_id=...        graceful disconnect
+#   POST   /instances/delete?instance_id=...            remove instance
+#   GET    /instances/pair/qrcode?instance_id=...       pull QR (push via webhook is primary)
+#   POST   /messages/send?instance_id=...               send text (Web)
+#   POST   /messages/send-media?instance_id=...         send media (Web)
+#   POST   /messages/react?instance_id=...              send reaction
+#   POST   /messages/mark-read?instance_id=...          mark messages as read
+#   POST   /presence/chat?instance_id=...               typing/recording/paused
+#   GET    /contacts/profile-picture?instance_id=...&jid=...   profile picture
+#   GET    /contacts/onwhatsapp?instance_id=...&phone=...      number-on-whatsapp check
+#   GET    /health                                      service health
 #
-# API Structure:
-# - Base URL: http://localhost:8080/api/v1 (from env or user config)
-# - All endpoints append: /chatwoot/{account_id}/inboxes/...
-# - Example full URL: http://localhost:8080/api/v1/chatwoot/123/inboxes/456/messages/send/text
-# - Channel ID format: {account_id}_{inbox_id} (not phone number)
-#
-# @see /root/data/development/chatwoot.git/.llm/planning/20251104_click2run_integration_plan.md
-# @see /root/data/development/click2run/delivery.git/click2run/.llm/implementation/20251104140000_all_features_complete.md
+# Reference TS implementation: ../propriacloud.git/apps/minha/app/services/whatsapp.server.ts
 
 class Whatsapp::Providers::WhatsappClick2RunService < Whatsapp::Providers::BaseService
-  include BaileysHelper # Reuse timestamp extraction helper
+  include BaileysHelper
 
   class MessageContentTypeNotSupported < StandardError; end
   class ProviderUnavailableError < StandardError; end
 
-  # Environment configuration
-  DEFAULT_URL = ENV.fetch('CLICK2RUN_PROVIDER_DEFAULT_URL', nil)
-  DEFAULT_API_KEY = ENV.fetch('CLICK2RUN_PROVIDER_DEFAULT_API_KEY', nil)
+  # Backwards-compat env-var cascade. Prefer WHATSAPP_API_* going forward.
+  DEFAULT_URL = ENV['WHATSAPP_API_URL'].presence || ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
+  DEFAULT_API_KEY = ENV['WHATSAPP_API_KEY'].presence || ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
 
-  # Service status check (class method)
+  DEFAULT_WEBHOOK_EVENTS = %w[
+    connection.update
+    messages.upsert
+    messages.update
+    messages.delete
+    presence.update
+    contacts.upsert
+  ].freeze
+
   def self.status
     if DEFAULT_URL.blank? || DEFAULT_API_KEY.blank?
-      raise ProviderUnavailableError, 'Missing CLICK2RUN_PROVIDER_DEFAULT_URL or CLICK2RUN_PROVIDER_DEFAULT_API_KEY'
+      raise ProviderUnavailableError, 'Missing WHATSAPP_API_URL or WHATSAPP_API_KEY (or legacy CLICK2RUN_PROVIDER_DEFAULT_*)'
     end
 
-    response = HTTParty.get(
-      "#{DEFAULT_URL}/health",
-      headers: { 'X-API-Key' => DEFAULT_API_KEY }
-    )
+    response = HTTParty.get("#{DEFAULT_URL}/health", headers: { 'X-API-Key' => DEFAULT_API_KEY })
 
     unless response.success?
       Rails.logger.error response.body
-      raise ProviderUnavailableError, 'Click2Run is unavailable'
+      raise ProviderUnavailableError, 'whatsapp-api is unavailable'
     end
 
     response.parsed_response.deep_symbolize_keys
   end
 
-  # Setup channel provider (create inbox + connect)
-  # Click2Run uses two-step process: 1) create inbox 2) connect
+  # Three-call setup: create instance → register webhook → connect.
+  # Idempotent against existing instances (409 on create is treated as success).
   def setup_channel_provider
-    # Step 1: Create inbox if not exists
-    inbox = whatsapp_channel.inbox
-    admin_user = find_account_admin
-
-    create_instance_response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{inbox.account_id}/inboxes",
+    create_response = HTTParty.post(
+      "#{provider_url}/instances/create",
       headers: api_headers,
       body: {
-        inbox_id: inbox.id,
-        name: inbox.name,
-        account_id: inbox.account_id,
-        channel_type: inbox.channel_type,
-        channel_id: inbox.channel_id,
-        phone_number: whatsapp_channel.phone_number,
-        provider: whatsapp_channel.provider,
-        admin_id: admin_user.id,
-        admin_token: admin_user.access_token.token,
-        webhook_url: inbox_webhook_url,
-        webhook_token: whatsapp_channel.provider_config['webhook_verify_token'],
-        api_url: chatwoot_api_url
-      }.to_json
+        instance_id: instance_id,
+        name: whatsapp_channel.inbox.name,
+        phone: normalized_phone_number,
+        custom_id: "chatwoot:account:#{whatsapp_channel.inbox.account_id}:inbox:#{whatsapp_channel.inbox.id}"
+      }.compact.to_json
     )
 
-    # 404 or 409 (already exists) is OK, continue to connect
-    unless [200, 201, 409].include?(create_instance_response.code)
-      Rails.logger.error create_instance_response.body
-      raise ProviderUnavailableError, 'Failed to create Click2Run inbox'
+    unless [200, 201, 409].include?(create_response.code)
+      Rails.logger.error create_response.body
+      raise ProviderUnavailableError, 'Failed to create whatsapp-api instance'
     end
 
-    # Step 2: Connect inbox (initiates QR code generation)
+    register_webhook!
+
     connect_response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{inbox.account_id}/inboxes/#{inbox.id}/connect",
+      "#{provider_url}/instances/connect#{instance_query}",
       headers: api_headers
     )
 
     unless process_response(connect_response)
-      raise ProviderUnavailableError, 'Failed to connect Click2Run channel'
+      raise ProviderUnavailableError, 'Failed to connect whatsapp-api instance'
     end
-
-    # TODO: Webhook configuration
-    # Click2Run supports webhook delivery for events
-    # Future enhancement: Configure webhook URL and verify token
-    # POST /channels/:id/webhook with {url, secret}
 
     true
   end
 
-  # Disconnect channel provider (disconnect + delete channel)
   def disconnect_channel_provider
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
-
-    # Step 1: Disconnect channel (graceful disconnection)
     disconnect_response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/disconnect",
+      "#{provider_url}/instances/disconnect#{instance_query}",
       headers: api_headers
     )
 
-    # Log error but don't fail if already disconnected
-    unless process_response(disconnect_response)
-      Rails.logger.warn "Failed to disconnect Click2Run channel (may already be disconnected)"
-    end
+    Rails.logger.warn "Failed to disconnect whatsapp-api instance (may already be disconnected)" unless process_response(disconnect_response)
 
-    # Step 2: Delete channel
-    delete_response = HTTParty.delete(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}",
+    delete_response = HTTParty.post(
+      "#{provider_url}/instances/delete#{instance_query}",
       headers: api_headers
     )
 
-    unless process_response(delete_response)
-      raise ProviderUnavailableError, 'Failed to delete Click2Run channel'
-    end
+    raise ProviderUnavailableError, 'Failed to delete whatsapp-api instance' unless process_response(delete_response)
 
     true
   end
 
-  # Send message (text, media, reaction, or location)
   def send_message(phone_number, message)
     @message = message
     @phone_number = phone_number
 
-    # Determine message type and send accordingly
     if message.content_attributes[:is_reaction]
       send_reaction_message
     elsif message.attachments.present?
@@ -148,358 +127,268 @@ class Whatsapp::Providers::WhatsappClick2RunService < Whatsapp::Providers::BaseS
     end
   end
 
-  # Send template (not implemented for click2run - templates are for WhatsApp Business API)
-  def send_template(phone_number, template_info)
-    # Click2Run doesn't support templates (those are WhatsApp Business API specific)
-    # Left empty for compatibility
-  end
+  # whatsapp-api Web mode does not consume Cloud-API templates. WABA mode handles
+  # templates via separate /templates/* endpoints (deferred to Phase 5b.2).
+  def send_template(_phone_number, _template_info); end
 
-  # Sync templates (not implemented for click2run)
-  def sync_templates
-    # Click2Run doesn't support templates
-    # Left empty for compatibility
-  end
+  def sync_templates; end
 
-  # Get media URL for download
-  # Click2Run uses message_id to download media
   def media_url(media_id)
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
-    "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/media/#{media_id}"
+    "#{provider_url}/messages/#{media_id}/media#{instance_query(prefix: '&')}"
   end
 
-  # API headers for authentication
   def api_headers
     { 'X-API-Key' => api_key, 'Content-Type' => 'application/json' }
   end
 
-  # Validate provider configuration
-  # Called during channel creation (before inbox is saved)
-  # Validates API credentials by listing inboxes for the account
   def validate_provider_config?
-    account_id = whatsapp_channel.inbox.account_id
-
-    response = HTTParty.get(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes",
-      headers: api_headers
-    )
-
-    # Accept 200 OK (empty list or existing inboxes)
-    # Reject any error (401 Unauthorized, 403 Forbidden, 500 Server Error, etc.)
+    response = HTTParty.get("#{provider_url}/health", headers: api_headers)
     process_response(response)
   end
 
-  # Toggle typing status (composing/recording/paused)
   def toggle_typing_status(typing_status, phone_number:, **)
     @phone_number = phone_number
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
 
-    # Map Chatwoot events to Click2Run presence types
-    status_map = {
+    presence_map = {
       Events::Types::CONVERSATION_TYPING_ON => 'composing',
       Events::Types::CONVERSATION_RECORDING => 'recording',
       Events::Types::CONVERSATION_TYPING_OFF => 'paused'
     }
 
-    response = HTTParty.patch(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/presence",
+    response = HTTParty.post(
+      "#{provider_url}/presence/chat#{instance_query}",
       headers: api_headers,
-      body: {
-        to_jid: format_jid(phone_number),
-        type: status_map[typing_status]
-      }.to_json
+      body: { jid: format_jid(phone_number), state: presence_map[typing_status] }.to_json
     )
 
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to update presence'
-    end
+    raise ProviderUnavailableError, 'Failed to update presence' unless process_response(response)
 
     true
   end
 
-  # Update account presence (available/unavailable)
-  # Note: Click2Run doesn't currently expose account-level presence
-  # This is chat-level presence (typing indicators) only
-  def update_presence(status)
-    # Not implemented in current Click2Run
-    # Click2Run focuses on chat presence (typing) rather than account presence (online/offline)
-    Rails.logger.debug "Account presence update not supported in Click2Run: #{status}"
+  def update_presence(_status)
+    Rails.logger.debug 'Account-level presence not used by whatsapp-api integration'
     true
   end
 
-  # Mark messages as read
   def read_messages(messages, phone_number:, **)
     @phone_number = phone_number
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
 
     response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/mark-read",
+      "#{provider_url}/messages/mark-read#{instance_query}",
       headers: api_headers,
       body: {
-        messages: messages.map do |message|
-          {
-            id: message.source_id,
-            remote_jid: format_jid(phone_number),
-            from_me: message.message_type == 'outgoing'
-          }
-        end
+        jid: format_jid(phone_number),
+        message_ids: messages.map(&:source_id).compact
       }.to_json
     )
 
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to mark messages as read'
-    end
+    raise ProviderUnavailableError, 'Failed to mark messages as read' unless process_response(response)
 
     true
   end
 
-  # Mark chat as unread
-  # Note: Not currently implemented in Click2Run
-  def unread_message(phone_number, message)
-    @phone_number = phone_number
-    # Not implemented in current Click2Run
-    Rails.logger.debug "Unread message not supported in Click2Run"
+  def unread_message(_phone_number, _message)
+    Rails.logger.debug 'Mark-unread not exposed by whatsapp-api'
     true
   end
 
-  # Send received receipts
-  # Note: Click2Run handles this automatically at protocol level
-  def received_messages(phone_number, messages)
-    @phone_number = phone_number
-    # Click2Run automatically sends received receipts at protocol level
-    # No explicit API call needed
-    Rails.logger.debug "Received receipts handled automatically by Click2Run"
+  def received_messages(_phone_number, _messages)
+    Rails.logger.debug 'Received receipts handled at protocol level'
     true
   end
 
-  # Get profile picture URL
   def get_profile_pic(jid)
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
     response = HTTParty.get(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/profile-picture/#{jid}",
-      headers: api_headers,
-      query: { preview: false } # Get full quality by default
+      "#{provider_url}/contacts/profile-picture#{instance_query}&jid=#{CGI.escape(jid)}&preview=false",
+      headers: api_headers
     )
 
     return nil unless process_response(response)
 
-    # Click2Run returns: {status: "success", jid: "...", url: "https://...", preview: false}
-    response.parsed_response['url']
+    body = unwrap(response.parsed_response)
+    body['url']
   end
 
-  # Check if phone number is on WhatsApp
   def on_whatsapp(phone_number)
     @phone_number = phone_number
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
 
-    # Click2Run uses GET endpoint (Baileys uses POST)
     response = HTTParty.get(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/on_whatsapp/#{phone_number}",
+      "#{provider_url}/contacts/onwhatsapp#{instance_query}&phone=#{CGI.escape(phone_number)}",
       headers: api_headers
     )
 
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to check WhatsApp registration'
-    end
+    raise ProviderUnavailableError, 'Failed to check WhatsApp registration' unless process_response(response)
 
-    # Click2Run returns: {status: "success", query: "...", jid: "...", is_in: true/false}
-    # Convert to Baileys format for compatibility
-    parsed = response.parsed_response
+    body = unwrap(response.parsed_response)
     {
-      'jid' => parsed['jid'],
-      'exists' => parsed['is_in'],
-      'lid' => nil # LID not used in multi-device protocol
+      'jid' => body['jid'],
+      'exists' => body['is_in'] || body['exists'] || false,
+      'lid' => body['lid']
     }
   end
 
   private
 
-  # Get provider URL from channel config or default
   def provider_url
     whatsapp_channel.provider_config['provider_url'].presence || DEFAULT_URL
   end
 
-  # Get API key from channel config or default
   def api_key
     whatsapp_channel.provider_config['api_key'].presence || DEFAULT_API_KEY
   end
 
-  # Find the first administrator user for the account
-  # Chatwoot guarantees at least one undeletable admin per account
-  def find_account_admin
-    account = whatsapp_channel.inbox.account
-    admin_user = account.account_users.find_by(role: :administrator)&.user
-
-    raise ProviderUnavailableError, 'No administrator found for account' unless admin_user
-
-    # Ensure user has an access token
-    admin_user.access_token || admin_user.create_access_token
-
-    admin_user
+  def instance_id
+    whatsapp_channel.provider_config['instance_id'].presence ||
+      (whatsapp_channel.provider_config['instance_id'] = SecureRandom.uuid).tap { whatsapp_channel.save! }
   end
 
-  # Generate webhook URL for this inbox
-  # Format: https://chatwoot.example.com/webhooks/whatsapp/{phone_number}
+  def instance_query(prefix: '?')
+    "#{prefix}instance_id=#{CGI.escape(instance_id)}"
+  end
+
   def inbox_webhook_url
     base_url = ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
     "#{base_url}/webhooks/whatsapp/#{whatsapp_channel.phone_number}"
   end
 
-  # Get Chatwoot API URL
-  # Format: https://chatwoot.example.com/api/v1
-  def chatwoot_api_url
-    base_url = ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
-    "#{base_url}/api/v1"
-  end
-
-  # Get normalized phone number (digits only)
-  # Used for JID formatting
   def normalized_phone_number
-    whatsapp_channel.phone_number.delete('+')
+    whatsapp_channel.phone_number.to_s.delete('+')
   end
 
-  # Format phone number as WhatsApp JID
-  # Example: +1234567890 -> 1234567890@s.whatsapp.net
   def format_jid(phone_number)
-    "#{phone_number.delete('+')}@s.whatsapp.net"
+    "#{phone_number.to_s.delete('+')}@s.whatsapp.net"
   end
 
-  # Send text message
-  def send_text_message
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
-
-    # Check if this is a reply (quoted message)
-    quoted_message_id = nil
-    if @message.in_reply_to.present?
-      reply_to = Message.find(@message.in_reply_to)
-      quoted_message_id = reply_to.source_id if reply_to
-    end
-
+  def register_webhook!
     response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/text",
+      "#{provider_url}/webhooks#{instance_query}",
       headers: api_headers,
       body: {
-        to: format_jid(@phone_number),
-        message: @message.content,
-        quoted_message_id: quoted_message_id
-      }.compact.to_json
-    )
-
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to send text message'
-    end
-
-    update_external_created_at(response)
-    response.parsed_response['message_id']
-  end
-
-  # Send media message (image, video, audio, document)
-  def send_media_message
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
-    attachment = @message.attachments.first
-
-    # Download attachment and encode as base64
-    buffer = Base64.strict_encode64(attachment.file.download)
-
-    # Determine media type
-    media_type = case attachment.file_type
-                 when 'image'
-                   attachment.file.content_type
-                 when 'audio'
-                   attachment.file.content_type
-                 when 'video'
-                   attachment.file.content_type
-                 when 'file'
-                   attachment.file.content_type
-                 when 'sticker'
-                   'image/webp'
-                 else
-                   'application/octet-stream'
-                 end
-
-    response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/media",
-      headers: api_headers,
-      body: {
-        to: format_jid(@phone_number),
-        media_type: media_type,
-        media_data: buffer, # Base64 encoded
-        caption: @message.content,
-        filename: attachment.file.filename.to_s
-      }.compact.to_json
-    )
-
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to send media message'
-    end
-
-    update_external_created_at(response)
-    response.parsed_response['message_id']
-  end
-
-  # Send reaction message
-  def send_reaction_message
-    inbox = whatsapp_channel.inbox
-    account_id = inbox.account_id
-    inbox_id = inbox.id
-    reply_to = Message.find(@message.in_reply_to)
-
-    response = HTTParty.post(
-      "#{provider_url}/chatwoot/#{account_id}/inboxes/#{inbox_id}/messages/send/reaction",
-      headers: api_headers,
-      body: {
-        to: format_jid(@phone_number),
-        message_id: reply_to.source_id,
-        emoji: @message.content
+        url: inbox_webhook_url,
+        events: DEFAULT_WEBHOOK_EVENTS,
+        enabled: true,
+        active: true,
+        secret: whatsapp_channel.provider_config['webhook_verify_token']
       }.to_json
     )
 
-    unless process_response(response)
-      raise ProviderUnavailableError, 'Failed to send reaction'
-    end
+    return if process_response(response)
 
-    update_external_created_at(response)
-    response.parsed_response['reaction_id']
+    Rails.logger.error "Failed to register webhook on whatsapp-api: #{response.body}"
+    raise ProviderUnavailableError, 'Failed to register webhook on whatsapp-api'
   end
 
-  # Process HTTP response
+  def send_text_message
+    quoted_id = quoted_message_source_id
+
+    response = HTTParty.post(
+      "#{provider_url}/messages/send#{instance_query}",
+      headers: api_headers,
+      body: {
+        to: { user: normalized_to_user, server: 's.whatsapp.net' },
+        message: { conversation: @message.content },
+        context_info: ({ stanza_id: quoted_id } if quoted_id)
+      }.compact.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to send text message' unless process_response(response)
+
+    update_external_created_at(response)
+    unwrap(response.parsed_response)['message_id']
+  end
+
+  def send_media_message
+    attachment = @message.attachments.first
+    media_type = case attachment.file_type
+                 when 'image' then 'image'
+                 when 'audio' then 'audio'
+                 when 'video' then 'video'
+                 when 'sticker' then 'sticker'
+                 else 'document'
+                 end
+
+    media_item = {
+      type: media_type,
+      data: Base64.strict_encode64(attachment.file.download),
+      mime_type: attachment.file.content_type,
+      caption: @message.content.presence,
+      file_name: attachment.file.filename.to_s
+    }.compact
+
+    response = HTTParty.post(
+      "#{provider_url}/messages/send-media#{instance_query}",
+      headers: api_headers,
+      body: {
+        to: { user: normalized_to_user, server: 's.whatsapp.net' },
+        media: [media_item]
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to send media message' unless process_response(response)
+
+    update_external_created_at(response)
+    unwrap(response.parsed_response)['message_id']
+  end
+
+  def send_reaction_message
+    reply_to = Message.find(@message.in_reply_to)
+
+    response = HTTParty.post(
+      "#{provider_url}/messages/react#{instance_query}",
+      headers: api_headers,
+      body: {
+        jid: format_jid(@phone_number),
+        message_id: reply_to.source_id,
+        reaction: @message.content
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to send reaction' unless process_response(response)
+
+    update_external_created_at(response)
+    unwrap(response.parsed_response)['reaction_id'] || unwrap(response.parsed_response)['message_id']
+  end
+
+  def normalized_to_user
+    @phone_number.to_s.delete('+')
+  end
+
+  def quoted_message_source_id
+    return nil if @message.in_reply_to.blank?
+
+    Message.find_by(id: @message.in_reply_to)&.source_id
+  end
+
   def process_response(response)
     case response.code
     when 200..299
       true
     when 401
-      Rails.logger.error "Click2Run authentication failed: #{response.body}"
+      Rails.logger.error "whatsapp-api authentication failed: #{response.body}"
       false
     when 404
-      Rails.logger.error "Click2Run instance not found: #{response.body}"
+      Rails.logger.error "whatsapp-api instance not found: #{response.body}"
       false
     else
-      Rails.logger.error "Click2Run error: #{response.code} - #{response.body}"
+      Rails.logger.error "whatsapp-api error: #{response.code} - #{response.body}"
       false
     end
   end
 
-  # Update message external_created_at timestamp
-  def update_external_created_at(response)
-    # Click2Run doesn't return timestamp in same format as Baileys
-    # Set to current time as fallback
+  def update_external_created_at(_response)
     @message.update!(external_created_at: Time.current)
   end
 
-  # Error handling wrapper (same pattern as Baileys)
+  # whatsapp-api wraps most successful responses as { success, data: {...}, timestamp }.
+  # Fall back to the unwrapped body for legacy/edge cases.
+  def unwrap(body)
+    return {} if body.blank?
+    return body['data'] if body.is_a?(Hash) && body['data'].is_a?(Hash)
+
+    body.is_a?(Hash) ? body : {}
+  end
+
   private_class_method def self.with_error_handling(*method_names)
     method_names.each do |method_name|
       original_method = instance_method(method_name)
@@ -517,7 +406,6 @@ class Whatsapp::Providers::WhatsappClick2RunService < Whatsapp::Providers::BaseS
     end
   end
 
-  # Handle channel error (attempt reconnection)
   def handle_channel_error
     whatsapp_channel.update_provider_connection!(connection: 'close')
 
@@ -527,13 +415,12 @@ class Whatsapp::Providers::WhatsappClick2RunService < Whatsapp::Providers::BaseS
     begin
       setup_channel_provider_without_error_handling
     rescue StandardError => e
-      Rails.logger.error "Failed to reconnect Click2Run channel after error: #{e.message}"
+      Rails.logger.error "Failed to reconnect whatsapp-api instance after error: #{e.message}"
     ensure
       @handling_error = false
     end
   end
 
-  # Apply error handling to critical methods
   with_error_handling :setup_channel_provider,
                       :disconnect_channel_provider,
                       :send_message,
