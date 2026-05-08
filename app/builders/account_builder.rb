@@ -52,9 +52,12 @@ class AccountBuilder
 
   def enable_default_account_features
     # Enable default features from config/features.yml
-    # This ensures OAuth-created accounts have the same features as UI-created accounts
+    # This ensures OAuth-created accounts have the same features as UI-created accounts.
+    # Filter via safe_default_features so default features whose bit positions
+    # overflow signed bigint (bits 64+, FEATURE_LIST index 63+) don't cause
+    # Account.save! to fail with ActiveModel::RangeError.
     default_features = Featurable::FEATURE_LIST.select { |f| f['enabled'] }.pluck('name')
-    @account.enable_features(*default_features)
+    @account.enable_features(*@account.send(:safe_default_features, default_features))
     @account.save!
   end
 

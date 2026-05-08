@@ -76,6 +76,21 @@ module Featurable
     return true if config.blank?
 
     features_to_enabled = config.value.select { |f| f[:enabled] }.pluck(:name)
-    enable_features(*features_to_enabled)
+    enable_features(*safe_default_features(features_to_enabled))
+  end
+
+  # Drop features whose bit position cannot be stored in a signed bigint.
+  # flag_shih_tzu indexes FEATURES starting at 1, so FEATURE_LIST index N
+  # uses bit (N+1). Bits 0..63 (indices 0..62) fit in signed bigint with
+  # the two's-complement shim in feature_flag_value; bits 64+ (indices
+  # 63+) overflow unconditionally. High-index features can still be
+  # enabled later per-account via SuperAdmin once support exists, but
+  # they cannot be in the default-enabled set without breaking
+  # Account.create!.
+  def safe_default_features(names)
+    names.select do |name|
+      idx = FEATURE_LIST.index { |f| f['name'] == name }
+      idx && idx < 63
+    end
   end
 end
