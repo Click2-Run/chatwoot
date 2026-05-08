@@ -57,7 +57,9 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
       raise ProviderUnavailableError, 'whatsapp-api is unavailable'
     end
 
-    response.parsed_response.deep_symbolize_keys
+    body = response.parsed_response
+    body = JSON.parse(body) if body.is_a?(String)
+    body.deep_symbolize_keys
   end
 
   # Three-call setup: create instance → register webhook → connect.
@@ -245,6 +247,7 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
     raise ProviderUnavailableError, 'Failed to check WhatsApp registration' unless process_response(response)
 
     parsed = response.parsed_response
+    parsed = safe_parse_json(parsed) if parsed.is_a?(String)
     # Response is an array of IsOnWhatsAppResponse — pick first.
     entry = parsed.is_a?(Array) ? parsed.first : unwrap(parsed)
     entry ||= {}
@@ -430,11 +433,21 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
 
   # whatsapp-api wraps most successful responses as { success, data: {...}, timestamp }.
   # Fall back to the unwrapped body for legacy/edge cases.
+  # Tolerates String input — whatsapp-api ships JSON with text/plain content-type
+  # so HTTParty hands back the raw string.
   def unwrap(body)
     return {} if body.blank?
-    return body['data'] if body.is_a?(Hash) && body['data'].is_a?(Hash)
 
-    body.is_a?(Hash) ? body : {}
+    parsed = body.is_a?(String) ? safe_parse_json(body) : body
+    return parsed['data'] if parsed.is_a?(Hash) && parsed['data'].is_a?(Hash)
+
+    parsed.is_a?(Hash) ? parsed : {}
+  end
+
+  def safe_parse_json(body)
+    JSON.parse(body)
+  rescue JSON::ParserError
+    {}
   end
 
   private_class_method def self.with_error_handling(*method_names)

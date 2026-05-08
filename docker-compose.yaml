@@ -39,6 +39,11 @@ services:
       - VITE_DEV_SERVER_HOST=vite
       - NODE_ENV=development
       - RAILS_ENV=development
+    # host.docker.internal lets the rails container reach services bound on
+    # the host (e.g. a local whatsapp-api on host:8080). On Linux Docker the
+    # mapping isn't automatic — declare it explicitly via host-gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
 
@@ -60,6 +65,8 @@ services:
     environment:
       - NODE_ENV=development
       - RAILS_ENV=development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
 
