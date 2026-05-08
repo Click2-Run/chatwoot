@@ -253,8 +253,8 @@
           "BAILEYS_DESC": "Conectar vía API no oficial Baileys",
           "WHATSMEOW": "Whatsmeow",
           "WHATSMEOW_DESC": "Conectar vía API no oficial Whatsmeow",
-          "PROPRIACLOUD": "Própria Cloud Platform",
-          "PROPRIACLOUD_DESC": "Conectar vía QRCode",
+          "PROPRIACLOUD": "Própria Cloud",
+          "PROPRIACLOUD_DESC": "WhatsApp Web",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar vía API no oficial Z-API"
         },
