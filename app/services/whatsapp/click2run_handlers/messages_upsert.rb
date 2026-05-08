@@ -168,9 +168,10 @@ module Whatsapp::Click2RunHandlers::MessagesUpsert
   end
 
   def download_attachment_file
-    # Click2Run provides media download endpoint
-    media_url = @conversation.inbox.channel.media_url(raw_message_id)
-    Down.download(media_url, headers: @conversation.inbox.channel.api_headers)
+    # whatsapp-api exposes media via POST /media/download which takes the raw
+    # message payload (encryption keys live in the message itself) and returns
+    # base64. Delegate to the service so credentials/URL stay encapsulated.
+    @conversation.inbox.channel.provider_service.download_media(@raw_message)
   end
 
   def filename

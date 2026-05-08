@@ -133,8 +133,29 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
 
   def sync_templates; end
 
-  def media_url(media_id)
-    "#{provider_url}/messages/#{media_id}/media#{instance_query(prefix: '&')}"
+  # Legacy callers expect a media URL; whatsapp-api uses POST /media/download
+  # with the raw message body. Kept for interface parity but actual download
+  # happens via {#download_media}.
+  def media_url(_media_id)
+    "#{provider_url}/media/download#{instance_query}"
+  end
+
+  # POST the raw message back to whatsapp-api and return the decrypted bytes
+  # as a StringIO. See OpenAPI: /media/download (line 6666).
+  def download_media(raw_message)
+    response = HTTParty.post(
+      "#{provider_url}/media/download#{instance_query}",
+      headers: api_headers,
+      body: { message: raw_message }.to_json
+    )
+
+    raise Down::Error, "media download failed: #{response.code} #{response.body}" unless response.success?
+
+    body = unwrap(response.parsed_response)
+    encoded = body['data'] || body['body'] || body['file']
+    raise Down::Error, "media download response missing data: #{response.body}" if encoded.blank?
+
+    StringIO.new(Base64.decode64(encoded))
   end
 
   def api_headers
@@ -261,10 +282,16 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
   end
 
   def register_webhook!
+    # CreateWebhookRequest schema requires `scope` and `url`; for instance
+    # scope, `instance_id` is also required in the BODY (the query-param
+    # variant is informational only). Secret must be 16+ chars (HMAC-SHA256
+    # signing key); the channel's webhook_verify_token is exactly 32 hex chars.
     response = HTTParty.post(
       "#{provider_url}/webhooks#{instance_query}",
       headers: api_headers,
       body: {
+        scope: 'instance',
+        instance_id: instance_id,
         url: inbox_webhook_url,
         events: DEFAULT_WEBHOOK_EVENTS,
         enabled: true,
