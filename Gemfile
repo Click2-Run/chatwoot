@@ -75,6 +75,9 @@ gem 'dotenv-rails', '>= 3.0.0'
 gem 'foreman'
 gem 'puma'
 gem 'vite_rails'
+# Pin vite_ruby to 3.7.x — matches the vite-plugin-ruby 5.1.x npm we keep pinned
+# (5.2.x is ESM-only and cannot be loaded by our CommonJS vite.config.ts).
+gem 'vite_ruby', '~> 3.7.0'
 # metrics on heroku
 gem 'barnes'
 

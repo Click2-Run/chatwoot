@@ -26,7 +26,7 @@
 #
 # Reference TS implementation: ../propriacloud.git/apps/minha/app/services/whatsapp.server.ts
 
-class Whatsapp::Providers::WhatsappClick2RunService < Whatsapp::Providers::BaseService
+class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseService
   include BaileysHelper
 
   class MessageContentTypeNotSupported < StandardError; end
