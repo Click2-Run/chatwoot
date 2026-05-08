@@ -22,7 +22,7 @@
 #  index_accounts_on_status  (status)
 #
 
-class Account < ApplicationRecord
+class Account < ApplicationRecord # rubocop:disable Metrics/ClassLength
   # used for single column multi flags
   include FlagShihTzu
   include Reportable
@@ -120,6 +120,8 @@ class Account < ApplicationRecord
   has_many :tiktok_channels, dependent: :destroy_async, class_name: '::Channel::Tiktok'
   has_many :hooks, dependent: :destroy_async, class_name: 'Integrations::Hook'
   has_many :inboxes, dependent: :destroy_async
+  has_many :internal_chat_categories, class_name: 'InternalChat::Category', dependent: :destroy_async
+  has_many :internal_chat_channels, class_name: 'InternalChat::Channel', dependent: :destroy_async
   has_many :labels, dependent: :destroy_async
   has_many :line_channels, dependent: :destroy_async, class_name: '::Channel::Line'
   has_many :mentions, dependent: :destroy_async
@@ -150,6 +152,7 @@ class Account < ApplicationRecord
 
   before_validation :validate_limit_keys
   after_create_commit :notify_creation
+  after_create_commit :setup_internal_chat
   after_destroy :remove_account_sequences
 
   def agents
@@ -205,6 +208,10 @@ class Account < ApplicationRecord
 
   def notify_creation
     Rails.configuration.dispatcher.dispatch(ACCOUNT_CREATED, Time.zone.now, account: self)
+  end
+
+  def setup_internal_chat
+    InternalChat::DefaultChannelSetupService.new(account: self).perform
   end
 
   trigger.after(:insert).for_each(:row) do
