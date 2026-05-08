@@ -179,7 +179,7 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
     response = HTTParty.post(
       "#{provider_url}/presence/chat#{instance_query}",
       headers: api_headers,
-      body: { jid: format_jid(phone_number), state: presence_map[typing_status] }.to_json
+      body: { chat: jid_param(phone_number), state: presence_map[typing_status] }.to_json
     )
 
     raise ProviderUnavailableError, 'Failed to update presence' unless process_response(response)
@@ -199,7 +199,7 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
       "#{provider_url}/messages/mark-read#{instance_query}",
       headers: api_headers,
       body: {
-        jid: format_jid(phone_number),
+        chat: jid_param(phone_number),
         message_ids: messages.map(&:source_id).compact
       }.to_json
     )
@@ -220,9 +220,10 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
   end
 
   def get_profile_pic(jid)
-    response = HTTParty.get(
-      "#{provider_url}/contacts/profile-picture#{instance_query}&jid=#{CGI.escape(jid)}&preview=false",
-      headers: api_headers
+    response = HTTParty.post(
+      "#{provider_url}/contacts/profile-picture#{instance_query}",
+      headers: api_headers,
+      body: { jid: jid_param(jid), preview: false }.to_json
     )
 
     return nil unless process_response(response)
@@ -234,18 +235,23 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
   def on_whatsapp(phone_number)
     @phone_number = phone_number
 
-    response = HTTParty.get(
-      "#{provider_url}/contacts/onwhatsapp#{instance_query}&phone=#{CGI.escape(phone_number)}",
-      headers: api_headers
+    # POST with array body — API can check multiple phones at once.
+    response = HTTParty.post(
+      "#{provider_url}/contacts/onwhatsapp#{instance_query}",
+      headers: api_headers,
+      body: { phones: [phone_number.to_s] }.to_json
     )
 
     raise ProviderUnavailableError, 'Failed to check WhatsApp registration' unless process_response(response)
 
-    body = unwrap(response.parsed_response)
+    parsed = response.parsed_response
+    # Response is an array of IsOnWhatsAppResponse — pick first.
+    entry = parsed.is_a?(Array) ? parsed.first : unwrap(parsed)
+    entry ||= {}
     {
-      'jid' => body['jid'],
-      'exists' => body['is_in'] || body['exists'] || false,
-      'lid' => body['lid']
+      'jid' => entry['jid'],
+      'exists' => entry['is_in'] || entry['exists'] || entry['is_registered'] || false,
+      'lid' => entry['lid']
     }
   end
 
@@ -281,13 +287,23 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
     "#{phone_number.to_s.delete('+')}@s.whatsapp.net"
   end
 
+  # JIDParam structured form { user, server } as the OpenAPI components expect.
+  # Some endpoints accept the string variant in examples; the structured form
+  # works everywhere and matches the schema strictly.
+  def jid_param(phone_or_jid)
+    digits = phone_or_jid.to_s.split('@').first.to_s.delete('+').gsub(/\D/, '')
+    server = phone_or_jid.to_s.split('@')[1].presence || 's.whatsapp.net'
+    { user: digits, server: server }
+  end
+
   def register_webhook!
     # CreateWebhookRequest schema requires `scope` and `url`; for instance
     # scope, `instance_id` is also required in the BODY (the query-param
     # variant is informational only). Secret must be 16+ chars (HMAC-SHA256
     # signing key); the channel's webhook_verify_token is exactly 32 hex chars.
+    # /webhooks POST takes no query params — scope + instance_id live in the body.
     response = HTTParty.post(
-      "#{provider_url}/webhooks#{instance_query}",
+      "#{provider_url}/webhooks",
       headers: api_headers,
       body: {
         scope: 'instance',
@@ -360,12 +376,17 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
 
   def send_reaction_message
     reply_to = Message.find(@message.in_reply_to)
+    chat = jid_param(@phone_number)
 
     response = HTTParty.post(
       "#{provider_url}/messages/react#{instance_query}",
       headers: api_headers,
       body: {
-        jid: format_jid(@phone_number),
+        chat: chat,
+        # For 1:1 chats sender == chat. For groups, the per-message sender JID
+        # would be needed — out of scope for the initial port (Chatwoot does
+        # not currently model group sender JIDs in our reaction outgoing flow).
+        sender: chat,
         message_id: reply_to.source_id,
         reaction: @message.content
       }.to_json
