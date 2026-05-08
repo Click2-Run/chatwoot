@@ -50,6 +50,7 @@ export const FEATURE_FLAGS = {
   CHANNEL_TWILIO_WHATSAPP: 'channel_twilio_whatsapp',
   CHANNEL_BANDWIDTH_SMS: 'channel_bandwidth_sms',
   COMPANIES: 'companies',
+  ADVANCED_SEARCH: 'advanced_search',
 };
 
 export const PREMIUM_FEATURES = [
