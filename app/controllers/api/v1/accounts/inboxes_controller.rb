@@ -98,6 +98,28 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     channel.update_provider_connection!(connection: 'close') if channel.respond_to?(:update_provider_connection!)
   end
 
+  def convert_provider
+    channel = @inbox.channel
+
+    unless channel.respond_to?(:convert_provider!)
+      render json: { error: 'Channel does not support provider conversion' }, status: :unprocessable_entity and return
+    end
+
+    new_provider = params.require(:provider)
+    new_provider_config = (params.permit(provider_config: {})[:provider_config] || {}).to_h
+
+    channel.convert_provider!(new_provider: new_provider, new_provider_config: new_provider_config)
+    render :show
+  rescue ActionController::ParameterMissing => e
+    render json: { message: e.message }, status: :bad_request
+  rescue ActiveRecord::RecordInvalid => e
+    render json: { message: e.record.errors.full_messages.join(', ') }, status: :unprocessable_entity
+  rescue StandardError => e
+    Rails.logger.error "[WHATSAPP] Provider conversion failed for inbox #{@inbox.id}: #{e.class}: #{e.message}"
+    render json: { message: 'Provider conversion failed. Please check your credentials and the previous provider session, then try again.' },
+           status: :unprocessable_entity
+  end
+
   def destroy
     ::DeleteObjectJob.perform_later(@inbox, Current.user, request.ip) if @inbox.present?
     render status: :ok, json: { message: I18n.t('messages.inbox_deletetion_response') }
