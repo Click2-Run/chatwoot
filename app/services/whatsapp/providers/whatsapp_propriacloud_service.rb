@@ -42,14 +42,12 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
                     ENV['PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY'].presence ||
                     ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
 
-  DEFAULT_WEBHOOK_EVENTS = %w[
-    connection.update
-    messages.upsert
-    messages.update
-    messages.delete
-    presence.update
-    contacts.upsert
-  ].freeze
+  # whatsapp-api uses dotted event_type values like `connection.connected`,
+  # `message.received`, `message.sent`, `message.edited`, `presence.update`,
+  # etc. (105 total per OpenAPI). `*` is the catch-all wildcard the API
+  # supports — future-proof against new event types and lets us handle
+  # whichever subset our handlers can dispatch.
+  DEFAULT_WEBHOOK_EVENTS = %w[*].freeze
 
   def self.status
     if DEFAULT_URL.blank? || DEFAULT_API_KEY.blank?
@@ -284,7 +282,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   end
 
   def inbox_webhook_url
-    base_url = ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
+    # The URL we register with whatsapp-api must be reachable from THAT
+    # container, not from the user's browser. In docker-compose dev where
+    # FRONTEND_URL=https://localhost:3000 (browser-facing), the whatsapp-api
+    # container can't reach back to its own localhost — set
+    # WHATSAPP_WEBHOOK_BASE_URL=http://host.docker.internal:3000 (or the
+    # Chatwoot container's network alias) to override.
+    base_url = ENV['WHATSAPP_WEBHOOK_BASE_URL'].presence ||
+               ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
     "#{base_url}/webhooks/whatsapp/#{whatsapp_channel.phone_number}"
   end
 

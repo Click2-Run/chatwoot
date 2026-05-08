@@ -20,6 +20,7 @@ const inboxName = ref('');
 const phoneNumber = ref('');
 const apiKey = ref('');
 const providerUrl = ref('');
+const instanceId = ref('');
 const showAdvancedOptions = ref(false);
 const markAsRead = ref(true);
 
@@ -56,6 +57,13 @@ const createChannel = async () => {
     if (apiKey.value || providerUrl.value) {
       providerConfig.api_key = apiKey.value;
       providerConfig.provider_url = providerUrl.value;
+    }
+
+    // Optional: bind this Chatwoot inbox to an EXISTING whatsapp-api
+    // instance instead of letting the model auto-generate a fresh UUID.
+    // Useful for adopting an instance already paired (e.g. "0119").
+    if (instanceId.value && instanceId.value.trim()) {
+      providerConfig.instance_id = instanceId.value.trim();
     }
 
     const whatsappChannel = await store.dispatch('inboxes/createChannel', {
@@ -190,6 +198,20 @@ const setShowAdvancedOptions = () => {
           />
           <span v-if="v$.apiKey.$error" class="message">
             {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.API_KEY.ERROR') }}
+          </span>
+        </label>
+      </div>
+
+      <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
+        <label>
+          Instance ID (optional)
+          <input
+            v-model="instanceId"
+            type="text"
+            placeholder="Adopt an existing whatsapp-api instance, e.g. 0119"
+          />
+          <span class="message">
+            Leave blank to generate a fresh UUID and create a new instance.
           </span>
         </label>
       </div>

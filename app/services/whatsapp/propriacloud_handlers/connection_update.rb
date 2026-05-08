@@ -22,58 +22,72 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
 
   def process_connection_update
     data = processed_params[:data] || {}
-
-    # Connection states from Propriacloud:
-    #   - `close`: Disconnected, no longer able to send/receive messages
-    #   - `connecting`: In the process of connecting, QR code available
-    #   - `open`: Connected and ready to send/receive messages
+    event = (processed_params[:event_type] || processed_params['event_type'] ||
+             processed_params[:event] || processed_params['event']).to_s
 
     connection_data = {
-      connection: data[:connection] || data['connection'] || inbox.channel.provider_connection['connection'],
+      connection: infer_connection_state(event, data),
       qr_data_url: extract_qr_data_url(data),
-      error: extract_error_message(data)
+      error: extract_error_message(data, event)
     }.compact
 
     inbox.channel.update_provider_connection!(connection_data)
 
-    log_connection_state(data)
+    log_connection_state(event, data)
   end
 
-  def extract_qr_data_url(data)
-    # Propriacloud sends QR code as base64 PNG when connecting
-    qr_code = data[:qr_code] || data['qr_code']
-    return nil unless qr_code
-
-    # Convert to data URL if not already in that format
-    if qr_code.start_with?('data:image/')
-      qr_code
+  # Map whatsapp-api event_type values to the Chatwoot connection state
+  # vocabulary (open / connecting / close). Falls back to the in-payload
+  # `connection` field for legacy / generic events.
+  def infer_connection_state(event, data)
+    case event
+    when 'connection.connected', 'pairing.success'
+      'open'
+    when 'pairing.qrcode', 'pairing.phonecode'
+      'connecting'
+    when 'connection.disconnected',
+         'connection.logged_out',
+         'connection.stream_replaced',
+         'connection.connect_failure',
+         'connection.client_outdated',
+         'connection.temporary_ban',
+         'connection.stream_error',
+         'pairing.error'
+      'close'
     else
-      "data:image/png;base64,#{qr_code}"
+      data[:connection] || data['connection'] || inbox.channel.provider_connection['connection']
     end
   end
 
-  def extract_error_message(data)
-    error = data[:error] || data['error']
-    return nil unless error
+  def extract_qr_data_url(data)
+    # whatsapp-api QR delivery fields (in order of preference):
+    #   - `img`: full base64 PNG (preferred for direct UI rendering)
+    #   - `code`: the WhatsApp pairing code (text); UI generates QR from it
+    #   - `qr_code`: legacy fazer-ai naming
+    qr = data[:img] || data['img'] ||
+         data[:qr_code] || data['qr_code'] ||
+         data[:qrcode] || data['qrcode']
+    return nil if qr.blank?
 
-    # Translate error message using i18n
+    return qr if qr.start_with?('data:image/')
+
+    "data:image/png;base64,#{qr}"
+  end
+
+  def extract_error_message(data, event = nil)
+    error = data[:error] || data['error']
+    error ||= event.split('.', 2).last if event.to_s.start_with?('connection.', 'pairing.error')
+    return nil if error.blank?
+
     I18n.t("errors.inboxes.channel.provider_connection.#{error}", default: error.to_s)
   end
 
-  def log_connection_state(data)
-    connection = data[:connection] || data['connection']
+  def log_connection_state(event, data)
     error = data[:error] || data['error']
-
     if error.present?
-      Rails.logger.error "Propriacloud connection error",
-                         inbox_id: inbox.id,
-                         phone_number: inbox.channel.phone_number,
-                         error: error
+      Rails.logger.error "Propriacloud #{event} error: #{error} (inbox=#{inbox.id})"
     else
-      Rails.logger.info "Propriacloud connection update",
-                        inbox_id: inbox.id,
-                        phone_number: inbox.channel.phone_number,
-                        connection: connection
+      Rails.logger.info "Propriacloud #{event} (inbox=#{inbox.id} state=#{inbox.channel.provider_connection['connection']})"
     end
   end
 end
