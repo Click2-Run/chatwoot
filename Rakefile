@@ -16,3 +16,14 @@ if Rake::Task.task_defined?('db:schema:load') &&
    Rake::Task.task_defined?('db:internal_chat:ensure_search_functions')
   Rake::Task['db:schema:load'].enhance(['db:internal_chat:ensure_search_functions'])
 end
+
+# Re-inject the f_unaccent `execute <<~SQL ...` block into db/schema.rb after
+# db:schema:dump rewrites the file. The schema dumper can't capture CREATE
+# FUNCTION statements, so without this hook every dump would silently drop the
+# block and break db:schema:load downstream.
+if Rake::Task.task_defined?('db:schema:dump') &&
+   Rake::Task.task_defined?('db:internal_chat:inject_schema_functions')
+  Rake::Task['db:schema:dump'].enhance do
+    Rake::Task['db:internal_chat:inject_schema_functions'].invoke
+  end
+end

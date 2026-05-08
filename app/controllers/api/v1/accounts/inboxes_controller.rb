@@ -1,4 +1,4 @@
-class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
+class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController # rubocop:disable Metrics/ClassLength
   include Api::V1::InboxesHelper
   before_action :fetch_inbox, except: [:index, :create]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
@@ -66,6 +66,12 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController
       @inbox.agent_bot_inbox.destroy!
     end
     head :ok
+  end
+
+  def reset_secret
+    return head :not_found unless @inbox.api?
+
+    @inbox.channel.reset_secret!
   end
 
   def setup_channel_provider

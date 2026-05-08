@@ -24,7 +24,12 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   private
 
   def sign_in_user
+    # Capture before skip_confirmation! sets confirmed_at, which would
+    # make oauth_user_needs_password_reset? return false and skip the
+    # password reset for persisted unconfirmed users.
+    needs_password_reset = oauth_user_needs_password_reset?
     @resource.skip_confirmation! if confirmable_enabled?
+    set_random_password_if_oauth_user if needs_password_reset
 
     # Sync profile from OpenID provider if enabled (default: true)
     # This updates name, email, and picture but preserves display_name (Chatwoot-specific)
@@ -38,7 +43,10 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   end
 
   def sign_in_user_on_mobile
+    # See comment in sign_in_user for why this is captured before skip_confirmation!
+    needs_password_reset = oauth_user_needs_password_reset?
     @resource.skip_confirmation! if confirmable_enabled?
+    set_random_password_if_oauth_user if needs_password_reset
 
     # once the resource is found and verified
     # we can just send them to the login page again with the SSO params
@@ -59,14 +67,16 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
 
     create_account_for_user
 
-    # For trusted OAuth providers (Click2Run), set a random password and skip password setup
-    # These users should only authenticate via OAuth, not password
+    # For trusted OAuth providers (Click2Run/Logto), assign a secure random
+    # password (so the User record satisfies devise-secure_password validators)
+    # and sign in directly — these accounts are OAuth-only and never use a
+    # password to log in.
     if trusted_oauth_provider?
-      @resource.password = generate_secure_random_password
-      @resource.save!
+      set_random_password_if_oauth_user
       sign_in_user
     else
       # For standard OAuth (Google), require password setup for account recovery
+      set_random_password_if_oauth_user
       token = @resource.send(:set_reset_password_token)
       frontend_url = ENV.fetch('FRONTEND_URL', nil)
       redirect_to "#{frontend_url}/app/auth/password/edit?config=default&reset_password_token=#{token}"
@@ -133,6 +143,15 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
       # If nothing is available, return empty string (user can set name later)
       auth_hash['info']['name'].presence || ''
     end
+  end
+
+  def oauth_user_needs_password_reset?
+    @resource.present? && (@resource.new_record? || !@resource.confirmed?)
+  end
+
+  def set_random_password_if_oauth_user
+    # Password must satisfy secure_password requirements (uppercase, lowercase, number, special char)
+    @resource.update!(password: "#{SecureRandom.hex(16)}aA1!") if @resource.persisted?
   end
 
   def default_devise_mapping

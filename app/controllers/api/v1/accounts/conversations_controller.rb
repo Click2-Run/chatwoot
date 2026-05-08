@@ -126,6 +126,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     # High-traffic accounts generate excessive DB writes when agents frequently switch between conversations.
     # Throttle last_seen updates to once per hour when there are no unread messages to reduce DB load.
     # Always update immediately if there are unread messages to maintain accurate read/unread state.
+    # Visiting a conversation should clear any unread inbox notifications for this conversation.
+    Notification::MarkConversationReadService.new(user: Current.user, account: Current.account, conversation: @conversation).perform
     has_unread = assignee? ? @conversation.assignee_unread_messages.any? : @conversation.unread_messages.any?
 
     # No unread messages - apply throttling to limit DB writes

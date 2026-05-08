@@ -5,10 +5,24 @@
 # `CREATE FUNCTION`, so without this hook `db:schema:load` would fail trying to
 # create indexes that reference the non-existent `f_unaccent` function.
 #
-# This task is wired as a prerequisite of `db:schema:load` from the Rakefile
-# (after `Rails.application.load_tasks`), so both task definitions are
-# guaranteed to be present when the prereq is added.
+# These tasks are wired from the Rakefile (after `Rails.application.load_tasks`):
+# - `ensure_search_functions` runs BEFORE `db:schema:load` to create the function
+#   in the target database.
+# - `inject_schema_functions` runs AFTER `db:schema:dump` to re-insert the
+#   `execute <<~SQL CREATE OR REPLACE FUNCTION ...` block the dumper drops.
 
+SCHEMA_FUNCTION_MARKER = 'CREATE OR REPLACE FUNCTION f_unaccent'.freeze
+
+SCHEMA_FUNCTION_BLOCK = <<~RUBY.gsub(/^(?=.)/, '  ').freeze
+  # Custom SQL functions (required before index creation)
+  execute <<~SQL
+    CREATE OR REPLACE FUNCTION f_unaccent(text)
+      RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
+      AS $func$ SELECT public.unaccent('public.unaccent', $1) $func$
+  SQL
+RUBY
+
+# rubocop:disable Metrics/BlockLength
 namespace :db do
   namespace :internal_chat do
     desc 'Ensure the f_unaccent wrapper function required by internal chat search indexes exists'
@@ -40,5 +54,29 @@ namespace :db do
     ensure
       ActiveRecord::Base.establish_connection(original_db_config) if original_db_config
     end
+
+    desc 'Inject the f_unaccent function block into db/schema.rb (run after db:schema:dump)'
+    task inject_schema_functions: :environment do
+      schema_path = Rails.root.join('db/schema.rb')
+      next unless File.exist?(schema_path)
+
+      content = File.read(schema_path)
+      next if content.include?(SCHEMA_FUNCTION_MARKER)
+
+      new_content = content.sub(
+        /(^  enable_extension "[^"]+"\n)(\n  create_table)/,
+        "\\1\n#{SCHEMA_FUNCTION_BLOCK}\\2"
+      )
+
+      if new_content == content
+        warn '[inject_schema_functions] Could not find insertion point in db/schema.rb ' \
+             '(last enable_extension + create_table); f_unaccent block NOT injected. Add it manually.'
+        next
+      end
+
+      File.write(schema_path, new_content)
+      puts '-- Injected f_unaccent function block into db/schema.rb'
+    end
   end
 end
+# rubocop:enable Metrics/BlockLength
