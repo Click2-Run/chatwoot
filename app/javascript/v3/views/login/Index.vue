@@ -137,7 +137,7 @@ export default {
     );
     if (shouldAutoRedirect && this.showClick2RunOpenid && !this.ssoAuthToken) {
       // Redirect to Click2Run OAuth flow
-      window.location.href = '/auth/click2run';
+      window.location.href = '/auth/propriacloud';
     }
   },
   methods: {

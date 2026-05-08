@@ -31,7 +31,7 @@ const { t } = useI18n();
 const getClick2RunAuthUrl = () => {
   // OmniAuth provides /auth/:provider routes automatically
   // This will initiate the OpenID Connect authorization flow
-  return '/auth/click2run';
+  return '/auth/propriacloud';
 };
 
 // Use dynamic label from config or fall back to i18n translation

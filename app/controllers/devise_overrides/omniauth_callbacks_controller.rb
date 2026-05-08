@@ -161,7 +161,7 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   def trusted_oauth_provider?
     # List of OAuth providers that are trusted and should skip domain validation
     # Click2Run is a trusted SSO provider, so we allow any email domain
-    trusted_providers = ['click2run']
+    trusted_providers = %w[propriacloud click2run]
     trusted_providers.include?(auth_hash['provider'])
   end
 

@@ -16,7 +16,7 @@ Rails.application.config.middleware.use OmniAuth::Builder do
 
   if click2run_issuer.present? && click2run_app_id.present?
     provider :openid_connect, {
-      name: :click2run,
+      name: :propriacloud,
       issuer: click2run_issuer,
       discovery: true,
       scope: click2run_scopes,
@@ -25,7 +25,7 @@ Rails.application.config.middleware.use OmniAuth::Builder do
       client_options: {
         identifier: click2run_app_id,
         secret: click2run_app_secret,
-        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'https://localhost:3000')}/omniauth/click2run/callback"
+        redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'https://localhost:3000')}/omniauth/propriacloud/callback"
       }
     }
   end
