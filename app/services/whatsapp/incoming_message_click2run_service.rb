@@ -43,11 +43,26 @@ class Whatsapp::IncomingMessageClick2runService < Whatsapp::IncomingMessageBaseS
   private
 
   def validate_webhook_token!
+    expected_token = inbox.channel.provider_config['webhook_verify_token']
+    raise InvalidWebhookVerifyToken if expected_token.blank?
+
+    # whatsapp-api signs each delivery with HMAC-SHA256 in `X-Webhook-Signature`
+    # (format: "sha256=<hex-digest>") computed over the raw request body, using
+    # the secret we registered via POST /webhooks. Prefer that path when present.
+    signature = processed_params[:_webhook_signature] || processed_params['_webhook_signature']
+    raw_body = processed_params[:_webhook_raw_body] || processed_params['_webhook_raw_body']
+
+    if signature.present? && raw_body.present?
+      expected = "sha256=#{OpenSSL::HMAC.hexdigest('SHA256', expected_token, raw_body)}"
+      raise InvalidWebhookVerifyToken unless ActiveSupport::SecurityUtils.secure_compare(signature, expected)
+
+      return
+    end
+
+    # Backwards-compat: legacy delivery backends echoed the secret in the body.
     webhook_token = processed_params[:webhook_verify_token] ||
                     processed_params['webhook_verify_token'] ||
                     processed_params[:webhookVerifyToken]
-
-    expected_token = inbox.channel.provider_config['webhook_verify_token']
 
     raise InvalidWebhookVerifyToken if webhook_token != expected_token
   end
