@@ -210,33 +210,11 @@ const handleManualLinkClick = () => {
   selectProvider(PROVIDER_TYPES.WHATSAPP_MANUAL);
 };
 
-// Hide Click2Run promo if only official WhatsApp Cloud and Click2Run are enabled
-// No need to promote Click2Run if there are no other alternatives
-const shouldShowClick2RunPromo = computed(() => {
-  if (!isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD)) {
-    return false;
-  }
-
-  // Count enabled providers (excluding WhatsApp Cloud which is always enabled)
-  const otherProvidersEnabled = [
-    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_TWILIO_WHATSAPP),
-    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_BAILEYS),
-    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_WHATSMEOW),
-    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI),
-  ].filter(Boolean).length;
-
-  // Show promo only if there are other providers besides WhatsApp Cloud and Click2Run
-  return otherProvidersEnabled > 0;
-});
-
-// Show Z-API promo only if Z-API is enabled AND Click2Run is disabled
-// This prevents promoting Z-API when Click2Run (superior alternative) is available
-const shouldShowZApiPromo = computed(() => {
-  return (
-    isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI) &&
-    !isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD)
-  );
-});
+// Promo banners (Própria Cloud / Z-API) are intentionally disabled — Própria
+// Cloud is now the recommended path and shown directly in the picker; no
+// cross-sell needed.
+const shouldShowPropriacloudPromo = computed(() => false);
+const shouldShowZApiPromo = computed(() => false);
 </script>
 
 <template>
@@ -276,7 +254,7 @@ const shouldShowZApiPromo = computed(() => {
       </div>
 
       <div
-        v-if="shouldShowClick2RunPromo && !isConvertMode"
+        v-if="shouldShowPropriacloudPromo && !isConvertMode"
         class="mt-6 relative overflow-visible"
       >
         <PromoBanner
