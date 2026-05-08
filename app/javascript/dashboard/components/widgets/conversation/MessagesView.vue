@@ -693,6 +693,7 @@ export default {
         color-scheme="warning"
         class="mx-2 mt-2 overflow-hidden rounded-lg"
         :banner-message="$t('CONVERSATION.GROUPS_DISABLED_BANNER')"
+        :notice-message="$t('GENERAL_SETTINGS.SUPER_ADMIN_ONLY_NOTICE')"
         has-action-button
         :action-button-label="$t('CONVERSATION.GROUPS_DISABLED_CTA')"
         @primary-action="onOpenGroupsEnabledLink"
