@@ -611,7 +611,7 @@ export default {
       class="hidden"
     />
   </div>
-  <div v-else-if="isAWhatsAppBaileysChannel">
+  <div v-else-if="isAWhatsAppBaileysChannel || isAWhatsAppPropriacloudChannel">
     <WhatsappLinkDeviceModal
       v-if="showLinkDeviceModal"
       :show="showLinkDeviceModal"

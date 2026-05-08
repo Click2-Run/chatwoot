@@ -133,6 +133,13 @@ export const useInbox = (inboxId = null) => {
     );
   });
 
+  const isAWhatsAppPropriacloudChannel = computed(() => {
+    return (
+      channelType.value === INBOX_TYPES.WHATSAPP &&
+      whatsAppAPIProvider.value === 'propriacloud'
+    );
+  });
+
   const isAWhatsAppChannel = computed(() => {
     return (
       channelType.value === INBOX_TYPES.WHATSAPP ||
@@ -169,6 +176,7 @@ export const useInbox = (inboxId = null) => {
     is360DialogWhatsAppChannel,
     isAWhatsAppBaileysChannel,
     isAWhatsAppZapiChannel,
+    isAWhatsAppPropriacloudChannel,
     isAnEmailChannel,
     isAnInstagramChannel,
     isATiktokChannel,

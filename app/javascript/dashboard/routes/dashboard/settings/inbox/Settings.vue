@@ -140,6 +140,9 @@ export default {
       if (this.isAWhatsAppZapiChannel) {
         return this.$t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.ZAPI');
       }
+      if (this.isAWhatsAppPropriacloudChannel) {
+        return this.$t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.PROPRIACLOUD');
+      }
       return '';
     },
     isConvertibleWhatsAppChannel() {
@@ -147,6 +150,7 @@ export default {
         this.isAWhatsAppCloudChannel ||
         this.isAWhatsAppBaileysChannel ||
         this.isAWhatsAppZapiChannel ||
+        this.isAWhatsAppPropriacloudChannel ||
         this.is360DialogWhatsAppChannel
       );
     },
