@@ -1,6 +1,6 @@
 import { frontendURL } from '../../../helper/URLHelper';
-
-const InternalChatLayout = () => import('./InternalChatLayout.vue');
+import InternalChatLayout from './InternalChatLayout.vue';
+import DraftsList from './DraftsList.vue';
 
 const INTERNAL_CHAT_PERMISSIONS = ['administrator', 'agent'];
 
@@ -56,7 +56,7 @@ export default {
           meta: {
             permissions: INTERNAL_CHAT_PERMISSIONS,
           },
-          component: () => import('./DraftsList.vue'),
+          component: DraftsList,
         },
       ],
     },
