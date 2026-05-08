@@ -17,10 +17,10 @@
   display_name: Facebook Channel
   enabled: true
   help_url: https://chwt.app/hc/fb
-- name: channel_twitter
-  display_name: Twitter Channel
-  enabled: false
-  deprecated: true
+- name: channel_whatsapp_propriacloud
+  display_name: Própria Cloud WhatsApp Provider
+  enabled: true
+  help_url: https://propria.cloud/docs/whatsapp
 - name: ip_lookup
   display_name: IP Lookup
   enabled: false
@@ -243,9 +243,9 @@
   enabled: false
   help_url: https://chwt.app/hc/whatsmeow
 - name: channel_whatsapp_click2run
-  display_name: Click2Run WhatsApp Provider
-  enabled: true
-  help_url: https://chwt.app/hc/click2run
+  display_name: Click2Run WhatsApp Provider (legacy — superseded by channel_whatsapp_propriacloud)
+  enabled: false
+  deprecated: true
 - name: channel_twilio_whatsapp
   display_name: Twilio WhatsApp Provider
   enabled: false

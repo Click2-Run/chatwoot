@@ -14,7 +14,7 @@ import { parseBoolean } from '@chatwoot/utils';
 import SimpleDivider from '../../components/Divider/SimpleDivider.vue';
 import FormInput from '../../components/Form/Input.vue';
 import GoogleOAuthButton from '../../components/GoogleOauth/Button.vue';
-import Click2RunOpenidButton from '../../components/Click2RunOpenid/Button.vue';
+import PropriacloudOpenidButton from '../../components/PropriacloudOpenid/Button.vue';
 import Spinner from 'shared/components/Spinner.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
@@ -33,7 +33,7 @@ export default {
   components: {
     FormInput,
     GoogleOAuthButton,
-    Click2RunOpenidButton,
+    PropriacloudOpenidButton,
     Spinner,
     NextButton,
     SimpleDivider,
@@ -96,8 +96,8 @@ export default {
         Boolean(window.chatwootConfig.googleOAuthClientId)
       );
     },
-    showClick2RunOpenid() {
-      return Boolean(window.chatwootConfig.click2runOpenidAppId);
+    showPropriacloudOpenid() {
+      return Boolean(window.chatwootConfig.propriacloudOpenidAppId);
     },
     showSignupLink() {
       return (
@@ -131,12 +131,16 @@ export default {
     }
   },
   mounted() {
-    // Auto-redirect to Click2Run OpenID login if enabled
+    // Auto-redirect to Própria Cloud OpenID login if enabled
     const shouldAutoRedirect = parseBoolean(
-      window.chatwootConfig.click2runOpenidLoginRedirect
+      window.chatwootConfig.propriacloudOpenidLoginRedirect
     );
-    if (shouldAutoRedirect && this.showClick2RunOpenid && !this.ssoAuthToken) {
-      // Redirect to Click2Run OAuth flow
+    if (
+      shouldAutoRedirect &&
+      this.showPropriacloudOpenid &&
+      !this.ssoAuthToken
+    ) {
+      // Redirect to Própria Cloud OAuth flow
       window.location.href = '/auth/propriacloud';
     }
   },
@@ -289,7 +293,7 @@ export default {
       <div v-if="!email">
         <div class="flex flex-col gap-4">
           <GoogleOAuthButton v-if="showGoogleOAuth" />
-          <Click2RunOpenidButton v-if="showClick2RunOpenid" />
+          <PropriacloudOpenidButton v-if="showPropriacloudOpenid" />
           <div v-if="showSamlLogin" class="text-center">
             <router-link
               to="/app/login/sso"
@@ -307,7 +311,7 @@ export default {
           <SimpleDivider
             v-if="
               !isDefaultAuthDisabled &&
-              (showGoogleOAuth || showClick2RunOpenid || showSamlLogin)
+              (showGoogleOAuth || showPropriacloudOpenid || showSamlLogin)
             "
             :label="$t('COMMON.OR')"
             class="uppercase"

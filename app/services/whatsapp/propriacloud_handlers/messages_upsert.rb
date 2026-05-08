@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Click2Run Messages Upsert Handler
-# Processes incoming and outgoing messages from Click2Run
+# Propriacloud Messages Upsert Handler
+# Processes incoming and outgoing messages from Propriacloud
 #
-# Event payload format from Click2Run:
+# Event payload format from Propriacloud:
 # {
 #   event: "messages.upsert",
 #   instance_id: "1234567890",
@@ -25,8 +25,8 @@
 #   }
 # }
 
-module Whatsapp::Click2RunHandlers::MessagesUpsert
-  include Whatsapp::Click2RunHandlers::Helpers
+module Whatsapp::PropriacloudHandlers::MessagesUpsert
+  include Whatsapp::PropriacloudHandlers::Helpers
 
   private
 
@@ -135,7 +135,7 @@ module Whatsapp::Click2RunHandlers::MessagesUpsert
   end
 
   def extract_message_timestamp
-    # Click2Run uses Unix timestamps (int64)
+    # Propriacloud uses Unix timestamps (int64)
     timestamp = @raw_message[:message_timestamp] || @raw_message['message_timestamp'] || @raw_message[:messageTimestamp]
     return extract_timestamp(timestamp) if timestamp
 

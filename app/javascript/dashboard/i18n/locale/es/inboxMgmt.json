@@ -253,18 +253,18 @@
           "BAILEYS_DESC": "Conectar vía API no oficial Baileys",
           "WHATSMEOW": "Whatsmeow",
           "WHATSMEOW_DESC": "Conectar vía API no oficial Whatsmeow",
-          "CLICK2RUN": "Click2Run Platform",
-          "CLICK2RUN_DESC": "Conectar vía QRCode",
+          "PROPRIACLOUD": "Própria Cloud Platform",
+          "PROPRIACLOUD_DESC": "Conectar vía QRCode",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar vía API no oficial Z-API"
         },
         "SELECT_PROVIDER": {
           "TITLE": "Seleccione su proveedor de API",
           "DESCRIPTION": "Elija su proveedor de WhatsApp. Puede conectarse directamente a través de Meta, que no requiere configuración, o conectarse a través de Twilio usando las credenciales de su cuenta.",
-          "CLICK2RUN_PROMO": {
+          "PROPRIACLOUD_PROMO": {
             "TITLE": "¿Busca una solución de WhatsApp de alto rendimiento?",
-            "DESCRIPTION": "Click2Run es una integración de WhatsApp basada en Go lista para producción, con todas las funciones, que ofrece un rendimiento y estabilidad superiores en comparación con Baileys, Evolution API/Go/Cloud, Z-API y otras alternativas basadas en Node.js. Perfecto para empresas que requieren conectividad WhatsApp confiable y escalable.",
-            "CTA": "Usar Click2Run"
+            "DESCRIPTION": "Própria Cloud es una integración de WhatsApp basada en Go lista para producción, con todas las funciones, que ofrece un rendimiento y estabilidad superiores en comparación con Baileys, Evolution API/Go/Cloud, Z-API y otras alternativas basadas en Node.js. Perfecto para empresas que requieren conectividad WhatsApp confiable y escalable.",
+            "CTA": "Usar Própria Cloud"
           },
           "ZAPI_PROMO": {
             "TITLE": "¿Busca una solución de WhatsApp confiable?",
@@ -403,10 +403,10 @@
             "ERROR_MESSAGE": "No pudimos guardar el canal Whatsmeow"
           }
         },
-        "CLICK2RUN": {
+        "PROPRIACLOUD": {
           "INFO": {
-            "TITLE": "API Click2Run",
-            "DESCRIPTION": "Click2Run es una integración de WhatsApp basada en Go lista para producción, con todas las funciones, que ofrece un rendimiento y estabilidad superiores en comparación con Baileys, Evolution API/Go/Cloud, Z-API y otras alternativas basadas en Node.js."
+            "TITLE": "API Própria Cloud",
+            "DESCRIPTION": "Própria Cloud es una integración de WhatsApp basada en Go lista para producción, con todas las funciones, que ofrece un rendimiento y estabilidad superiores en comparación con Baileys, Evolution API/Go/Cloud, Z-API y otras alternativas basadas en Node.js."
           },
           "PROVIDER_URL": {
             "LABEL": "URL del proveedor",
@@ -418,9 +418,9 @@
             "PLACEHOLDER": "Clave API",
             "ERROR": "Por favor, ingrese un valor válido."
           },
-          "SUBMIT_BUTTON": "Crear canal Click2Run",
+          "SUBMIT_BUTTON": "Crear canal Própria Cloud",
           "API": {
-            "ERROR_MESSAGE": "No pudimos guardar el canal Click2Run"
+            "ERROR_MESSAGE": "No pudimos guardar el canal Própria Cloud"
           }
         },
         "API": {

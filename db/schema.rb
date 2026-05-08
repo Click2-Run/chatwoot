@@ -630,7 +630,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.bigint "account_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "contacts_count", default: 0, null: false
+    t.integer "contacts_count"
     t.index ["account_id", "domain"], name: "index_companies_on_account_and_domain", unique: true, where: "(domain IS NOT NULL)"
     t.index ["account_id"], name: "index_companies_on_account_id"
     t.index ["name", "account_id"], name: "index_companies_on_name_and_account_id"
@@ -995,9 +995,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.boolean "muted", default: false, null: false
     t.datetime "last_read_at"
     t.boolean "favorited", default: false, null: false
+    t.boolean "hidden", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.boolean "hidden", default: false, null: false
     t.index ["internal_chat_channel_id", "user_id"], name: "idx_ic_channel_members_channel_user", unique: true
     t.index ["user_id", "favorited"], name: "idx_ic_channel_members_user_favorited"
     t.index ["user_id"], name: "index_internal_chat_channel_members_on_user_id"
@@ -1071,11 +1071,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.text "content"
     t.integer "content_type", default: 0, null: false
     t.bigint "parent_id"
+    t.integer "replies_count", default: 0, null: false
     t.jsonb "content_attributes", default: {}
     t.string "echo_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "replies_count", default: 0, null: false
     t.index "f_unaccent(content) gin_trgm_ops", name: "idx_ic_messages_content_unaccent_trgm", using: :gin
     t.index ["account_id", "created_at"], name: "idx_ic_messages_account_created"
     t.index ["account_id"], name: "index_internal_chat_messages_on_account_id"
@@ -1091,8 +1091,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.string "emoji"
     t.string "image_url"
     t.integer "position", default: 0, null: false
-    t.datetime "created_at", null: false
     t.integer "votes_count", default: 0, null: false
+    t.datetime "created_at", null: false
     t.index ["internal_chat_poll_id", "position"], name: "idx_ic_poll_options_poll_pos"
     t.index ["internal_chat_poll_id"], name: "idx_ic_poll_options_poll"
   end
@@ -1523,18 +1523,13 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.text "message_signature"
     t.string "otp_secret"
     t.integer "consumed_timestep"
-    t.boolean "otp_required_for_login", default: false, null: false
+    t.boolean "otp_required_for_login", default: false
     t.text "otp_backup_codes"
     t.index "f_unaccent((name)::text) gin_trgm_ops", name: "idx_users_name_unaccent_trgm", using: :gin
     t.index ["email"], name: "index_users_on_email"
     t.index ["otp_required_for_login"], name: "index_users_on_otp_required_for_login"
     t.index ["otp_secret"], name: "index_users_on_otp_secret", unique: true
-    t.index ["pubsub_token"], name: "index_users_on_pubsub_token", unique: true
-    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
-    t.index ["uid", "provider"], name: "index_users_on_uid_and_provider", unique: true
-  end
-
-  create_table "webhooks", force: :cascade do |t|
+    t.in  create_table "webhooks", force: :cascade do |t|
     t.integer "account_id"
     t.integer "inbox_id"
     t.text "url"
@@ -1615,6 +1610,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
       after(:insert).
       for_each(:row) do
     "execute format('create sequence IF NOT EXISTS camp_dpid_seq_%s', NEW.id);"
+  end
+
+  create_trigger("campaigns_before_insert_row_tr", :generated => true, :compatibility => 1).
+      on("campaigns").
+      before(:insert).
+      for_each(:row) do
+    "NEW.display_id := nextval('camp_dpid_seq_' || NEW.account_id);"
+  end
+
+end
+, NEW.id);"
   end
 
   create_trigger("campaigns_before_insert_row_tr", :generated => true, :compatibility => 1).

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Click2Run Event Handlers - Helper Methods
-# Adapted from Baileys handlers for Click2Run event format
+# Propriacloud Event Handlers - Helper Methods
+# Adapted from Baileys handlers for Propriacloud event format
 #
 # Key Differences from Baileys:
 # - Timestamp format: Unix int64 (not {low, high, unsigned})
@@ -9,7 +9,7 @@
 # - JID format: Same as Baileys (phone@s.whatsapp.net)
 # - Message keys: Slightly different nesting
 
-module Whatsapp::Click2RunHandlers::Helpers # rubocop:disable Metrics/ModuleLength
+module Whatsapp::PropriacloudHandlers::Helpers # rubocop:disable Metrics/ModuleLength
   include Whatsapp::IncomingMessageServiceHelpers
 
   private
@@ -19,8 +19,8 @@ module Whatsapp::Click2RunHandlers::Helpers # rubocop:disable Metrics/ModuleLeng
   end
 
   def sender_lid
-    # Click2Run doesn't use LID in the same way as Baileys
-    # LID (Linked ID) is handled internally by click2run
+    # Propriacloud doesn't use LID in the same way as Baileys
+    # LID (Linked ID) is handled internally by propriacloud
     @raw_message[:key][:sender_lid] || @raw_message[:sender_lid]
   end
 
@@ -57,7 +57,7 @@ module Whatsapp::Click2RunHandlers::Helpers # rubocop:disable Metrics/ModuleLeng
     msg = @raw_message[:message] || @raw_message
     return 'unsupported' unless msg.is_a?(Hash)
 
-    # Click2Run uses similar message structure to Baileys
+    # Propriacloud uses similar message structure to Baileys
     if msg.key?(:conversation) || msg.dig(:extended_text_message, :text).present? || msg.dig(:text_message, :text).present?
       'text'
     elsif msg.key?(:image_message)
@@ -151,7 +151,7 @@ module Whatsapp::Click2RunHandlers::Helpers # rubocop:disable Metrics/ModuleLeng
   end
 
   def contact_name
-    # Click2Run provides push_name in events
+    # Propriacloud provides push_name in events
     name = @raw_message[:verified_biz_name].presence ||
            @raw_message[:push_name].presence ||
            @raw_message[:pushname].presence
@@ -199,7 +199,7 @@ module Whatsapp::Click2RunHandlers::Helpers # rubocop:disable Metrics/ModuleLeng
     ::Redis::Alfred.delete(key)
   end
 
-  # Click2Run uses Unix timestamps (int64), not Baileys' {low, high, unsigned}
+  # Propriacloud uses Unix timestamps (int64), not Baileys' {low, high, unsigned}
   def extract_timestamp(timestamp_value)
     return Time.current unless timestamp_value
 

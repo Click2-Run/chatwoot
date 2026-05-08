@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Click2Run Connection Update Handler
-# Processes connection state changes and QR code updates from Click2Run
+# Propriacloud Connection Update Handler
+# Processes connection state changes and QR code updates from Propriacloud
 #
-# Event payload format from Click2Run:
+# Event payload format from Propriacloud:
 # {
 #   event: "connection.update",
 #   instance_id: "1234567890",
@@ -15,15 +15,15 @@
 #   }
 # }
 
-module Whatsapp::Click2RunHandlers::ConnectionUpdate
-  include Whatsapp::Click2RunHandlers::Helpers
+module Whatsapp::PropriacloudHandlers::ConnectionUpdate
+  include Whatsapp::PropriacloudHandlers::Helpers
 
   private
 
   def process_connection_update
     data = processed_params[:data] || {}
 
-    # Connection states from Click2Run:
+    # Connection states from Propriacloud:
     #   - `close`: Disconnected, no longer able to send/receive messages
     #   - `connecting`: In the process of connecting, QR code available
     #   - `open`: Connected and ready to send/receive messages
@@ -40,7 +40,7 @@ module Whatsapp::Click2RunHandlers::ConnectionUpdate
   end
 
   def extract_qr_data_url(data)
-    # Click2Run sends QR code as base64 PNG when connecting
+    # Propriacloud sends QR code as base64 PNG when connecting
     qr_code = data[:qr_code] || data['qr_code']
     return nil unless qr_code
 
@@ -65,12 +65,12 @@ module Whatsapp::Click2RunHandlers::ConnectionUpdate
     error = data[:error] || data['error']
 
     if error.present?
-      Rails.logger.error "Click2Run connection error",
+      Rails.logger.error "Propriacloud connection error",
                          inbox_id: inbox.id,
                          phone_number: inbox.channel.phone_number,
                          error: error
     else
-      Rails.logger.info "Click2Run connection update",
+      Rails.logger.info "Propriacloud connection update",
                         inbox_id: inbox.id,
                         phone_number: inbox.channel.phone_number,
                         connection: connection

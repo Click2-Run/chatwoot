@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Whatsapp Incoming Message Service for Click2Run Provider
+# Whatsapp Incoming Message Service for Propriacloud Provider
 #
-# Processes webhook events from Click2Run service
+# Processes webhook events from Propriacloud service
 # Events: connection.update, messages.upsert, messages.update
 #
 # Webhook payload format:
@@ -15,11 +15,11 @@
 #   data: {...}
 # }
 
-class Whatsapp::IncomingMessageClick2runService < Whatsapp::IncomingMessageBaseService
+class Whatsapp::IncomingMessagePropriacloudService < Whatsapp::IncomingMessageBaseService
   include Events::Types
-  include Whatsapp::Click2runHandlers::ConnectionUpdate
-  include Whatsapp::Click2runHandlers::MessagesUpsert
-  include Whatsapp::Click2runHandlers::MessagesUpdate
+  include Whatsapp::PropriacloudHandlers::ConnectionUpdate
+  include Whatsapp::PropriacloudHandlers::MessagesUpsert
+  include Whatsapp::PropriacloudHandlers::MessagesUpdate
 
   class InvalidWebhookVerifyToken < StandardError; end
 
@@ -78,7 +78,7 @@ class Whatsapp::IncomingMessageClick2runService < Whatsapp::IncomingMessageBaseS
     if respond_to?(method_name, true)
       send(method_name)
     else
-      Rails.logger.warn "Click2Run unsupported event: #{event_name}"
+      Rails.logger.warn "Propriacloud unsupported event: #{event_name}"
     end
   end
 end

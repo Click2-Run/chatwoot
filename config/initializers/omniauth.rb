@@ -7,24 +7,37 @@ Rails.application.config.middleware.use OmniAuth::Builder do
     provider_ignores_state: true
   }
 
-  # Click2Run OpenID Connect provider
-  # Supports multiple environment variable names for backward compatibility
-  click2run_issuer = ENV['CLICK2RUN_OPENID_ISSUER'].presence || ENV['LOGTO_ISSUER'].presence || ENV['LOGTO_ENDPOINT']
-  click2run_app_id = ENV['CLICK2RUN_OPENID_APP_ID'].presence || ENV['LOGTO_APP_ID'].presence || ENV['LOGTO_CLIENT_ID']
-  click2run_app_secret = ENV['CLICK2RUN_OPENID_APP_SECRET'].presence || ENV['LOGTO_APP_SECRET'].presence || ENV['LOGTO_CLIENT_SECRET']
-  click2run_scopes = ENV.fetch('CLICK2RUN_OPENID_SCOPES', ENV.fetch('LOGTO_SCOPES', 'openid profile email')).split
+  # Própria Cloud OpenID Connect provider
+  # Cascade: PROPRIACLOUD_OPENID_* (current) -> CLICK2RUN_OPENID_* (legacy)
+  #          -> LOGTO_* (upstream Logto naming)
+  pc_issuer = ENV['PROPRIACLOUD_OPENID_ISSUER'].presence ||
+              ENV['CLICK2RUN_OPENID_ISSUER'].presence ||
+              ENV['LOGTO_ISSUER'].presence ||
+              ENV['LOGTO_ENDPOINT']
+  pc_app_id = ENV['PROPRIACLOUD_OPENID_APP_ID'].presence ||
+              ENV['CLICK2RUN_OPENID_APP_ID'].presence ||
+              ENV['LOGTO_APP_ID'].presence ||
+              ENV['LOGTO_CLIENT_ID']
+  pc_app_secret = ENV['PROPRIACLOUD_OPENID_APP_SECRET'].presence ||
+                  ENV['CLICK2RUN_OPENID_APP_SECRET'].presence ||
+                  ENV['LOGTO_APP_SECRET'].presence ||
+                  ENV['LOGTO_CLIENT_SECRET']
+  pc_scopes = (ENV['PROPRIACLOUD_OPENID_SCOPES'].presence ||
+               ENV['CLICK2RUN_OPENID_SCOPES'].presence ||
+               ENV['LOGTO_SCOPES'].presence ||
+               'openid profile email').split
 
-  if click2run_issuer.present? && click2run_app_id.present?
+  if pc_issuer.present? && pc_app_id.present?
     provider :openid_connect, {
       name: :propriacloud,
-      issuer: click2run_issuer,
+      issuer: pc_issuer,
       discovery: true,
-      scope: click2run_scopes,
+      scope: pc_scopes,
       response_type: :code,
       provider_ignores_state: true,
       client_options: {
-        identifier: click2run_app_id,
-        secret: click2run_app_secret,
+        identifier: pc_app_id,
+        secret: pc_app_secret,
         redirect_uri: "#{ENV.fetch('FRONTEND_URL', 'https://localhost:3000')}/omniauth/propriacloud/callback"
       }
     }

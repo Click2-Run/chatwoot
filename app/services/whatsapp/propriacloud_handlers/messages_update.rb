@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-# Click2Run Messages Update Handler
-# Processes message status updates (sent, delivered, read) from Click2Run
+# Propriacloud Messages Update Handler
+# Processes message status updates (sent, delivered, read) from Propriacloud
 #
-# Event payload format from Click2Run:
+# Event payload format from Propriacloud:
 # {
 #   event: "messages.update",
 #   instance_id: "1234567890",
@@ -23,8 +23,8 @@
 #   ]
 # }
 
-module Whatsapp::Click2RunHandlers::MessagesUpdate
-  include Whatsapp::Click2RunHandlers::Helpers
+module Whatsapp::PropriacloudHandlers::MessagesUpdate
+  include Whatsapp::PropriacloudHandlers::Helpers
 
   class MessageNotFoundError < StandardError; end
 
@@ -64,7 +64,7 @@ module Whatsapp::Click2RunHandlers::MessagesUpdate
   end
 
   def status_mapper
-    # Click2Run status values (simpler than Baileys):
+    # Propriacloud status values (simpler than Baileys):
     #  - "sent"      → (0) sent
     #  - "delivered" → (1) delivered
     #  - "read"      → (2) read
@@ -82,7 +82,7 @@ module Whatsapp::Click2RunHandlers::MessagesUpdate
     when 'failed', 'error'
       'failed'
     else
-      Rails.logger.warn "Click2Run unsupported message update status: #{status}"
+      Rails.logger.warn "Propriacloud unsupported message update status: #{status}"
       nil
     end
   end

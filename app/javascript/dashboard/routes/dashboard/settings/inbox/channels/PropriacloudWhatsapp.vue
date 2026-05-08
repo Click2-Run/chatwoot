@@ -63,7 +63,7 @@ const createChannel = async () => {
       channel: {
         type: 'whatsapp',
         phone_number: phoneNumber.value,
-        provider: 'click2run',
+        provider: 'propriacloud',
         provider_config: providerConfig,
       },
     });
@@ -77,7 +77,8 @@ const createChannel = async () => {
     });
   } catch (error) {
     useAlert(
-      error.message || t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.API.ERROR_MESSAGE')
+      error.message ||
+        t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.API.ERROR_MESSAGE')
     );
   }
 };
@@ -107,10 +108,10 @@ const setShowAdvancedOptions = () => {
           </div>
           <div class="ml-3">
             <h3 class="text-sm font-medium text-blue-800">
-              {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.INFO.TITLE') }}
+              {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INFO.TITLE') }}
             </h3>
             <p class="mt-1 text-sm text-blue-700">
-              {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.INFO.DESCRIPTION') }}
+              {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INFO.DESCRIPTION') }}
             </p>
           </div>
         </div>
@@ -161,32 +162,34 @@ const setShowAdvancedOptions = () => {
           {{ $t('INBOX_MGMT.ADD.WHATSAPP.ADVANCED_OPTIONS') }}
         </span>
         <label :class="{ error: v$.providerUrl.$error }">
-          {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.PROVIDER_URL.LABEL') }}
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PROVIDER_URL.LABEL') }}
           <input
             v-model="providerUrl"
             type="text"
             :placeholder="
-              $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.PROVIDER_URL.PLACEHOLDER')
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PROVIDER_URL.PLACEHOLDER'
+              )
             "
           />
           <span v-if="v$.providerUrl.$error" class="message">
-            {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.PROVIDER_URL.ERROR') }}
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PROVIDER_URL.ERROR') }}
           </span>
         </label>
       </div>
 
       <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
         <label :class="{ error: v$.apiKey.$error }">
-          {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.API_KEY.LABEL') }}
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.API_KEY.LABEL') }}
           <input
             v-model="apiKey"
             type="text"
             :placeholder="
-              $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.API_KEY.PLACEHOLDER')
+              $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.API_KEY.PLACEHOLDER')
             "
           />
           <span v-if="v$.apiKey.$error" class="message">
-            {{ $t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.API_KEY.ERROR') }}
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.API_KEY.ERROR') }}
           </span>
         </label>
       </div>
@@ -209,7 +212,7 @@ const setShowAdvancedOptions = () => {
         type="submit"
         solid
         blue
-        :label="$t('INBOX_MGMT.ADD.WHATSAPP.CLICK2RUN.SUBMIT_BUTTON')"
+        :label="$t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.SUBMIT_BUTTON')"
       />
     </div>
   </form>

@@ -9,7 +9,7 @@ import WhatsappEmbeddedSignup from './WhatsappEmbeddedSignup.vue';
 import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import BaileysWhatsapp from './BaileysWhatsapp.vue';
 import WhatsmeowWhatsapp from './WhatsmeowWhatsapp.vue';
-import Click2runWhatsapp from './Click2runWhatsapp.vue';
+import PropriacloudWhatsapp from './PropriacloudWhatsapp.vue';
 import ZapiWhatsapp from './ZapiWhatsapp.vue';
 import PromoBanner from 'dashboard/components-next/banner/PromoBanner.vue';
 import { usePolicy } from 'dashboard/composables/usePolicy';
@@ -43,7 +43,7 @@ const PROVIDER_TYPES = {
   THREE_SIXTY_DIALOG: '360dialog',
   BAILEYS: 'baileys',
   WHATSMEOW: 'whatsmeow',
-  CLICK2RUN: 'click2run',
+  PROPRIACLOUD: 'propriacloud',
   ZAPI: 'zapi',
 };
 
@@ -94,9 +94,9 @@ const PROVIDER_CATALOG = computed(() => [
     icon: 'i-woot-whatsapp',
   },
   {
-    key: PROVIDER_TYPES.CLICK2RUN,
-    title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN'),
-    description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.CLICK2RUN_DESC'),
+    key: PROVIDER_TYPES.PROPRIACLOUD,
+    title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.PROPRIACLOUD'),
+    description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.PROPRIACLOUD_DESC'),
     icon: 'i-lucide-qr-code',
   },
   {
@@ -120,14 +120,14 @@ const CREATE_PICKER_KEYS = [
   PROVIDER_TYPES.TWILIO,
   PROVIDER_TYPES.BAILEYS,
   PROVIDER_TYPES.WHATSMEOW,
-  PROVIDER_TYPES.CLICK2RUN,
+  PROVIDER_TYPES.PROPRIACLOUD,
   PROVIDER_TYPES.ZAPI,
 ];
 const CONVERT_PICKER_KEYS = [
   PROVIDER_TYPES.WHATSAPP,
   PROVIDER_TYPES.BAILEYS,
   PROVIDER_TYPES.WHATSMEOW,
-  PROVIDER_TYPES.CLICK2RUN,
+  PROVIDER_TYPES.PROPRIACLOUD,
   PROVIDER_TYPES.ZAPI,
   PROVIDER_TYPES.THREE_SIXTY_DIALOG,
 ];
@@ -145,8 +145,8 @@ const availableProviders = computed(() => {
         return FEATURE_FLAGS.CHANNEL_WHATSAPP_BAILEYS;
       case PROVIDER_TYPES.WHATSMEOW:
         return FEATURE_FLAGS.CHANNEL_WHATSAPP_WHATSMEOW;
-      case PROVIDER_TYPES.CLICK2RUN:
-        return FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN;
+      case PROVIDER_TYPES.PROPRIACLOUD:
+        return FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD;
       case PROVIDER_TYPES.ZAPI:
         return FEATURE_FLAGS.CHANNEL_ZAPI;
       default:
@@ -213,7 +213,7 @@ const handleManualLinkClick = () => {
 // Hide Click2Run promo if only official WhatsApp Cloud and Click2Run are enabled
 // No need to promote Click2Run if there are no other alternatives
 const shouldShowClick2RunPromo = computed(() => {
-  if (!isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)) {
+  if (!isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD)) {
     return false;
   }
 
@@ -234,7 +234,7 @@ const shouldShowClick2RunPromo = computed(() => {
 const shouldShowZApiPromo = computed(() => {
   return (
     isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_ZAPI) &&
-    !isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_CLICK2RUN)
+    !isFeatureFlagEnabled(FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD)
   );
 });
 </script>
@@ -281,20 +281,22 @@ const shouldShowZApiPromo = computed(() => {
       >
         <PromoBanner
           :title="
-            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.TITLE')
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.TITLE'
+            )
           "
           :description="
             $t(
-              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.DESCRIPTION'
+              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.DESCRIPTION'
             )
           "
           variant="success"
           logo-src=""
           logo-alt="Click2Run"
           :cta-text="
-            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.CLICK2RUN_PROMO.CTA')
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.CTA')
           "
-          @cta-click="selectProvider(PROVIDER_TYPES.CLICK2RUN)"
+          @cta-click="selectProvider(PROVIDER_TYPES.PROPRIACLOUD)"
         />
       </div>
 
@@ -391,8 +393,8 @@ const shouldShowZApiPromo = computed(() => {
         <WhatsmeowWhatsapp
           v-else-if="selectedProvider === PROVIDER_TYPES.WHATSMEOW"
         />
-        <Click2runWhatsapp
-          v-else-if="selectedProvider === PROVIDER_TYPES.CLICK2RUN"
+        <PropriacloudWhatsapp
+          v-else-if="selectedProvider === PROVIDER_TYPES.PROPRIACLOUD"
         />
       </div>
     </div>

@@ -170,7 +170,8 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
     # Default to true if not set (always sync)
     return false unless trusted_oauth_provider?
 
-    sync_enabled = ENV.fetch('CLICK2RUN_OPENID_ALWAYS_SYNC', 'true')
+    sync_enabled = ENV['PROPRIACLOUD_OPENID_ALWAYS_SYNC'].presence ||
+                   ENV.fetch('CLICK2RUN_OPENID_ALWAYS_SYNC', 'true')
     sync_enabled.to_s.downcase != 'false'
   end
 

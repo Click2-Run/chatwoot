@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Click2Run WhatsApp Provider Service for Chatwoot.
+# Propriacloud WhatsApp Provider Service for Chatwoot.
 #
 # Targets the whatsapp-api OpenAPI 3.1 contract (Propria.Cloud product, Go +
 # whatsmeow). Each Chatwoot WhatsApp inbox maps to one whatsapp-api instance
 # identified by `provider_config['instance_id']` (UUID, seeded by the channel
 # model). The base URL and API key come from env (with backward-compat aliases
-# for the legacy CLICK2RUN_PROVIDER_DEFAULT_* names).
+# for the legacy PROPRIACLOUD_PROVIDER_DEFAULT_* names).
 #
 # Surface (paths used here):
 #   POST   /instances/create                            create instance record
@@ -26,15 +26,21 @@
 #
 # Reference TS implementation: ../propriacloud.git/apps/minha/app/services/whatsapp.server.ts
 
-class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseService
+class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::BaseService
   include BaileysHelper
 
   class MessageContentTypeNotSupported < StandardError; end
   class ProviderUnavailableError < StandardError; end
 
   # Backwards-compat env-var cascade. Prefer WHATSAPP_API_* going forward.
-  DEFAULT_URL = ENV['WHATSAPP_API_URL'].presence || ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
-  DEFAULT_API_KEY = ENV['WHATSAPP_API_KEY'].presence || ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
+  # Legacy CLICK2RUN_PROVIDER_DEFAULT_* retained as final fallback so existing
+  # deployments mid-rebrand keep working without env changes.
+  DEFAULT_URL = ENV['WHATSAPP_API_URL'].presence ||
+                ENV['PROPRIACLOUD_PROVIDER_DEFAULT_URL'].presence ||
+                ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
+  DEFAULT_API_KEY = ENV['WHATSAPP_API_KEY'].presence ||
+                    ENV['PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY'].presence ||
+                    ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
 
   DEFAULT_WEBHOOK_EVENTS = %w[
     connection.update
@@ -47,7 +53,7 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
 
   def self.status
     if DEFAULT_URL.blank? || DEFAULT_API_KEY.blank?
-      raise ProviderUnavailableError, 'Missing WHATSAPP_API_URL or WHATSAPP_API_KEY (or legacy CLICK2RUN_PROVIDER_DEFAULT_*)'
+      raise ProviderUnavailableError, 'Missing WHATSAPP_API_URL or WHATSAPP_API_KEY (or legacy PROPRIACLOUD_PROVIDER_DEFAULT_*)'
     end
 
     response = HTTParty.get("#{DEFAULT_URL}/health", headers: { 'X-API-Key' => DEFAULT_API_KEY })
@@ -169,8 +175,8 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
     process_response(response)
   end
 
-  def toggle_typing_status(typing_status, phone_number:, **)
-    @phone_number = phone_number
+  def toggle_typing_status(typing_status, recipient_id: nil, phone_number: nil, **)
+    @phone_number = recipient_id || phone_number
 
     presence_map = {
       Events::Types::CONVERSATION_TYPING_ON => 'composing',
@@ -194,8 +200,8 @@ class Whatsapp::Providers::WhatsappClick2runService < Whatsapp::Providers::BaseS
     true
   end
 
-  def read_messages(messages, phone_number:, **)
-    @phone_number = phone_number
+  def read_messages(messages, recipient_id: nil, phone_number: nil, **)
+    @phone_number = recipient_id || phone_number
 
     response = HTTParty.post(
       "#{provider_url}/messages/mark-read#{instance_query}",
