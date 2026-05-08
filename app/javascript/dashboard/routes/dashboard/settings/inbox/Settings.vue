@@ -16,6 +16,8 @@ import DuplicateInboxBanner from './channels/instagram/DuplicateInboxBanner.vue'
 import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
 import GoogleReauthorize from './channels/google/Reauthorize.vue';
 import WhatsappReauthorize from './channels/whatsapp/Reauthorize.vue';
+import WhatsappLinkDeviceModal from './components/WhatsappLinkDeviceModal.vue';
+import InboxName from 'dashboard/components/widgets/InboxName.vue';
 import InboxHealthAPI from 'dashboard/api/inboxHealth';
 import PreChatFormSettings from './PreChatForm/Settings.vue';
 import WeeklyAvailability from './components/WeeklyAvailability.vue';
@@ -49,6 +51,8 @@ export default {
     ConfigurationPage,
     CustomerSatisfactionPage,
     FacebookReauthorize,
+    InboxName,
+    WhatsappLinkDeviceModal,
     GreetingsEditor,
     PreChatFormSettings,
     SettingIntroBanner,
@@ -109,6 +113,7 @@ export default {
       widgetBubbleType: 'standard',
       widgetBubbleLauncherTitle: '',
       showConvertGate: false,
+      showLinkDeviceModal: false,
     };
   },
   computed: {
@@ -389,6 +394,12 @@ export default {
     this.fetchSharedData();
   },
   methods: {
+    onOpenLinkDeviceModal() {
+      this.showLinkDeviceModal = true;
+    },
+    onCloseLinkDeviceModal() {
+      this.showLinkDeviceModal = false;
+    },
     async copyWebhookSecret(value) {
       await copyTextToClipboard(value);
       useAlert(
@@ -716,6 +727,74 @@ export default {
           :content="$t('INBOX_MGMT.ADD.INSTAGRAM.DUPLICATE_INBOX_BANNER')"
           class="mx-6 mb-4"
           :class="bannerMaxWidth"
+        />
+
+        <!-- Connection status panel (only for whatsmeow-style providers) -->
+        <div
+          v-if="
+            selectedTabKey === 'inbox-settings' &&
+            (isAWhatsAppBaileysChannel ||
+              isAWhatsAppZapiChannel ||
+              isAWhatsAppPropriacloudChannel)
+          "
+          class="mx-6 mb-4 max-w-4xl flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-n-strong bg-n-solid-1"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <span
+              class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+              :class="{
+                'bg-green-500':
+                  inbox.provider_connection?.connection === 'open',
+                'bg-amber-500':
+                  inbox.provider_connection?.connection === 'connecting' ||
+                  inbox.provider_connection?.connection === 'reconnecting',
+                'bg-red-500':
+                  !inbox.provider_connection?.connection ||
+                  inbox.provider_connection?.connection === 'close',
+              }"
+            />
+            <div class="flex flex-col min-w-0">
+              <span class="text-sm font-medium text-n-slate-12 truncate">
+                {{
+                  inbox.provider_connection?.connection === 'open'
+                    ? 'Connected'
+                    : inbox.provider_connection?.connection === 'connecting'
+                      ? 'Waiting for QR scan'
+                      : inbox.provider_connection?.connection ===
+                          'reconnecting'
+                        ? 'Reconnecting…'
+                        : 'Disconnected'
+                }}
+              </span>
+              <span
+                v-if="inbox.provider_connection?.error"
+                class="text-xs text-red-500 truncate"
+              >
+                {{ inbox.provider_connection.error }}
+              </span>
+              <span v-else class="text-xs text-n-slate-10 truncate">
+                Provider: {{ whatsAppAPIProviderName }} · Instance:
+                {{ inbox.provider_config?.instance_id || '—' }}
+              </span>
+            </div>
+          </div>
+          <NextButton
+            slate
+            :label="
+              inbox.provider_connection?.connection === 'open'
+                ? 'Manage'
+                : inbox.provider_connection?.connection === 'connecting'
+                  ? 'Show QR'
+                  : 'Connect'
+            "
+            @click="onOpenLinkDeviceModal"
+          />
+        </div>
+        <WhatsappLinkDeviceModal
+          v-if="showLinkDeviceModal"
+          :show="showLinkDeviceModal"
+          :on-close="onCloseLinkDeviceModal"
+          :inbox="inbox"
         />
 
         <div
