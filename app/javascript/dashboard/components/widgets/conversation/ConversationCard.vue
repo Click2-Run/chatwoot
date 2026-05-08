@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
+import { useI18n } from 'vue-i18n';
 import { getLastMessage } from 'dashboard/helper/conversationHelper';
 import { frontendURL, conversationUrl } from 'dashboard/helper/URLHelper';
 import Avatar from 'next/avatar/Avatar.vue';
@@ -111,6 +112,21 @@ const hasUnread = computed(
 const isInboxNameVisible = computed(() => !activeInbox.value);
 
 const lastMessageInChat = computed(() => getLastMessage(props.chat));
+
+const { t } = useI18n();
+const typingUsersList = computed(() => {
+  const users = store.getters['conversationTypingStatus/getUserList'](
+    props.chat.id
+  );
+  return users.filter(u => u.type === 'contact');
+});
+const isAnyoneTyping = computed(() => typingUsersList.value.length > 0);
+const typingPreviewText = computed(() => {
+  if (!isAnyoneTyping.value) return '';
+  return typingUsersList.value.some(u => u.recording)
+    ? t('CHAT_LIST.RECORDING')
+    : t('CHAT_LIST.TYPING');
+});
 
 const voiceCallData = computed(() => ({
   status: props.chat.additional_attributes?.call_status,
@@ -350,6 +366,14 @@ const deleteConversation = () => {
         :direction="voiceCallData.direction"
         :message-preview-class="messagePreviewClass"
       />
+      <p
+        v-else-if="isAnyoneTyping"
+        key="typing-preview"
+        class="text-green-500 text-sm font-medium my-0 mx-2 leading-6 h-6 flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
+        :class="messagePreviewClass"
+      >
+        {{ typingPreviewText }}
+      </p>
       <MessagePreview
         v-else-if="lastMessageInChat"
         key="message-preview"

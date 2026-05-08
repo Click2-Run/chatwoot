@@ -3,7 +3,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
   include DateRangeHelper
   include HmacConcern
 
-  before_action :conversation, except: [:index, :meta, :search, :create, :filter]
+  before_action :conversation, except: [:index, :meta, :search, :create, :filter, :presence_subscribe_bulk]
   before_action :inbox, :contact, :contact_inbox, only: [:create]
 
   ATTACHMENT_RESULTS_PER_PAGE = 100
@@ -32,6 +32,11 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
                                 .order(created_at: :desc)
                                 .page(attachment_params[:page])
                                 .per(ATTACHMENT_RESULTS_PER_PAGE)
+  end
+
+  def presence_subscribe_bulk
+    Conversations::PresenceSubscribeService.new(Current.account, presence_subscribe_params[:conversation_ids]).perform
+    head :ok
   end
 
   def show; end
@@ -112,6 +117,11 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     head :ok
   end
 
+  def presence_subscribe
+    Conversations::PresenceSubscribeService.new(Current.account, [@conversation.display_id]).perform
+    head :ok
+  end
+
   def update_last_seen
     # High-traffic accounts generate excessive DB writes when agents frequently switch between conversations.
     # Throttle last_seen updates to once per hour when there are no unread messages to reduce DB load.
@@ -155,6 +165,10 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def attachment_params
     params.permit(:page)
+  end
+
+  def presence_subscribe_params
+    params.permit(conversation_ids: [])
   end
 
   def update_last_seen_on_conversation(last_seen_at, update_assignee)
