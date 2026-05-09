@@ -34,31 +34,51 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   # Resolution order (highest priority first):
   #   1. per-channel `provider_config['provider_url' / 'api_key']` overrides
-  #   2. Super Admin → Própria Cloud (`PROPRIACLOUD_API_*` InstallationConfig
-  #      rows, read via GlobalConfigService — DB takes precedence over env)
-  #   3. Legacy env vars: WHATSAPP_API_*, PROPRIACLOUD_PROVIDER_DEFAULT_*,
-  #      CLICK2RUN_PROVIDER_DEFAULT_* (kept for migration-period compatibility)
+  #   2. InstallationConfig (DB) — Super Admin → Própria Cloud form
+  #   3. Legacy env-var aliases (WHATSAPP_API_*, PROPRIACLOUD_PROVIDER_DEFAULT_*,
+  #      CLICK2RUN_PROVIDER_DEFAULT_*)
   #
-  # GlobalConfigService.load itself migrates a value from ENV into the DB on
-  # first read, so env-only installs auto-populate the Super Admin form.
+  # When the canonical DB row is blank but an alias env var is set, the
+  # alias value is migrated into the canonical InstallationConfig row on
+  # first read. From that point on the Super Admin form shows the value
+  # and saving via the UI takes precedence — DB always wins on the next
+  # request because it's checked first.
   def self.default_url
-    GlobalConfigService.load('PROPRIACLOUD_API_URL', nil).presence ||
-      ENV['WHATSAPP_API_URL'].presence ||
-      ENV['PROPRIACLOUD_PROVIDER_DEFAULT_URL'].presence ||
-      ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
+    resolve_with_env_aliases(
+      'PROPRIACLOUD_API_URL',
+      %w[WHATSAPP_API_URL PROPRIACLOUD_PROVIDER_DEFAULT_URL CLICK2RUN_PROVIDER_DEFAULT_URL]
+    )
   end
 
   def self.default_api_key
-    GlobalConfigService.load('PROPRIACLOUD_API_KEY', nil).presence ||
-      ENV['WHATSAPP_API_KEY'].presence ||
-      ENV['PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY'].presence ||
-      ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
+    resolve_with_env_aliases(
+      'PROPRIACLOUD_API_KEY',
+      %w[WHATSAPP_API_KEY PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY CLICK2RUN_PROVIDER_DEFAULT_API_KEY]
+    )
   end
 
   def self.default_webhook_base_url
-    GlobalConfigService.load('PROPRIACLOUD_WEBHOOK_BASE_URL', nil).presence ||
-      ENV['WHATSAPP_WEBHOOK_BASE_URL'].presence ||
-      ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
+    resolve_with_env_aliases(
+      'PROPRIACLOUD_WEBHOOK_BASE_URL',
+      %w[WHATSAPP_WEBHOOK_BASE_URL FRONTEND_URL]
+    ) || 'http://localhost:3000'
+  end
+
+  # Resolve `canonical_key` from DB first; if blank, walk env aliases and
+  # migrate the first hit into the canonical InstallationConfig row so
+  # subsequent reads (and the Super Admin form) reflect the same value.
+  def self.resolve_with_env_aliases(canonical_key, env_aliases)
+    db_value = GlobalConfigService.load(canonical_key, nil)
+    return db_value if db_value.present?
+
+    env_value = env_aliases.lazy.map { |k| ENV[k] }.find { |v| v.present? }
+    return nil if env_value.blank?
+
+    # first_or_create! is race-safe; subsequent callers race onto the same row.
+    config = InstallationConfig.where(name: canonical_key).first_or_create!(value: env_value, locked: false)
+    config.update!(value: env_value) if config.value.blank?
+    GlobalConfig.clear_cache
+    config.value
   end
 
   # Curated subscription. whatsapp-api offers ~105 event types; we only

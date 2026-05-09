@@ -25,6 +25,14 @@
   </nav>
 
   <section class="propriacloud-pane" data-pane="whatsapp" role="tabpanel">
+    <p class="text-xs text-slate-500 mb-4 leading-5">
+      Values saved here are stored in the database and take precedence
+      over environment variables on the next request. When a field is
+      empty, the runtime falls back to the legacy env aliases
+      (<code>WHATSAPP_API_URL</code>, <code>PROPRIACLOUD_PROVIDER_DEFAULT_*</code>,
+      <code>CLICK2RUN_PROVIDER_DEFAULT_*</code>) and the first matching
+      value is auto-migrated into this form on first use.
+    </p>
     <%= form_with url: super_admin_app_config_url(config: @config), method: :post do |form| %>
       <% @allowed_configs.each do |key| %>
         <div class="flex mb-8">
