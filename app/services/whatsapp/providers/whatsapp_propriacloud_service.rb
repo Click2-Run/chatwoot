@@ -61,12 +61,59 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
   end
 
-  # whatsapp-api uses dotted event_type values like `connection.connected`,
-  # `message.received`, `message.sent`, `message.edited`, `presence.update`,
-  # etc. (105 total per OpenAPI). `*` is the catch-all wildcard the API
-  # supports — future-proof against new event types and lets us handle
-  # whichever subset our handlers can dispatch.
-  DEFAULT_WEBHOOK_EVENTS = %w[*].freeze
+  # Curated subscription. whatsapp-api offers ~105 event types; we only
+  # subscribe to the ones Chatwoot actually dispatches a handler for so
+  # Sidekiq doesn't burn cycles enqueueing privacy/newsletter/call/system
+  # events we'll immediately drop. Wildcards are supported by the API
+  # (`message.*`, `instance.recovery.*`, etc.).
+  DEFAULT_WEBHOOK_EVENTS = %w[
+    connection.connected
+    connection.disconnected
+    connection.logged_out
+    connection.stream_replaced
+    connection.connect_failure
+    connection.client_outdated
+    connection.temporary_ban
+    connection.stream_error
+    connection.keepalive_timeout
+    connection.keepalive_restored
+    pairing.qrcode
+    pairing.phonecode
+    pairing.success
+    pairing.error
+    pairing.qrcode_scanned_without_multidevice
+    message.received
+    message.sent
+    message.sent_failed
+    message.fb_received
+    message.receipt
+    message.reaction
+    message.undecryptable
+    message.media_retry
+    message.media_retry_error
+    message.error
+    message.status
+    user.push_name_changed
+    user.picture_changed
+    user.business_name_changed
+    appstate.mark_chat_as_read
+    appstate.archive
+    appstate.delete_chat
+    appstate.label_association_chat
+    appstate.label_association_message
+    appstate.label_edit
+    history.sync_started
+    history.sync_completed
+    history.sync_conversation
+    history.sync_messages
+    history.sync_contacts
+    instance.recovery.detected
+    instance.recovery.started
+    instance.recovery.retry
+    instance.recovery.success
+    instance.recovery.exhausted
+    instance.recovery.aborted
+  ].freeze
 
   def self.status
     url = default_url
@@ -286,6 +333,31 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     true
   end
 
+  # ---------- one-shot history pulls (used by HistoryBackfillJob) ----------
+  # Each helper returns the parsed array of records or [] on failure. They
+  # are paginated via page/page_size (1-based). The caller keeps incrementing
+  # page until an empty page comes back.
+
+  def sync_contacts(page: 1, page_size: 200)
+    paged_get('/sync/contacts', page: page, page_size: page_size)
+  end
+
+  def sync_conversations(page: 1, page_size: 200)
+    paged_get('/sync/conversations', page: page, page_size: page_size)
+  end
+
+  def sync_messages(chat_jid, page: 1, page_size: 200)
+    paged_get('/sync/messages', extra: { chat_jid: chat_jid }, page: page, page_size: page_size)
+  end
+
+  def sync_push_names(page: 1, page_size: 500)
+    paged_get('/sync/push-names', page: page, page_size: page_size)
+  end
+
+  def list_labels(page: 1, page_size: 100)
+    paged_get('/labels', page: page, page_size: page_size, scope: :tenant)
+  end
+
   def get_profile_pic(jid)
     response = HTTParty.post(
       "#{provider_url}/contacts/profile-picture#{instance_query}",
@@ -356,6 +428,27 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     whatsapp_channel.provider_config['api_key'].presence || self.class.default_api_key
   end
 
+  # Paginated GET for /sync/* and /labels endpoints. Returns an Array
+  # of records (already symbolized). On non-2xx responses it logs and
+  # returns [] so the backfill job can proceed without raising.
+  def paged_get(path, page: 1, page_size: 200, extra: {}, scope: :instance)
+    qs = { page: page, page_size: page_size }
+    qs.merge!(extra)
+    qs[:instance_id] = instance_id if scope == :instance
+    response = HTTParty.get(
+      "#{provider_url}#{path}?#{qs.to_query}",
+      headers: api_headers
+    )
+    return [] unless response.success?
+
+    body = unwrap(response.parsed_response)
+    rows = body.is_a?(Array) ? body : (body['data'] || body['items'] || body['results'] || [])
+    rows.map { |r| r.respond_to?(:deep_symbolize_keys) ? r.deep_symbolize_keys : r }
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud paged_get(#{path}) failed: #{e.class}: #{e.message[0..120]}"
+    []
+  end
+
   def instance_id
     whatsapp_channel.provider_config['instance_id'].presence ||
       (whatsapp_channel.provider_config['instance_id'] = SecureRandom.uuid).tap { whatsapp_channel.save! }
@@ -415,12 +508,52 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     return if process_response(response)
 
     # 409 Conflict — the same {scope, instance_id, url} webhook already
-    # exists. setup_channel_provider is idempotent, so this is a success
-    # for our purposes (re-running setup must not error).
-    return if response.code == 409
+    # exists. setup_channel_provider is idempotent, so this is a success,
+    # but the existing record may have a STALE event subscription. Push
+    # the canonical DEFAULT_WEBHOOK_EVENTS list to it so re-runs converge.
+    if response.code == 409
+      sync_webhook_subscription!
+      return
+    end
 
     Rails.logger.error "Failed to register webhook on whatsapp-api: #{response.body}"
     raise ProviderUnavailableError, 'Failed to register webhook on whatsapp-api'
+  end
+
+  # Find the existing instance-scoped webhook (matched by url) and PATCH
+  # its event filter to DEFAULT_WEBHOOK_EVENTS. Best-effort — a sync
+  # failure must not break setup_channel_provider; the next setup run
+  # retries.
+  def sync_webhook_subscription!
+    list = HTTParty.get("#{provider_url}/webhooks?scope=instance&instance_id=#{CGI.escape(instance_id)}",
+                        headers: api_headers)
+    return unless list.success?
+
+    items = extract_webhook_list(list.parsed_response)
+    target = items.find { |w| (w['url'] || w[:url]) == inbox_webhook_url }
+    return unless target
+
+    HTTParty.patch(
+      "#{provider_url}/webhooks/#{target['id'] || target[:id]}",
+      headers: api_headers,
+      body: { events: DEFAULT_WEBHOOK_EVENTS, enabled: true, active: true }.to_json
+    )
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: webhook subscription sync skipped (#{e.class}: #{e.message[0..120]})"
+  end
+
+  # whatsapp-api wraps list responses as
+  # {"success": true, "data": {"webhooks": [...], "count": N, ...}}
+  # Walk every plausible nesting so we are tolerant to payload shape drift.
+  def extract_webhook_list(parsed)
+    parsed = safe_parse_json(parsed) if parsed.is_a?(String)
+    return parsed if parsed.is_a?(Array)
+    return [] unless parsed.is_a?(Hash)
+
+    parsed['webhooks'] ||
+      parsed.dig('data', 'webhooks') ||
+      parsed['data'] ||
+      []
   end
 
   def send_text_message
@@ -452,12 +585,20 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
                  else 'document'
                  end
 
+    # PTT (push-to-talk = voice note) is the default UX for audio
+    # captured from Chatwoot's mic recorder, which produces audio/ogg
+    # (opus). File-style audio uploads (mp3/m4a/wav) ship as a regular
+    # audio attachment so the recipient sees a player, not a voice note.
+    is_voice_note = media_type == 'audio' &&
+                    attachment.file.content_type.to_s.match?(%r{^audio/(ogg|opus|webm)})
+
     media_item = {
       type: media_type,
       data: Base64.strict_encode64(attachment.file.download),
       mime_type: attachment.file.content_type,
       caption: @message.content.presence,
-      file_name: attachment.file.filename.to_s
+      file_name: attachment.file.filename.to_s,
+      ptt: is_voice_note ? true : nil
     }.compact
 
     response = HTTParty.post(

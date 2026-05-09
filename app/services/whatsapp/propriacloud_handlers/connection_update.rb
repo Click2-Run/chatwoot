@@ -25,6 +25,8 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
     event = (processed_params[:event_type] || processed_params['event_type'] ||
              processed_params[:event] || processed_params['event']).to_s
 
+    previous_state = inbox.channel.provider_connection&.dig('connection')
+
     connection_data = {
       connection: infer_connection_state(event, data),
       qr_data_url: extract_qr_data_url(data),
@@ -34,6 +36,18 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
     inbox.channel.update_provider_connection!(connection_data)
 
     log_connection_state(event, data)
+    enqueue_history_backfill_if_needed(previous_state, connection_data[:connection])
+  end
+
+  # Trigger a one-shot history pull the first time the inbox transitions
+  # into `open`. The job itself is idempotent (skips if already
+  # completed) so even a flap that toggles open→close→open won't re-run.
+  def enqueue_history_backfill_if_needed(previous_state, current_state)
+    return unless current_state == 'open'
+    return if previous_state == 'open'
+    return if inbox.channel.provider_config['history_backfill_completed_at'].present?
+
+    Whatsapp::Propriacloud::HistoryBackfillJob.perform_later(inbox.channel.id)
   end
 
   # Map whatsapp-api event_type values to the Chatwoot connection state
