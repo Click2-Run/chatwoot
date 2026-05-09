@@ -1529,7 +1529,12 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
     t.index ["email"], name: "index_users_on_email"
     t.index ["otp_required_for_login"], name: "index_users_on_otp_required_for_login"
     t.index ["otp_secret"], name: "index_users_on_otp_secret", unique: true
-    t.in  create_table "webhooks", force: :cascade do |t|
+    t.index ["pubsub_token"], name: "index_users_on_pubsub_token", unique: true
+    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
+    t.index ["uid", "provider"], name: "index_users_on_uid_and_provider", unique: true
+  end
+
+  create_table "webhooks", force: :cascade do |t|
     t.integer "account_id"
     t.integer "inbox_id"
     t.text "url"
@@ -1610,17 +1615,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_06_120000) do
       after(:insert).
       for_each(:row) do
     "execute format('create sequence IF NOT EXISTS camp_dpid_seq_%s', NEW.id);"
-  end
-
-  create_trigger("campaigns_before_insert_row_tr", :generated => true, :compatibility => 1).
-      on("campaigns").
-      before(:insert).
-      for_each(:row) do
-    "NEW.display_id := nextval('camp_dpid_seq_' || NEW.account_id);"
-  end
-
-end
-, NEW.id);"
   end
 
   create_trigger("campaigns_before_insert_row_tr", :generated => true, :compatibility => 1).

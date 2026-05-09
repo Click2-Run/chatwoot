@@ -94,8 +94,10 @@ yarn-debug.log*
 # TextEditors & AI Agents config files
 .vscode
 .claude/**/*.local.*
+.claude/scheduled_tasks.lock
 .cursor
 .codex/
+.llm/
 CLAUDE.local.md
 
 # Histoire deployment
