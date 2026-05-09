@@ -65,6 +65,31 @@ File.open(output, 'w') do |f|
 
   HEADER
 
+  f.puts <<~MILESTONES
+    ## Version milestones
+
+    Each adopted upstream tag becomes its own `codi-vX.Y.Z-fazer-ai.N`
+    branch and gets a `codi-vX.Y.Z-fazer-ai.N.ITER` tag for every
+    Própria-Cloud-side release cut on top of it. The chatwoot core
+    version (`vX.Y.Z`) is the upstream Chatwoot release embedded inside
+    fazer-ai; the `.N` suffix is fazer-ai's own iteration counter.
+
+    Update this table whenever a new fazer-ai upstream tag is adopted
+    or a new `codi-*` release tag is cut. The script preserves the
+    block on regen — edit it directly inside `.codi/scripts/build-changelog.rb`.
+
+    | Date       | Branch                          | Adopted upstream tag        | Chatwoot core | Notes                                                                                       |
+    | :--------- | :------------------------------ | :-------------------------- | :------------ | :------------------------------------------------------------------------------------------ |
+    | 2025-11-03 | `codi-v4.7.0-fazer-ai.6`        | `v4.7.0-fazer-ai.6`         | 4.7.0         | Initial fork — Click2Run / OpenID Connect / WhatsApp baseline.                              |
+    | 2026-05-07 | `codi-v4.9.0-fazer-ai.13`       | `v4.9.0-fazer-ai.13`        | 4.9.0         | Tagged `codi-v4.9.0-fazer-ai.13.1` after intermediate upgrade. Safety tag: `codi-pre-upgrade-2026-05-07`. |
+    | 2026-05-08 | `codi-v4.13.0-fazer-ai.66`      | `v4.13.0-fazer-ai.66`       | 4.13.0        | Tagged `codi-v4.13.0-fazer-ai.66.1`. Safety tag: `codi-pre-upgrade2-2026-05-08`. **Current branch.** |
+    | 2026-05-09 | _(still on `.66` branch)_       | `fazerai/main` head (post-`.66`) | 4.13.0   | Merged 2 untagged upstream commits (#285, #286) — within the `.66` cycle until fazer-ai cuts `.67`. |
+
+    Pre-upgrade safety tags taken before each version bump (kept as
+    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`.
+
+  MILESTONES
+
   current_month = nil
   current_day   = nil
 
