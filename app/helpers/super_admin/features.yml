@@ -138,15 +138,17 @@ whatsapp_embedded:
   enabled: true
   icon: 'icon-whatsapp-line'
   config_key: 'whatsapp_embedded'
-propriacloud:
-  name: 'Própria Cloud'
-  description: 'Configuration for the Própria Cloud whatsapp-api provider (URL, API key, webhook base URL).'
-  enabled: true
-  icon: 'icon-whatsapp-line'
-  config_key: 'propriacloud'
 shopify:
   name: 'Shopify'
   description: 'Configuration for setting up Shopify Integration'
   enabled: true
   icon: 'icon-shopify'
   config_key: 'shopify'
+
+# ------- Própria Cloud Products ------- #
+propriacloud:
+  name: 'Própria Cloud'
+  description: 'Configuration for Própria Cloud products (WhatsApp API, Ekkoa, …).'
+  enabled: true
+  icon: 'icon-whatsapp-line'
+  config_key: 'propriacloud'

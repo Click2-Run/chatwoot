@@ -1,0 +1,93 @@
+<%# Própria Cloud products live under a single super_admin config page so
+    the user can switch between integrations (WhatsApp API, Ekkoa, future
+    products) via tabs. Only the WhatsApp tab is wired today; new tabs
+    drop into the same nav + panes pattern. %>
+<div class="propriacloud-tabs">
+  <nav class="flex gap-1 border-b border-n-weak mb-6" role="tablist">
+    <button
+      type="button"
+      class="propriacloud-tab px-4 py-2 -mb-px text-sm font-medium border-b-2 border-transparent text-n-slate-11 hover:text-n-slate-12 active-tab"
+      data-tab="whatsapp"
+      role="tab"
+      aria-selected="true"
+    >
+      WhatsApp
+    </button>
+    <button
+      type="button"
+      class="propriacloud-tab px-4 py-2 -mb-px text-sm font-medium border-b-2 border-transparent text-n-slate-11 hover:text-n-slate-12"
+      data-tab="ekkoa"
+      role="tab"
+      aria-selected="false"
+    >
+      Ekkoa
+    </button>
+  </nav>
+
+  <section class="propriacloud-pane" data-pane="whatsapp" role="tabpanel">
+    <%= form_with url: super_admin_app_config_url(config: @config), method: :post do |form| %>
+      <% @allowed_configs.each do |key| %>
+        <div class="flex mb-8">
+          <div class="field-unit__label">
+            <%= form.label "app_config[#{key}]", @installation_configs[key]&.dig('display_title') || key %>
+          </div>
+          <div class="-mt-2 field-unit__field">
+            <%= form.text_field "app_config[#{key}]", value: @app_config[key] %>
+            <% if @installation_configs[key]&.dig('description').present? %>
+              <p class="pt-2 text-xs italic text-slate-400">
+                <%= @installation_configs[key]&.dig('description') %>
+              </p>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      <div class="form-actions">
+        <%= form.submit "Submit" %>
+      </div>
+    <% end %>
+  </section>
+
+  <section class="propriacloud-pane hidden" data-pane="ekkoa" role="tabpanel">
+    <div class="flex flex-col items-center text-center py-16 px-8 border border-dashed border-n-weak rounded-lg">
+      <div class="flex items-center justify-center w-12 h-12 mb-4 rounded-full bg-slate-100 text-slate-600">
+        <svg width="24" height="24"><use xlink:href="#icon-hourglass-line" /></svg>
+      </div>
+      <h2 class="text-base font-medium text-n-slate-12 mb-1">Ekkoa</h2>
+      <p class="text-sm text-n-slate-11 max-w-md mb-1">
+        Em desenvolvimento pela Própria Cloud — em breve.
+      </p>
+      <p class="text-xs italic text-slate-400 max-w-md">
+        Coming soon — a new Própria Cloud product. Configuration for Ekkoa will
+        appear here once it is available.
+      </p>
+    </div>
+  </section>
+</div>
+
+<style>
+  .propriacloud-tab.active-tab {
+    color: rgb(15 23 42);
+    border-bottom-color: rgb(15 23 42);
+  }
+  .propriacloud-pane.hidden { display: none; }
+</style>
+
+<script>
+  (function () {
+    const tabs = document.querySelectorAll('.propriacloud-tab');
+    const panes = document.querySelectorAll('.propriacloud-pane');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        tabs.forEach(t => {
+          const active = t.dataset.tab === target;
+          t.classList.toggle('active-tab', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+        panes.forEach(p => {
+          p.classList.toggle('hidden', p.dataset.pane !== target);
+        });
+      });
+    });
+  })();
+</script>
