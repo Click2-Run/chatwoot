@@ -12,6 +12,13 @@ Related Files:
 
 # Fazer.AI Customizations to Chatwoot
 
+## See also
+
+- **`CUSTOM-MERGES-GUIDE.md`** — the end-to-end ritual for fetching /
+  merging / syncing the upstream fork. The rebrand table below is one
+  step inside that ritual; the guide carries the rest (safety tag →
+  branch decision → merge → sweep → smoke test → changelog → tag).
+
 ## Rebrand mapping (Própria Cloud) — durable across upstream merges
 
 Every fazer-ai upstream tag we pull will reintroduce `fazer.ai`,
