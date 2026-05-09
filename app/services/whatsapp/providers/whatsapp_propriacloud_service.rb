@@ -355,6 +355,11 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
     return if process_response(response)
 
+    # 409 Conflict — the same {scope, instance_id, url} webhook already
+    # exists. setup_channel_provider is idempotent, so this is a success
+    # for our purposes (re-running setup must not error).
+    return if response.code == 409
+
     Rails.logger.error "Failed to register webhook on whatsapp-api: #{response.body}"
     raise ProviderUnavailableError, 'Failed to register webhook on whatsapp-api'
   end
