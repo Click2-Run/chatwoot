@@ -28,8 +28,9 @@ const loading = ref(false);
 // "Link with phone number" flow). Only the propriacloud provider exposes
 // the phone-code path right now via /instances/pair/phonecode.
 const isPropriacloud = computed(
-  () => props.inbox.channel_type === 'Channel::Whatsapp' &&
-        props.inbox.provider === 'propriacloud',
+  () =>
+    props.inbox.channel_type === 'Channel::Whatsapp' &&
+    props.inbox.provider === 'propriacloud'
 );
 const pairingMode = ref('qr');
 const phoneCodeInput = ref(props.inbox.phone_number || '');
@@ -47,6 +48,15 @@ const setup = () => {
     .dispatch('inboxes/setupChannelProvider', props.inbox.id)
     .catch(handleError);
 };
+const startQrPairing = () => {
+  pairingMode.value = 'qr';
+  setup();
+};
+const ensureConnectingForPhoneCode = async () => {
+  if (!connection.value || connection.value === 'close') {
+    await store.dispatch('inboxes/setupChannelProvider', props.inbox.id);
+  }
+};
 const disconnect = () => {
   loading.value = true;
   store
@@ -59,6 +69,7 @@ const requestPhoneCode = async () => {
   phoneCode.value = '';
   phoneCodeLoading.value = true;
   try {
+    await ensureConnectingForPhoneCode();
     const result = await store.dispatch('inboxes/pairPhoneCode', {
       inboxId: props.inbox.id,
       phone: phoneCodeInput.value,
@@ -74,15 +85,21 @@ const requestPhoneCode = async () => {
   }
 };
 
+// No auto-setup or auto-disconnect on mount/unmount — let the user
+// pick the auth method and trigger explicitly. Only Propriacloud uses
+// this modal; for Baileys/Zapi the prior auto-setup behaviour kicks in.
 onMounted(() => {
-  if (!connection.value || connection.value === 'close') {
+  if (
+    !isPropriacloud.value &&
+    (!connection.value || connection.value === 'close')
+  ) {
     setup();
   }
 });
 onUnmounted(() => {
   if (
-    connection.value === 'connecting' ||
-    connection.value === 'reconnecting'
+    !isPropriacloud.value &&
+    (connection.value === 'connecting' || connection.value === 'reconnecting')
   ) {
     disconnect();
   }
@@ -119,37 +136,23 @@ watchEffect(() => {
             with-provider-connection-status
           />
 
-          <template v-if="!connection || connection === 'close' || error">
-            <p v-if="error" class="text-red-500 text-center">
-              {{ error }}
-            </p>
-            <Button :is-loading="loading" @click="setup">
-              {{
-                $t(
-                  'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.LINK_DEVICE'
-                )
-              }}
-            </Button>
-          </template>
+          <!-- Non-propriacloud (Baileys / Zapi / Whatsmeow) keeps the
+               existing one-button "Link device" flow that auto-fetches QR. -->
+          <template v-if="!isPropriacloud">
+            <template v-if="!connection || connection === 'close' || error">
+              <p v-if="error" class="text-red-500 text-center">
+                {{ error }}
+              </p>
+              <Button :is-loading="loading" @click="setup">
+                {{
+                  $t(
+                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.LINK_DEVICE'
+                  )
+                }}
+              </Button>
+            </template>
 
-          <template v-else-if="connection === 'connecting'">
-            <!-- Mode toggle (QR vs phone-code) — propriacloud only -->
-            <div v-if="isPropriacloud" class="flex gap-2">
-              <Button
-                :solid="pairingMode === 'qr'"
-                :ghost="pairingMode !== 'qr'"
-                label="QR code"
-                @click="pairingMode = 'qr'"
-              />
-              <Button
-                :solid="pairingMode === 'phone'"
-                :ghost="pairingMode !== 'phone'"
-                label="Phone code"
-                @click="pairingMode = 'phone'"
-              />
-            </div>
-
-            <template v-if="pairingMode === 'qr'">
+            <template v-else-if="connection === 'connecting'">
               <div v-if="!qrDataUrl" class="flex flex-col gap-4 items-center">
                 <p>
                   {{
@@ -168,20 +171,111 @@ watchEffect(() => {
               />
             </template>
 
+            <template v-else-if="connection === 'reconnecting'">
+              <p>
+                {{
+                  $t(
+                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.RECONNECTING'
+                  )
+                }}
+              </p>
+              <Spinner />
+            </template>
+          </template>
+
+          <!-- Propriacloud: user picks pairing method first, no auto-setup. -->
+          <template
+            v-else-if="connection !== 'open' && connection !== 'reconnecting'"
+          >
+            <p v-if="error" class="text-red-500 text-center">
+              {{ error }}
+            </p>
+
+            <div class="flex gap-2">
+              <Button
+                :solid="pairingMode === 'qr'"
+                :ghost="pairingMode !== 'qr'"
+                :label="
+                  $t(
+                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PAIRING_METHOD_QR'
+                  )
+                "
+                @click="pairingMode = 'qr'"
+              />
+              <Button
+                :solid="pairingMode === 'phone'"
+                :ghost="pairingMode !== 'phone'"
+                :label="
+                  $t(
+                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PAIRING_METHOD_PHONE'
+                  )
+                "
+                @click="pairingMode = 'phone'"
+              />
+            </div>
+
+            <template v-if="pairingMode === 'qr'">
+              <img
+                v-if="qrDataUrl"
+                :src="qrDataUrl"
+                alt="QR Code"
+                class="w-[276px] h-[276px]"
+              />
+              <div
+                v-else-if="connection === 'connecting' && loading"
+                class="flex flex-col gap-4 items-center"
+              >
+                <p>
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.LOADING_QRCODE'
+                    )
+                  }}
+                </p>
+                <Spinner />
+              </div>
+              <div v-else class="flex flex-col gap-3 items-center">
+                <p class="text-sm text-n-slate-11 text-center max-w-sm">
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.QR_INSTRUCTIONS'
+                    )
+                  }}
+                </p>
+                <Button :is-loading="loading" @click="startQrPairing">
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.GENERATE_QR'
+                    )
+                  }}
+                </Button>
+              </div>
+            </template>
+
             <template v-else>
               <div class="flex flex-col gap-3 w-full max-w-sm">
                 <p class="text-sm text-n-slate-11 text-center">
-                  Open WhatsApp → Settings → Linked devices → Link with phone
-                  number. Enter the phone number, then enter the 8-character
-                  code below.
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PHONE_CODE_INSTRUCTIONS'
+                    )
+                  }}
                 </p>
                 <label class="text-xs text-n-slate-11">
-                  Phone number (E.164)
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PHONE_NUMBER_LABEL'
+                    )
+                  }}
                   <input
                     v-model="phoneCodeInput"
                     type="text"
                     class="w-full px-3 py-2 border rounded"
-                    placeholder="+5511999999999"
+                    :placeholder="
+                      $t(
+                        'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PHONE_NUMBER_PLACEHOLDER'
+                      )
+                    "
                   />
                 </label>
                 <Button
@@ -189,7 +283,15 @@ watchEffect(() => {
                   :disabled="!phoneCodeInput"
                   @click="requestPhoneCode"
                 >
-                  {{ phoneCode ? 'Request new code' : 'Get pairing code' }}
+                  {{
+                    phoneCode
+                      ? $t(
+                          'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.REQUEST_NEW_CODE'
+                        )
+                      : $t(
+                          'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.GET_PAIRING_CODE'
+                        )
+                  }}
                 </Button>
                 <p
                   v-if="phoneCodeError"
@@ -202,7 +304,11 @@ watchEffect(() => {
                   class="mt-2 px-4 py-3 bg-n-solid-2 rounded text-center"
                 >
                   <p class="text-xs text-n-slate-11 mb-1">
-                    Enter this code in WhatsApp
+                    {{
+                      $t(
+                        'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.ENTER_CODE_IN_WHATSAPP'
+                      )
+                    }}
                   </p>
                   <p class="text-2xl font-mono tracking-widest">
                     {{ phoneCode }}

@@ -347,7 +347,17 @@
             "RECONNECTING": "Conectando...",
             "LINK_DEVICE": "Conectar dispositivo",
             "DISCONNECT": "Desconectar",
-            "CONNECTED": "Seu dispositivo foi conectado com sucesso. Agora você pode começar a enviar e receber mensagens."
+            "CONNECTED": "Seu dispositivo foi conectado com sucesso. Agora você pode começar a enviar e receber mensagens.",
+            "PAIRING_METHOD_QR": "QR code",
+            "PAIRING_METHOD_PHONE": "Código por telefone",
+            "QR_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho, depois clique abaixo para gerar um QR code para escanear.",
+            "GENERATE_QR": "Gerar QR Code",
+            "PHONE_CODE_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar com número de telefone. Informe o número, clique abaixo e digite no WhatsApp o código de 8 caracteres.",
+            "PHONE_NUMBER_LABEL": "Número de telefone (E.164)",
+            "PHONE_NUMBER_PLACEHOLDER": "+5511999999999",
+            "GET_PAIRING_CODE": "Obter código",
+            "REQUEST_NEW_CODE": "Solicitar novo código",
+            "ENTER_CODE_IN_WHATSAPP": "Digite este código no WhatsApp"
           }
         },
         "SUBMIT_BUTTON": "Criar canal do WhatsApp",
