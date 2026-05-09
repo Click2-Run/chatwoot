@@ -8,13 +8,29 @@ Upstream merges and third-party PRs are intentionally excluded — they
 are visible via `git log` against the remote tracking branches.
 
 Newest first. Each entry shows the commit subject, the short SHA, and
-the files touched (additions / deletions). Generated from the git
-history; rebuild with `.llm/temporary/20260509-changelog-builder.rb`.
+the files touched (additions / deletions). Regenerate from inside the
+rails container with:
+
+```bash
+git log --all --reverse --pretty=format:'COMMIT %H|%aI|%s' --numstat \
+  --author='robson@robson.com.br' > .llm/temporary/our-history.txt
+docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \
+  .llm/temporary/our-history.txt CUSTOM-CHANGELOG.md
+```
+
+Add new author emails to the `--author` filter as the team grows; the
+builder script accepts the input/output paths positionally.
 
 
 ## 2026-05
 
 ### 2026-05-09
+- **`e9dfe16f0`** — refactor(whatsapp-propriacloud): unify pairing trigger as small "Emparelhar" button
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +2/-5
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +2/-5
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +28/-25
+- **`f0d04498f`** — docs: add CUSTOM-CHANGELOG.md covering all 155 fork-owner commits
+  - `CUSTOM-CHANGELOG.md` +529/-0
 - **`b2ea56dfb`** — chore: ignore .llm and .claude runtime artifacts; sync schema.rb
   - `.gitignore` +2/-0
   - `db/schema.rb` +6/-12
