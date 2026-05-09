@@ -25,6 +25,10 @@ builder script accepts the input/output paths positionally.
 ## 2026-05
 
 ### 2026-05-09
+- **`bbe00fc70`** — Merge remote-tracking branch 'fazerai/main' into codi-v4.13.0-fazer-ai.66
+- **`78b4b7879`** — docs: refresh CUSTOM-CHANGELOG (157 commits) and persist regen script
+  - `.codi/scripts/build-changelog.rb` +95/-0
+  - `CUSTOM-CHANGELOG.md` +18/-2
 - **`e9dfe16f0`** — refactor(whatsapp-propriacloud): unify pairing trigger as small "Emparelhar" button
   - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +2/-5
   - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +2/-5

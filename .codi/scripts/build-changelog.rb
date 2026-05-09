@@ -50,8 +50,18 @@ File.open(output, 'w') do |f|
     are visible via `git log` against the remote tracking branches.
 
     Newest first. Each entry shows the commit subject, the short SHA, and
-    the files touched (additions / deletions). Generated from the git
-    history; rebuild with `.llm/temporary/20260509-changelog-builder.rb`.
+    the files touched (additions / deletions). Regenerate from inside the
+    rails container with:
+
+    ```bash
+    git log --all --reverse --pretty=format:'COMMIT %H|%aI|%s' --numstat \\
+      --author='robson@robson.com.br' > .llm/temporary/our-history.txt
+    docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \\
+      .llm/temporary/our-history.txt CUSTOM-CHANGELOG.md
+    ```
+
+    Add new author emails to the `--author` filter as the team grows; the
+    builder script accepts the input/output paths positionally.
 
   HEADER
 
