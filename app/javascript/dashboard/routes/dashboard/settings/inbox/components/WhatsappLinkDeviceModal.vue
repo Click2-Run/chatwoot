@@ -84,6 +84,24 @@ const requestPhoneCode = async () => {
   }
 };
 
+// Single trigger shared by both pairing tabs: clicking "Emparelhar"
+// fires the QR generation OR the phone-code request depending on the
+// currently selected tab. Nothing runs until the user clicks.
+const triggerPairing = () => {
+  if (pairingMode.value === 'qr') {
+    startQrPairing();
+  } else {
+    requestPhoneCode();
+  }
+};
+const pairingButtonDisabled = computed(() => {
+  if (pairingMode.value === 'phone') return !props.inbox.phone_number;
+  return false;
+});
+const pairingButtonLoading = computed(
+  () => loading.value || phoneCodeLoading.value
+);
+
 // No auto-setup or auto-disconnect on mount/unmount — let the user
 // pick the auth method and trigger explicitly. Only Propriacloud uses
 // this modal; for Baileys/Zapi the prior auto-setup behaviour kicks in.
@@ -241,13 +259,6 @@ watchEffect(() => {
                     )
                   }}
                 </p>
-                <Button :is-loading="loading" @click="startQrPairing">
-                  {{
-                    $t(
-                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.GENERATE_QR'
-                    )
-                  }}
-                </Button>
               </div>
             </template>
 
@@ -260,21 +271,6 @@ watchEffect(() => {
                     )
                   }}
                 </p>
-                <Button
-                  :is-loading="phoneCodeLoading"
-                  :disabled="!inbox.phone_number"
-                  @click="requestPhoneCode"
-                >
-                  {{
-                    phoneCode
-                      ? $t(
-                          'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.REQUEST_NEW_CODE'
-                        )
-                      : $t(
-                          'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.GET_PAIRING_CODE'
-                        )
-                  }}
-                </Button>
                 <p
                   v-if="phoneCodeError"
                   class="text-xs text-red-500 text-center"
@@ -299,9 +295,16 @@ watchEffect(() => {
               </div>
             </template>
 
-            <!-- Universal close button — same simple "OK" label regardless of
-                 the active pairing tab; "OK" is recognized in every locale. -->
-            <Button size="sm" ghost label="OK" @click="onClose" />
+            <!-- Unified small action button — same "Emparelhar" label across
+                 both QR and Phone Code tabs. Activation only fires when the
+                 user clicks; nothing auto-runs on mount or tab switch. -->
+            <Button
+              size="sm"
+              :is-loading="pairingButtonLoading"
+              :disabled="pairingButtonDisabled"
+              label="Emparelhar"
+              @click="triggerPairing"
+            />
           </template>
 
           <template v-else-if="connection === 'reconnecting'">
