@@ -262,6 +262,29 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     }
   end
 
+  # whatsapp-api supports phone-code pairing as an alternative to QR scan.
+  # The customer enters an 8-character code into WhatsApp's "Link with phone
+  # number" flow on their phone instead of scanning a QR. The instance must
+  # be in `connected: true, pair_state: unpaired` state when called.
+  # See OpenAPI: POST /instances/pair/phonecode
+  def request_phone_pairing_code(phone_number)
+    digits = phone_number.to_s.delete('+').gsub(/\D/, '')
+    response = HTTParty.post(
+      "#{provider_url}/instances/pair/phonecode#{instance_query}",
+      headers: api_headers,
+      body: { phone: digits }.to_json
+    )
+
+    raise ProviderUnavailableError, "Failed to request pairing code: #{response.code} #{response.body}" unless process_response(response)
+
+    body = unwrap(response.parsed_response)
+    {
+      'code' => body['code'] || body['pairingCode'] || body['pairing_code'],
+      'phone' => digits,
+      'expires_in' => body['expires_in'] || body['timeout']
+    }
+  end
+
   private
 
   def provider_url

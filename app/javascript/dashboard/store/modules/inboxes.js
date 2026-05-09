@@ -416,6 +416,15 @@ export const actions = {
       throwErrorMessage(error);
     }
   },
+  pairPhoneCode: async (_, { inboxId, phone }) => {
+    try {
+      const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
+      return response.data;
+    } catch (error) {
+      throwErrorMessage(error);
+      return null;
+    }
+  },
 };
 
 export const mutations = {

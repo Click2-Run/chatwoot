@@ -24,6 +24,18 @@ const qrDataUrl = computed(() => providerConnection.value?.qr_data_url);
 const error = computed(() => providerConnection.value?.error);
 
 const loading = ref(false);
+// Pairing mode: 'qr' (default) or 'phone' (8-char code into WhatsApp's
+// "Link with phone number" flow). Only the propriacloud provider exposes
+// the phone-code path right now via /instances/pair/phonecode.
+const isPropriacloud = computed(
+  () => props.inbox.channel_type === 'Channel::Whatsapp' &&
+        props.inbox.provider === 'propriacloud',
+);
+const pairingMode = ref('qr');
+const phoneCodeInput = ref(props.inbox.phone_number || '');
+const phoneCode = ref('');
+const phoneCodeLoading = ref(false);
+const phoneCodeError = ref('');
 
 const handleError = e => {
   useAlert(e.message);
@@ -40,6 +52,26 @@ const disconnect = () => {
   store
     .dispatch('inboxes/disconnectChannelProvider', props.inbox.id)
     .catch(handleError);
+};
+
+const requestPhoneCode = async () => {
+  phoneCodeError.value = '';
+  phoneCode.value = '';
+  phoneCodeLoading.value = true;
+  try {
+    const result = await store.dispatch('inboxes/pairPhoneCode', {
+      inboxId: props.inbox.id,
+      phone: phoneCodeInput.value,
+    });
+    phoneCode.value = result?.code || '';
+    if (!phoneCode.value) {
+      phoneCodeError.value = 'No code returned from provider';
+    }
+  } catch (e) {
+    phoneCodeError.value = e?.message || 'Failed to request pairing code';
+  } finally {
+    phoneCodeLoading.value = false;
+  }
 };
 
 onMounted(() => {
@@ -101,22 +133,83 @@ watchEffect(() => {
           </template>
 
           <template v-else-if="connection === 'connecting'">
-            <div v-if="!qrDataUrl" class="flex flex-col gap-4 items-center">
-              <p>
-                {{
-                  $t(
-                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.LOADING_QRCODE'
-                  )
-                }}
-              </p>
-              <Spinner />
+            <!-- Mode toggle (QR vs phone-code) — propriacloud only -->
+            <div v-if="isPropriacloud" class="flex gap-2">
+              <Button
+                :solid="pairingMode === 'qr'"
+                :ghost="pairingMode !== 'qr'"
+                label="QR code"
+                @click="pairingMode = 'qr'"
+              />
+              <Button
+                :solid="pairingMode === 'phone'"
+                :ghost="pairingMode !== 'phone'"
+                label="Phone code"
+                @click="pairingMode = 'phone'"
+              />
             </div>
-            <img
-              v-else
-              :src="qrDataUrl"
-              alt="QR Code"
-              class="w-[276px] h-[276px]"
-            />
+
+            <template v-if="pairingMode === 'qr'">
+              <div v-if="!qrDataUrl" class="flex flex-col gap-4 items-center">
+                <p>
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.LOADING_QRCODE'
+                    )
+                  }}
+                </p>
+                <Spinner />
+              </div>
+              <img
+                v-else
+                :src="qrDataUrl"
+                alt="QR Code"
+                class="w-[276px] h-[276px]"
+              />
+            </template>
+
+            <template v-else>
+              <div class="flex flex-col gap-3 w-full max-w-sm">
+                <p class="text-sm text-n-slate-11 text-center">
+                  Open WhatsApp → Settings → Linked devices → Link with phone
+                  number. Enter the phone number, then enter the 8-character
+                  code below.
+                </p>
+                <label class="text-xs text-n-slate-11">
+                  Phone number (E.164)
+                  <input
+                    v-model="phoneCodeInput"
+                    type="text"
+                    class="w-full px-3 py-2 border rounded"
+                    placeholder="+5511999999999"
+                  />
+                </label>
+                <Button
+                  :is-loading="phoneCodeLoading"
+                  :disabled="!phoneCodeInput"
+                  @click="requestPhoneCode"
+                >
+                  {{ phoneCode ? 'Request new code' : 'Get pairing code' }}
+                </Button>
+                <p
+                  v-if="phoneCodeError"
+                  class="text-xs text-red-500 text-center"
+                >
+                  {{ phoneCodeError }}
+                </p>
+                <div
+                  v-if="phoneCode"
+                  class="mt-2 px-4 py-3 bg-n-solid-2 rounded text-center"
+                >
+                  <p class="text-xs text-n-slate-11 mb-1">
+                    Enter this code in WhatsApp
+                  </p>
+                  <p class="text-2xl font-mono tracking-widest">
+                    {{ phoneCode }}
+                  </p>
+                </div>
+              </div>
+            </template>
           </template>
 
           <template v-else-if="connection === 'reconnecting'">

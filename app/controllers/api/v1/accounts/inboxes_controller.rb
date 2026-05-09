@@ -98,6 +98,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     channel.update_provider_connection!(connection: 'close') if channel.respond_to?(:update_provider_connection!)
   end
 
+  def pair_phone_code
+    channel = @inbox.channel
+    phone = params[:phone].presence || channel.phone_number
+
+    unless channel.provider_service.respond_to?(:request_phone_pairing_code)
+      render json: { error: 'Channel does not support phone-code pairing' }, status: :unprocessable_entity and return
+    end
+
+    result = channel.provider_service.request_phone_pairing_code(phone)
+    render json: result
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   def convert_provider
     channel = @inbox.channel
 
