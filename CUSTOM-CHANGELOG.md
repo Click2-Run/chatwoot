@@ -47,6 +47,23 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-09
+- **`c5660f91f`** — fix(whatsapp-propriacloud): kill auto-pairing paths and surface clean propriacloud status
+  - `app/javascript/dashboard/components/widgets/conversation/MessagesView.vue` +10/-0
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +4/-1
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +4/-1
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` +16/-15
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +31/-3
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/settingsPage/ConfigurationPage.vue` +79/-64
+  - `app/models/channel/whatsapp.rb` +14/-0
+  - `app/services/whatsapp/propriacloud_handlers/connection_update.rb` +21/-0
+  - `app/services/whatsapp/propriacloud_handlers/instance_recovery.rb` +6/-0
+- **`28c7f2c33`** — feat(whatsapp-propriacloud): inline connection-state badge in conversation header
+  - `app/javascript/dashboard/components/widgets/conversation/ConversationHeader.vue` +2/-0
+  - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +85/-0
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +6/-0
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +6/-0
+- **`e0d245efc`** — docs: refresh CUSTOM-CHANGELOG to include guide + milestones commits
+  - `CUSTOM-CHANGELOG.md` +9/-0
 - **`84ef72535`** — docs: add CUSTOM-MERGES-GUIDE.md and cross-link from CUSTOM-FAZER-AI
   - `CUSTOM-FAZER-AI.md` +7/-0
   - `CUSTOM-MERGES-GUIDE.md` +226/-0
