@@ -298,6 +298,10 @@ watchEffect(() => {
                 </div>
               </div>
             </template>
+
+            <!-- Universal close button — same simple "OK" label regardless of
+                 the active pairing tab; "OK" is recognized in every locale. -->
+            <Button size="sm" ghost label="OK" @click="onClose" />
           </template>
 
           <template v-else-if="connection === 'reconnecting'">
