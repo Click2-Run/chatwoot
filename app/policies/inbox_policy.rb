@@ -78,6 +78,11 @@ class InboxPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
+  def refresh_provider_status?
+    # Read-only refresh; available to anyone allowed to view the inbox.
+    show?
+  end
+
   def convert_provider?
     @account_user.administrator?
   end

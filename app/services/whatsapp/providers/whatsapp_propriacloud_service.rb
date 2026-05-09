@@ -296,9 +296,18 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     { 'X-API-Key' => api_key, 'Content-Type' => 'application/json' }
   end
 
+  # Called as an ActiveModel validator on every Channel::Whatsapp save.
+  # Must NOT fail just because the upstream API is briefly unreachable —
+  # otherwise routine UI toggles (read receipts, presence, group sync,
+  # etc.) start returning 422 Invalid Credentials whenever there's any
+  # network blip between Chatwoot and whatsapp-api. Initial setup time
+  # already validates credentials via setup_channel_provider; on
+  # routine saves we treat the config as valid as long as URL + API
+  # key are present.
   def validate_provider_config?
-    response = HTTParty.get("#{provider_url}/health", headers: api_headers)
-    process_response(response)
+    return false if provider_url.blank? || api_key.blank?
+
+    true
   end
 
   def toggle_typing_status(typing_status, recipient_id: nil, phone_number: nil, **)
@@ -412,6 +421,70 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   def list_labels(page: 1, page_size: 100)
     paged_get('/labels', page: page, page_size: page_size, scope: :tenant)
+  end
+
+  # Hit /instances/status and reconcile our cached provider_connection
+  # with what the API actually reports. Used on user-driven inbox
+  # opens so a stale `connecting` (left over from an abandoned pairing
+  # attempt) doesn't get stuck. Rate-limited externally by the
+  # controller — this method just does the work.
+  #
+  # API state matrix (per OpenAPI /instances/status doc):
+  #   connection_state | pair_state | meaning
+  #   ---------------- | ---------- | -----------------------------------
+  #   connected        | paired     | open
+  #   connected        | pairing    | connecting (QR/phone code phase)
+  #   connected        | unpaired   | close (ready to pair)
+  #   connecting       | any        | connecting
+  #   disconnected     | paired     | close (eligible for reconnect)
+  #   disconnected     | unpaired   | close
+  #   disconnecting    | any        | close
+  def refresh_status_from_api!
+    response = HTTParty.get(
+      "#{provider_url}/instances/status#{instance_query}",
+      headers: api_headers
+    )
+    return unless response.success?
+
+    payload = unwrap(response.parsed_response)
+    status = (payload['data'] && payload['data']['status']) || payload['status']
+    return if status.blank?
+
+    chat_state = map_api_status_to_chatwoot(
+      status['connection_state'],
+      status['pair_state']
+    )
+
+    new_conn = whatsapp_channel.provider_connection.deep_dup || {}
+    if chat_state != 'connecting'
+      new_conn['qr_data_url'] = nil
+      new_conn['error'] = nil if chat_state == 'open'
+    end
+    new_conn['connection'] = chat_state
+    whatsapp_channel.update_provider_connection!(new_conn)
+
+    # Sync paired_at with API truth for the auto-recovery gate.
+    config = whatsapp_channel.provider_config || {}
+    if status['pair_state'] == 'paired' && config['paired_at'].blank?
+      config['paired_at'] = Time.current.iso8601
+      whatsapp_channel.update!(provider_config: config)
+    elsif status['pair_state'] == 'unpaired' && config['paired_at'].present?
+      config.delete('paired_at')
+      whatsapp_channel.update!(provider_config: config)
+    end
+
+    { connection: chat_state, pair_state: status['pair_state'], connection_state: status['connection_state'] }
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: refresh_status_from_api! failed (#{e.class}: #{e.message[0..120]})"
+    nil
+  end
+
+  def map_api_status_to_chatwoot(connection_state, pair_state)
+    return 'open' if connection_state == 'connected' && pair_state == 'paired'
+    return 'connecting' if connection_state == 'connected' && pair_state == 'pairing'
+    return 'connecting' if connection_state == 'connecting'
+
+    'close'
   end
 
   def get_profile_pic(jid)

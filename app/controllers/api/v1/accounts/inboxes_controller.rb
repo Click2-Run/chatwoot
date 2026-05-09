@@ -112,6 +112,30 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
+  # Reconciles the cached provider_connection on the channel with the
+  # truth from the upstream API (e.g. propriacloud's /instances/status).
+  # Used by the dashboard on inbox open to clear stale "connecting"
+  # state left over from abandoned pairing attempts. Rate-limited via
+  # Redis so a chatty UI cannot flood the upstream API.
+  def refresh_provider_status
+    channel = @inbox.channel
+    unless channel.provider_service.respond_to?(:refresh_status_from_api!)
+      render json: { error: 'Channel does not support status refresh' }, status: :unprocessable_entity and return
+    end
+
+    key = "propriacloud:status_refresh:#{channel.id}"
+    if Redis::Alfred.get(key)
+      render json: { rate_limited: true, provider_connection: channel.provider_connection }
+      return
+    end
+    Redis::Alfred.setex(key, true, 30)
+
+    result = channel.provider_service.refresh_status_from_api!
+    render json: { result: result, provider_connection: channel.reload.provider_connection }
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   def convert_provider
     channel = @inbox.channel
 

@@ -614,8 +614,25 @@ const menuItems = computed(() => {
         {
           name: 'Settings Account Settings',
           label: t('SIDEBAR.ACCOUNT_SETTINGS'),
-          icon: 'i-lucide-briefcase',
+          // Org-level building icon — Própria Cloud rebrand renames
+          // "Conta" to "Organização" and uses a building glyph that
+          // signals a multi-tenant account rather than a personal one.
+          icon: 'i-lucide-building-2',
           to: accountScopedRoute('general_settings_index'),
+        },
+        {
+          name: 'Settings Inboxes',
+          label: t('SIDEBAR.INBOXES'),
+          icon: 'i-lucide-inbox',
+          activeOn: [
+            'settings_inbox_list',
+            'settings_inbox_show',
+            'settings_inbox_new',
+            'settings_inbox_finish',
+            'settings_inboxes_page_channel',
+            'settings_inboxes_add_agents',
+          ],
+          to: accountScopedRoute('settings_inbox_list'),
         },
         // {
         //   name: 'Settings Captain',
@@ -664,20 +681,6 @@ const menuItems = computed(() => {
               },
             ]
           : []),
-        {
-          name: 'Settings Inboxes',
-          label: t('SIDEBAR.INBOXES'),
-          icon: 'i-lucide-inbox',
-          activeOn: [
-            'settings_inbox_list',
-            'settings_inbox_show',
-            'settings_inbox_new',
-            'settings_inbox_finish',
-            'settings_inboxes_page_channel',
-            'settings_inboxes_add_agents',
-          ],
-          to: accountScopedRoute('settings_inbox_list'),
-        },
         {
           name: 'Settings Labels',
           label: t('SIDEBAR.LABELS'),
