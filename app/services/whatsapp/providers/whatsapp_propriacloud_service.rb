@@ -92,6 +92,11 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # Three-call setup: create instance → register webhook → connect.
   # Idempotent against existing instances (409 on create is treated as success).
   def setup_channel_provider
+    # custom_id is the Chatwoot account (organization) id, set server-side
+    # from the channel's inbox association. The client never has a chance to
+    # influence this — setup_channel_provider only reads it off the
+    # persisted record. Same value is sent regardless of the entry point
+    # (UI inbox creation, future API onboarding, agent invite, etc.).
     create_response = HTTParty.post(
       "#{provider_url}/instances/create",
       headers: api_headers,
@@ -99,7 +104,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
         instance_id: instance_id,
         name: whatsapp_channel.inbox.name,
         phone: normalized_phone_number,
-        custom_id: "chatwoot:account:#{whatsapp_channel.inbox.account_id}:inbox:#{whatsapp_channel.inbox.id}"
+        custom_id: whatsapp_channel.inbox.account_id.to_s
       }.compact.to_json
     )
 
