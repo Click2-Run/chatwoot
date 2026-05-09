@@ -353,6 +353,42 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     true
   end
 
+  # Chatwoot's Channel::Whatsapp routes message-edit / message-delete
+  # actions to the provider service when it `respond_to?` the method.
+  # WhatsApp imposes a 20-minute edit window per message; we let the API
+  # surface the error so it bubbles up to the agent UI.
+
+  def edit_message(recipient_id, message, new_content)
+    response = HTTParty.put(
+      "#{provider_url}/messages/edit#{instance_query}",
+      headers: api_headers,
+      body: {
+        chat: jid_param(recipient_id),
+        message_id: message.source_id,
+        new_content: { conversation: new_content.to_s }
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to edit message' unless process_response(response)
+
+    true
+  end
+
+  def delete_message(recipient_id, message)
+    response = HTTParty.delete(
+      "#{provider_url}/messages/revoke#{instance_query}",
+      headers: api_headers,
+      body: {
+        chat: jid_param(recipient_id),
+        message_id: message.source_id
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to delete message' unless process_response(response)
+
+    true
+  end
+
   # ---------- one-shot history pulls (used by HistoryBackfillJob) ----------
   # Each helper returns the parsed array of records or [] on failure. They
   # are paginated via page/page_size (1-based). The caller keeps incrementing
@@ -469,9 +505,17 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     []
   end
 
+  # Use the local Chatwoot channel id as the propriacloud instance_id for
+  # new inboxes — it's already a stable, unique handle that ties the two
+  # systems together with no extra mapping. Existing rows that were
+  # already paired with a UUID (e.g. dev instances created before this
+  # change) keep their value so we don't orphan their server-side state.
   def instance_id
-    whatsapp_channel.provider_config['instance_id'].presence ||
-      (whatsapp_channel.provider_config['instance_id'] = SecureRandom.uuid).tap { whatsapp_channel.save! }
+    return whatsapp_channel.provider_config['instance_id'] if whatsapp_channel.provider_config['instance_id'].present?
+
+    whatsapp_channel.provider_config['instance_id'] = whatsapp_channel.id.to_s
+    whatsapp_channel.save!
+    whatsapp_channel.provider_config['instance_id']
   end
 
   def instance_query(prefix: '?')
