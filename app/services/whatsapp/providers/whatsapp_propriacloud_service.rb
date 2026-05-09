@@ -96,7 +96,40 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       raise ProviderUnavailableError, 'Failed to connect whatsapp-api instance'
     end
 
+    # whatsapp-api emits pairing.qrcode webhook events only on actual state
+    # transitions. For instances that come back already in connected+unpaired
+    # state, the API answers /instances/connect with `message: "already
+    # connected"` and never re-emits a pairing.qrcode. The Chatwoot UI then
+    # has no QR to show. Pull the current QR explicitly so the user sees it
+    # immediately. If the instance is already paired, this returns nothing
+    # and the channel stays in whatever state the webhook last set.
+    fetch_and_publish_qr_code
+
     true
+  end
+
+  # Pull the current pairing QR from whatsapp-api and stuff it into the
+  # channel's provider_connection so the inbox UI displays it. No-op if the
+  # API doesn't return a QR (instance is paired or in an error state).
+  def fetch_and_publish_qr_code
+    response = HTTParty.get(
+      "#{provider_url}/instances/pair/qrcode#{instance_query}",
+      headers: api_headers
+    )
+    return unless response.success?
+
+    body = unwrap(response.parsed_response)
+    qr = body['img'] || body['code'] || body['qr_code']
+    return if qr.blank?
+
+    qr_data_url = qr.start_with?('data:image/') ? qr : "data:image/png;base64,#{qr}"
+    whatsapp_channel.update_provider_connection!(
+      connection: 'connecting',
+      qr_data_url: qr_data_url,
+      error: nil
+    )
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: could not fetch QR (#{e.class}: #{e.message[0..120]})"
   end
 
   def disconnect_channel_provider
