@@ -47,6 +47,16 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-09
+- **`8c21657f5`** — fix(whatsapp-propriacloud): tolerant validate_provider_config + status reconciliation + sidebar polish
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +24/-0
+  - `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` +18/-15
+  - `app/javascript/dashboard/i18n/locale/en/settings.json` +1/-1
+  - `app/javascript/dashboard/i18n/locale/pt_BR/settings.json` +1/-1
+  - `app/policies/inbox_policy.rb` +5/-0
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +75/-2
+  - `config/routes.rb` +1/-0
+- **`172a0b6fd`** — docs: refresh CUSTOM-CHANGELOG with auto-pairing fix + status badge commits
+  - `CUSTOM-CHANGELOG.md` +17/-0
 - **`c5660f91f`** — fix(whatsapp-propriacloud): kill auto-pairing paths and surface clean propriacloud status
   - `app/javascript/dashboard/components/widgets/conversation/MessagesView.vue` +10/-0
   - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +4/-1
