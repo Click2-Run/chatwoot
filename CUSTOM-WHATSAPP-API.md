@@ -209,13 +209,43 @@ number* screen.
 | `config/features.yml`                                                                               | `channel_whatsapp_propriacloud` feature toggle (replaces deprecated `channel_twitter` slot).      |
 | `config/routes.rb`                                                                                  | Routes the webhook (existing) and `pair_phone_code` member action (new).                          |
 
-## Environment variables
+## Configuration
 
-| Variable                    | Purpose                                                                                                                                                                                                  |
-| :-------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WHATSAPP_API_URL`          | Base URL of the whatsapp-api service. **Must include `/api/v1` prefix** (e.g. `http://host.docker.internal:8080/api/v1`). Falls back to `PROPRIACLOUD_PROVIDER_DEFAULT_URL`, then `CLICK2RUN_PROVIDER_DEFAULT_URL`. |
-| `WHATSAPP_API_KEY`          | Bearer token sent to whatsapp-api on every request. Generated via the whatsapp-api admin tooling.                                                                                                        |
-| `WHATSAPP_WEBHOOK_BASE_URL` | Base URL whatsapp-api should call back into. In Docker compose with separate stacks, this is the cross-network hostname (e.g. `http://chatwootgit-rails-1:3000`) — not `localhost`.                       |
+Two layers, in resolution order — first match wins:
+
+1. **Per-channel override** (`provider_config['provider_url' / 'api_key']`)
+   — set programmatically when creating an inbox via the API. Not exposed
+   in the dashboard UI today.
+2. **Super Admin → Própria Cloud card** (`/super_admin/app_config?config=propriacloud`)
+   — `PROPRIACLOUD_API_URL`, `PROPRIACLOUD_API_KEY`,
+   `PROPRIACLOUD_WEBHOOK_BASE_URL` rows in `installation_configs`,
+   editable through the standard Super Admin app-config form.
+3. **Environment variables** — picked up only when the corresponding DB
+   row is blank. `GlobalConfigService.load` migrates an env value into
+   the DB on first read, so an env-only install populates the Super
+   Admin form automatically.
+
+### Super Admin card
+
+The card is registered in `app/helpers/super_admin/features.yml` under
+the `propriacloud` key and shows up alongside *WhatsApp Embedded* on
+`/super_admin/settings`. Clicking the gear opens a form bound to the
+three `PROPRIACLOUD_*` rows; saving updates the rows via
+`SuperAdmin::AppConfigsController#create`. The same controller's
+`allowed_configs` whitelist is what makes the form accept those keys —
+unlisted keys are ignored.
+
+### Environment variables (legacy fallback)
+
+| Variable                                                                              | Purpose                                                                                                                                                                                                              |
+| :------------------------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROPRIACLOUD_API_URL` / `WHATSAPP_API_URL` / `PROPRIACLOUD_PROVIDER_DEFAULT_URL` / `CLICK2RUN_PROVIDER_DEFAULT_URL` | Base URL of the whatsapp-api service. **Must include `/api/v1` prefix** (e.g. `http://host.docker.internal:8080/api/v1`). |
+| `PROPRIACLOUD_API_KEY` / `WHATSAPP_API_KEY` / `PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY` / `CLICK2RUN_PROVIDER_DEFAULT_API_KEY` | Bearer token sent to whatsapp-api on every request. Generated via the whatsapp-api admin tooling.                            |
+| `PROPRIACLOUD_WEBHOOK_BASE_URL` / `WHATSAPP_WEBHOOK_BASE_URL` / `FRONTEND_URL`         | Base URL whatsapp-api should call back into. In Docker compose with separate stacks, this is the cross-network hostname (e.g. `http://chatwootgit-rails-1:3000`) — not `localhost`.                                  |
+
+The cascade is intentional — new installs should configure via the
+Super Admin UI; existing installs can keep their `WHATSAPP_API_*` env
+vars and get them auto-migrated into the DB on first runtime read.
 
 The local docker compose stack also adds:
 

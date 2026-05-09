@@ -32,15 +32,34 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   class MessageContentTypeNotSupported < StandardError; end
   class ProviderUnavailableError < StandardError; end
 
-  # Backwards-compat env-var cascade. Prefer WHATSAPP_API_* going forward.
-  # Legacy CLICK2RUN_PROVIDER_DEFAULT_* retained as final fallback so existing
-  # deployments mid-rebrand keep working without env changes.
-  DEFAULT_URL = ENV['WHATSAPP_API_URL'].presence ||
-                ENV['PROPRIACLOUD_PROVIDER_DEFAULT_URL'].presence ||
-                ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
-  DEFAULT_API_KEY = ENV['WHATSAPP_API_KEY'].presence ||
-                    ENV['PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY'].presence ||
-                    ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
+  # Resolution order (highest priority first):
+  #   1. per-channel `provider_config['provider_url' / 'api_key']` overrides
+  #   2. Super Admin → Própria Cloud (`PROPRIACLOUD_API_*` InstallationConfig
+  #      rows, read via GlobalConfigService — DB takes precedence over env)
+  #   3. Legacy env vars: WHATSAPP_API_*, PROPRIACLOUD_PROVIDER_DEFAULT_*,
+  #      CLICK2RUN_PROVIDER_DEFAULT_* (kept for migration-period compatibility)
+  #
+  # GlobalConfigService.load itself migrates a value from ENV into the DB on
+  # first read, so env-only installs auto-populate the Super Admin form.
+  def self.default_url
+    GlobalConfigService.load('PROPRIACLOUD_API_URL', nil).presence ||
+      ENV['WHATSAPP_API_URL'].presence ||
+      ENV['PROPRIACLOUD_PROVIDER_DEFAULT_URL'].presence ||
+      ENV['CLICK2RUN_PROVIDER_DEFAULT_URL']
+  end
+
+  def self.default_api_key
+    GlobalConfigService.load('PROPRIACLOUD_API_KEY', nil).presence ||
+      ENV['WHATSAPP_API_KEY'].presence ||
+      ENV['PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY'].presence ||
+      ENV['CLICK2RUN_PROVIDER_DEFAULT_API_KEY']
+  end
+
+  def self.default_webhook_base_url
+    GlobalConfigService.load('PROPRIACLOUD_WEBHOOK_BASE_URL', nil).presence ||
+      ENV['WHATSAPP_WEBHOOK_BASE_URL'].presence ||
+      ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
+  end
 
   # whatsapp-api uses dotted event_type values like `connection.connected`,
   # `message.received`, `message.sent`, `message.edited`, `presence.update`,
@@ -50,11 +69,15 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   DEFAULT_WEBHOOK_EVENTS = %w[*].freeze
 
   def self.status
-    if DEFAULT_URL.blank? || DEFAULT_API_KEY.blank?
-      raise ProviderUnavailableError, 'Missing WHATSAPP_API_URL or WHATSAPP_API_KEY (or legacy PROPRIACLOUD_PROVIDER_DEFAULT_*)'
+    url = default_url
+    key = default_api_key
+    if url.blank? || key.blank?
+      raise ProviderUnavailableError,
+            'Missing PROPRIACLOUD_API_URL / PROPRIACLOUD_API_KEY ' \
+            '(configure via Super Admin → Própria Cloud, or set the legacy WHATSAPP_API_* env vars).'
     end
 
-    response = HTTParty.get("#{DEFAULT_URL}/health", headers: { 'X-API-Key' => DEFAULT_API_KEY })
+    response = HTTParty.get("#{url}/health", headers: { 'X-API-Key' => key })
 
     unless response.success?
       Rails.logger.error response.body
@@ -321,11 +344,11 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   private
 
   def provider_url
-    whatsapp_channel.provider_config['provider_url'].presence || DEFAULT_URL
+    whatsapp_channel.provider_config['provider_url'].presence || self.class.default_url
   end
 
   def api_key
-    whatsapp_channel.provider_config['api_key'].presence || DEFAULT_API_KEY
+    whatsapp_channel.provider_config['api_key'].presence || self.class.default_api_key
   end
 
   def instance_id
@@ -344,9 +367,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # container can't reach back to its own localhost — set
     # WHATSAPP_WEBHOOK_BASE_URL=http://host.docker.internal:3000 (or the
     # Chatwoot container's network alias) to override.
-    base_url = ENV['WHATSAPP_WEBHOOK_BASE_URL'].presence ||
-               ENV.fetch('FRONTEND_URL', 'http://localhost:3000')
-    "#{base_url}/webhooks/whatsapp/#{whatsapp_channel.phone_number}"
+    "#{self.class.default_webhook_base_url}/webhooks/whatsapp/#{whatsapp_channel.phone_number}"
   end
 
   def normalized_phone_number
