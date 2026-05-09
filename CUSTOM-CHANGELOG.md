@@ -47,6 +47,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-09
+- **`84ef72535`** — docs: add CUSTOM-MERGES-GUIDE.md and cross-link from CUSTOM-FAZER-AI
+  - `CUSTOM-FAZER-AI.md` +7/-0
+  - `CUSTOM-MERGES-GUIDE.md` +226/-0
+- **`d57b24b94`** — docs(changelog): add Version milestones table tracking branch/tag bumps
+  - `.codi/scripts/build-changelog.rb` +25/-0
+  - `CUSTOM-CHANGELOG.md` +22/-0
+- **`d06fea621`** — docs: refresh changelog after fazerai/main merge (159 commits)
+  - `.codi/scripts/build-changelog.rb` +12/-2
+  - `CUSTOM-CHANGELOG.md` +4/-0
 - **`bbe00fc70`** — Merge remote-tracking branch 'fazerai/main' into codi-v4.13.0-fazer-ai.66
 - **`78b4b7879`** — docs: refresh CUSTOM-CHANGELOG (157 commits) and persist regen script
   - `.codi/scripts/build-changelog.rb` +95/-0
