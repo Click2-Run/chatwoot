@@ -123,6 +123,7 @@ class User < ApplicationRecord
   # rubocop:enable Rails/HasManyOrHasOneDependent
 
   before_validation :set_password_and_uid, on: :create
+  before_create :set_default_ui_locale
   after_destroy :remove_macros
 
   scope :order_by_full_name, -> { order('lower(name) ASC') }
@@ -138,6 +139,16 @@ class User < ApplicationRecord
 
   def set_password_and_uid
     self.uid = email
+  end
+
+  # Force pt_BR as the user's UI locale on creation so the dashboard renders
+  # in Portuguese regardless of browser Accept-Language. Users can still
+  # change it later from Profile Settings.
+  def set_default_ui_locale
+    self.ui_settings ||= {}
+    return if ui_settings['locale'].present?
+
+    ui_settings['locale'] = ENV.fetch('DEFAULT_USER_LOCALE', 'pt_BR')
   end
 
   def assigned_inboxes

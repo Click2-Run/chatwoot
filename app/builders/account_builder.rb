@@ -44,10 +44,17 @@ class AccountBuilder
   end
 
   def create_account
-    @account = Account.create!(name: account_name, locale: I18n.locale)
+    @account = Account.create!(name: account_name, locale: default_account_locale)
     Current.account = @account
     enable_default_account_features
     @account
+  end
+
+  # Force pt_BR as the default for any new account so the org-level UI
+  # is Portuguese regardless of the signup browser/Accept-Language. Users
+  # can still flip the locale later in account settings.
+  def default_account_locale
+    ENV.fetch('DEFAULT_ACCOUNT_LOCALE', 'pt_BR')
   end
 
   def enable_default_account_features
