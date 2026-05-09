@@ -1,5 +1,11 @@
 {
   "INBOX_MGMT": {
+    "PROPRIACLOUD_STATUS": {
+      "CONNECTED": "Conectada",
+      "CONNECTING": "Conectando",
+      "RECONNECTING": "Reconectando",
+      "DISCONNECTED": "Desconectada"
+    },
     "HEADER": "Caixas de Entrada",
     "DESCRIPTION": "Um canal é o modo de comunicação que seu cliente escolhe para interagir com você. Uma caixa de entrada é onde você gerencia interações para um canal específico. Pode incluir comunicações de várias fontes, como e-mail, chat ao vivo e mídia social.",
     "LEARN_MORE": "Saiba mais sobre as caixas de entrada",
