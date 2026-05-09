@@ -352,9 +352,7 @@
             "PAIRING_METHOD_PHONE": "Phone code",
             "QR_INSTRUCTIONS": "Open WhatsApp → Settings → Linked devices → Link a device, then click below to generate a QR code to scan.",
             "GENERATE_QR": "Generate QR Code",
-            "PHONE_CODE_INSTRUCTIONS": "Open WhatsApp → Settings → Linked devices → Link with phone number. Enter the phone number, click below, then type the 8-character code into WhatsApp.",
-            "PHONE_NUMBER_LABEL": "Phone number (E.164)",
-            "PHONE_NUMBER_PLACEHOLDER": "+5511999999999",
+            "PHONE_CODE_INSTRUCTIONS": "Open WhatsApp → Settings → Linked devices → Link with phone number, then click below and type the 8-character code into WhatsApp.",
             "GET_PAIRING_CODE": "Get pairing code",
             "REQUEST_NEW_CODE": "Request new code",
             "ENTER_CODE_IN_WHATSAPP": "Enter this code in WhatsApp"

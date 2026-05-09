@@ -33,7 +33,6 @@ const isPropriacloud = computed(
     props.inbox.provider === 'propriacloud'
 );
 const pairingMode = ref('qr');
-const phoneCodeInput = ref(props.inbox.phone_number || '');
 const phoneCode = ref('');
 const phoneCodeLoading = ref(false);
 const phoneCodeError = ref('');
@@ -72,7 +71,7 @@ const requestPhoneCode = async () => {
     await ensureConnectingForPhoneCode();
     const result = await store.dispatch('inboxes/pairPhoneCode', {
       inboxId: props.inbox.id,
-      phone: phoneCodeInput.value,
+      phone: props.inbox.phone_number,
     });
     phoneCode.value = result?.code || '';
     if (!phoneCode.value) {
@@ -261,26 +260,9 @@ watchEffect(() => {
                     )
                   }}
                 </p>
-                <label class="text-xs text-n-slate-11">
-                  {{
-                    $t(
-                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PHONE_NUMBER_LABEL'
-                    )
-                  }}
-                  <input
-                    v-model="phoneCodeInput"
-                    type="text"
-                    class="w-full px-3 py-2 border rounded"
-                    :placeholder="
-                      $t(
-                        'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.PHONE_NUMBER_PLACEHOLDER'
-                      )
-                    "
-                  />
-                </label>
                 <Button
                   :is-loading="phoneCodeLoading"
-                  :disabled="!phoneCodeInput"
+                  :disabled="!inbox.phone_number"
                   @click="requestPhoneCode"
                 >
                   {{
