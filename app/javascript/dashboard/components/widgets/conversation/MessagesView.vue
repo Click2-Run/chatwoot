@@ -757,6 +757,16 @@ export default {
       this.showLinkDeviceModal = false;
     },
     onSetupProviderConnection() {
+      // Propriacloud channels never auto-fire setupChannelProvider —
+      // pairing must always go through the LinkDeviceModal where the
+      // user picks QR vs Phone Code. Direct setup calls would
+      // unconditionally generate a QR even when the instance just
+      // needs a reconnect on a paired session, which is exactly the
+      // flood path we explicitly forbid.
+      if (this.inbox?.provider === 'propriacloud') {
+        this.onOpenLinkDeviceModal();
+        return;
+      }
       this.$store
         .dispatch('inboxes/setupChannelProvider', this.inbox.id)
         .catch(e => {

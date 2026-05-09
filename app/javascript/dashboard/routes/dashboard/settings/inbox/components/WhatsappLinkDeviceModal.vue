@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, computed, onUnmounted, ref, watchEffect } from 'vue';
+import { onMounted, computed, onUnmounted, ref, watch, watchEffect } from 'vue';
 import { useStore } from 'vuex';
 import { useAlert } from 'dashboard/composables';
 import InboxName from 'dashboard/components/widgets/InboxName.vue';
@@ -36,6 +36,12 @@ const pairingMode = ref('qr');
 const phoneCode = ref('');
 const phoneCodeLoading = ref(false);
 const phoneCodeError = ref('');
+// True only after the user has explicitly clicked "Emparelhar" in this
+// modal session. Until then we never render an existing QR or phone
+// code from provider_connection — even if the inbox row carries one
+// from a previous attempt — so the modal opens to the tab picker
+// every time and never implies pairing was already initiated.
+const userInitiatedPairing = ref(false);
 
 const handleError = e => {
   useAlert(e.message);
@@ -49,6 +55,7 @@ const setup = () => {
 };
 const startQrPairing = () => {
   pairingMode.value = 'qr';
+  userInitiatedPairing.value = true;
   setup();
 };
 const ensureConnectingForPhoneCode = async () => {
@@ -64,6 +71,7 @@ const disconnect = () => {
 };
 
 const requestPhoneCode = async () => {
+  userInitiatedPairing.value = true;
   phoneCodeError.value = '';
   phoneCode.value = '';
   phoneCodeLoading.value = true;
@@ -100,6 +108,23 @@ const pairingButtonDisabled = computed(() => {
 });
 const pairingButtonLoading = computed(
   () => loading.value || phoneCodeLoading.value
+);
+
+// Reset session state every time the modal opens so previously
+// rendered QR / phone-code never leaks across opens. The user must
+// click Emparelhar again on each modal session.
+watch(
+  () => props.show,
+  val => {
+    if (val) {
+      userInitiatedPairing.value = false;
+      phoneCode.value = '';
+      phoneCodeError.value = '';
+      phoneCodeLoading.value = false;
+      loading.value = false;
+      pairingMode.value = 'qr';
+    }
+  }
 );
 
 // No auto-setup or auto-disconnect on mount/unmount — let the user
@@ -232,14 +257,17 @@ watchEffect(() => {
             </div>
 
             <template v-if="pairingMode === 'qr'">
+              <!-- Render the QR only after the user has explicitly
+                   clicked Emparelhar in THIS modal session.
+                   `userInitiatedPairing` is reset on every modal open. -->
               <img
-                v-if="qrDataUrl"
+                v-if="userInitiatedPairing && qrDataUrl"
                 :src="qrDataUrl"
                 alt="QR Code"
                 class="w-[276px] h-[276px]"
               />
               <div
-                v-else-if="connection === 'connecting' && loading"
+                v-else-if="userInitiatedPairing && loading"
                 class="flex flex-col gap-4 items-center"
               >
                 <p>

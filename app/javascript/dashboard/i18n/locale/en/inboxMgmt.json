@@ -4,7 +4,10 @@
       "CONNECTED": "Connected",
       "CONNECTING": "Connecting",
       "RECONNECTING": "Reconnecting",
-      "DISCONNECTED": "Disconnected"
+      "DISCONNECTED": "Disconnected",
+      "PAIR": "Pair",
+      "DISCONNECT": "Disconnect",
+      "META_INSTANCE": "{provider} · Instance: {instanceId}"
     },
     "HEADER": "Inboxes",
     "DESCRIPTION": "A channel is the mode of communication your customer chooses to interact with you. An inbox is where you manage interactions for a specific channel. It can include communications from various sources such as email, live chat, and social media.",

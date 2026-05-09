@@ -39,10 +39,24 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
 
   has_one :inbox, as: :channel, dependent: :destroy
 
+  before_validation :apply_propriacloud_defaults, on: :create
   after_create :sync_templates
   before_destroy :teardown_webhooks
   before_destroy :disconnect_channel_provider, if: -> { provider_service.respond_to?(:disconnect_channel_provider) }
   after_commit :setup_webhooks, on: :create, if: :should_auto_setup_webhooks?
+
+  # Propriacloud inboxes default to mark_as_read=true and
+  # presence_subscribe=true so agents get full read receipts and
+  # contact-typing/recording indicators out of the box. The user can
+  # still flip them off later under Inbox → Configuration. Other
+  # providers keep their own defaults untouched.
+  def apply_propriacloud_defaults
+    return unless provider == 'propriacloud'
+
+    self.provider_config ||= {}
+    provider_config['mark_as_read'] = true unless provider_config.key?('mark_as_read')
+    provider_config['presence_subscribe'] = true unless provider_config.key?('presence_subscribe')
+  end
 
   def name
     'Whatsapp'

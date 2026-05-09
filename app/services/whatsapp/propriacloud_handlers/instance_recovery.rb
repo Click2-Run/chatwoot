@@ -18,6 +18,12 @@ module Whatsapp::PropriacloudHandlers::InstanceRecovery
   private
 
   def process_instance_recovery
+    # Recovery events are meaningful only when the instance was actually
+    # paired. For unpaired instances we'd be flipping the UI to
+    # "Reconectando" / triggering reconnect flows on a session that has
+    # nothing to recover, which floods the API and confuses agents.
+    return if inbox.channel.provider_config['paired_at'].blank?
+
     event = (processed_params[:event_type] || processed_params['event_type'] ||
              processed_params[:event] || processed_params['event']).to_s
     data = processed_params[:data] || {}

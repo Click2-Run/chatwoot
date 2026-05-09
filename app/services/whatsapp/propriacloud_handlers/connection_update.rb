@@ -36,7 +36,28 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
     inbox.channel.update_provider_connection!(connection_data)
 
     log_connection_state(event, data)
+    track_pair_state(event)
     enqueue_history_backfill_if_needed(previous_state, connection_data[:connection])
+  end
+
+  # Record whether the upstream instance is currently paired so other
+  # handlers (instance_recovery, future auto-reconnect) can gate
+  # themselves on it. We never auto-reconnect an unpaired instance —
+  # the user must explicitly emparelhar from the UI.
+  def track_pair_state(event)
+    config = inbox.channel.provider_config || {}
+    case event
+    when 'pairing.success', 'connection.connected'
+      return if config['paired_at'].present?
+
+      config['paired_at'] = Time.current.iso8601
+      inbox.channel.update!(provider_config: config)
+    when 'connection.logged_out', 'pairing.error'
+      return if config['paired_at'].blank?
+
+      config.delete('paired_at')
+      inbox.channel.update!(provider_config: config)
+    end
   end
 
   # Trigger a one-shot history pull the first time the inbox transitions

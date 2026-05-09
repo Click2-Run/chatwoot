@@ -17,7 +17,6 @@ import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
 import GoogleReauthorize from './channels/google/Reauthorize.vue';
 import WhatsappReauthorize from './channels/whatsapp/Reauthorize.vue';
 import WhatsappLinkDeviceModal from './components/WhatsappLinkDeviceModal.vue';
-import InboxName from 'dashboard/components/widgets/InboxName.vue';
 import InboxHealthAPI from 'dashboard/api/inboxHealth';
 import PreChatFormSettings from './PreChatForm/Settings.vue';
 import WeeklyAvailability from './components/WeeklyAvailability.vue';
@@ -51,7 +50,6 @@ export default {
     ConfigurationPage,
     CustomerSatisfactionPage,
     FacebookReauthorize,
-    InboxName,
     WhatsappLinkDeviceModal,
     GreetingsEditor,
     PreChatFormSettings,
@@ -151,11 +149,13 @@ export default {
       return '';
     },
     isConvertibleWhatsAppChannel() {
+      // Only offer the "Convert" button when the inbox is on a *different*
+      // provider — converting to the same provider is a no-op. Propriacloud
+      // can be the target of a conversion, but never the source.
       return (
         this.isAWhatsAppCloudChannel ||
         this.isAWhatsAppBaileysChannel ||
         this.isAWhatsAppZapiChannel ||
-        this.isAWhatsAppPropriacloudChannel ||
         this.is360DialogWhatsAppChannel
       );
     },
@@ -757,13 +757,12 @@ export default {
               <span class="text-sm font-medium text-n-slate-12 truncate">
                 {{
                   inbox.provider_connection?.connection === 'open'
-                    ? 'Connected'
+                    ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTED')
                     : inbox.provider_connection?.connection === 'connecting'
-                      ? 'Waiting for QR scan'
-                      : inbox.provider_connection?.connection ===
-                          'reconnecting'
-                        ? 'Reconnecting…'
-                        : 'Disconnected'
+                      ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTING')
+                      : inbox.provider_connection?.connection === 'reconnecting'
+                        ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.RECONNECTING')
+                        : $t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECTED')
                 }}
               </span>
               <span
@@ -773,8 +772,12 @@ export default {
                 {{ inbox.provider_connection.error }}
               </span>
               <span v-else class="text-xs text-n-slate-10 truncate">
-                Provider: {{ whatsAppAPIProviderName }} · Instance:
-                {{ inbox.provider_config?.instance_id || '—' }}
+                {{
+                  $t('INBOX_MGMT.PROPRIACLOUD_STATUS.META_INSTANCE', {
+                    provider: whatsAppAPIProviderName,
+                    instanceId: inbox.provider_config?.instance_id || '—',
+                  })
+                }}
               </span>
             </div>
           </div>
@@ -782,10 +785,8 @@ export default {
             slate
             :label="
               inbox.provider_connection?.connection === 'open'
-                ? 'Manage'
-                : inbox.provider_connection?.connection === 'connecting'
-                  ? 'Show QR'
-                  : 'Connect'
+                ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT')
+                : $t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR')
             "
             @click="onOpenLinkDeviceModal"
           />
