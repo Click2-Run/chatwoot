@@ -60,14 +60,14 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
 
   def sign_up_user
     return redirect_to login_page_url(error: 'no-account-found') unless account_signup_allowed?
-    # Skip domain validation for trusted OAuth providers (Click2Run, etc.)
+    # Skip domain validation for trusted OAuth providers (Própria Cloud, legacy Click2Run, etc.)
     unless trusted_oauth_provider?
       return redirect_to login_page_url(error: 'business-account-only') unless validate_signup_email_is_business_domain?
     end
 
     create_account_for_user
 
-    # For trusted OAuth providers (Click2Run/Logto), assign a secure random
+    # For trusted OAuth providers (Própria Cloud / Logto), assign a secure random
     # password (so the User record satisfies devise-secure_password validators)
     # and sign in directly — these accounts are OAuth-only and never use a
     # password to log in.
@@ -112,7 +112,7 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   end
 
   def create_account_for_user
-    # For Click2Run OpenID, use "Organization" as account name
+    # For Própria Cloud OpenID, use "Organization" as account name
     # For other providers, extract domain without TLD
     account_name = trusted_oauth_provider? ? 'Organization' : extract_domain_without_tld(auth_hash['info']['email'])
 
@@ -159,14 +159,15 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   end
 
   def trusted_oauth_provider?
-    # List of OAuth providers that are trusted and should skip domain validation
-    # Click2Run is a trusted SSO provider, so we allow any email domain
+    # List of OAuth providers that are trusted and should skip domain validation.
+    # Própria Cloud (Logto) is the canonical SSO; `click2run` retained as a
+    # legacy alias for any installs that still register that omniauth strategy.
     trusted_providers = %w[propriacloud click2run]
     trusted_providers.include?(auth_hash['provider'])
   end
 
   def should_sync_oauth_profile?
-    # Check if profile sync is enabled for Click2Run OpenID Connect
+    # Check if profile sync is enabled for Própria Cloud OpenID Connect
     # Default to true if not set (always sync)
     return false unless trusted_oauth_provider?
 

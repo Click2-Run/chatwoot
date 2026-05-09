@@ -12,6 +12,56 @@ Related Files:
 
 # Fazer.AI Customizations to Chatwoot
 
+## Rebrand mapping (Própria Cloud) — durable across upstream merges
+
+Every fazer-ai upstream tag we pull will reintroduce `fazer.ai`,
+`Click2Run`, and `c2r` strings. The table below is the authoritative
+translation rule — apply it when resolving conflicts and when reviewing
+post-merge diffs. Anything not listed must be left as-is to avoid
+fighting upstream or breaking the docker hub namespace.
+
+| Upstream string                                  | Replace with                                  | Where it appears                                                      |
+| :----------------------------------------------- | :-------------------------------------------- | :-------------------------------------------------------------------- |
+| `https://fazer.ai`                               | `https://multicanal.propria.cloud`            | Anchor `href`, JS string consts, ERB views                            |
+| `https://app.fazer.ai`                           | `https://app.multicanal.propria.cloud`        | Admin app links (e.g. guides URL in `globals.js`)                     |
+| `fazer.ai` (visible label)                       | `Própria Cloud` (with accent)                 | Display text only                                                     |
+| `fazer.ai` (technical identifier)                | `propriacloud`                                | `X-Platform` header value, `health` JSON `platform` field             |
+| `Click2Run` (visible label / logo-alt)           | `Própria Cloud`                               | UI strings, `logo-alt`, comments introducing the product              |
+| `click2run` (provider id, env var prefix)        | `propriacloud` (canonical) — keep `click2run` as **legacy alias** | Env-var aliases (`WHATSAPP_API_*`, `PROPRIACLOUD_PROVIDER_DEFAULT_*`, `CLICK2RUN_PROVIDER_DEFAULT_*`) and the `trusted_providers = %w[propriacloud click2run]` list. |
+| `c2r`                                            | `ppcloud`                                     | Internal short identifiers in code (rare)                             |
+| `https://github.com/fazer-ai/chatwoot/...`       | **Keep as-is**                                | Upstream fork URL — used by `check_new_versions_job`                  |
+| Branch names containing `fazer-ai`               | **Keep as-is**                                | Git branch / tag identity                                              |
+
+### Areas explicitly NOT translated
+
+- `docker-compose.yaml` / `Dockerfile` references to `click2run/...`
+  image names — that is the docker hub namespace for our image builds.
+- `config/features.yml` `channel_whatsapp_click2run` feature flag —
+  marked deprecated, kept as a legacy account-toggle slot to avoid
+  reshuffling FlagShihTzu bit positions.
+- `lib/middleware/fazer_ai_platform_header.rb` filename — only the
+  `X-Platform` value inside is updated to `propriacloud`. Renaming
+  the file would cascade into `config/application.rb`.
+- `lib/global_config_service.rb` and other upstream-owned `lib/`
+  files — translate the strings inside, accept everything else.
+
+### Files that recur on every upstream merge
+
+Tag these for explicit attention during conflict resolution:
+
+- `app/javascript/dashboard/components-next/sidebar/SidebarProfileMenu.vue` (release-notes link)
+- `app/javascript/dashboard/components/app/UpdateBanner.vue` (release-notes link)
+- `app/javascript/dashboard/routes/dashboard/kanban/Index.vue` (upgrade link)
+- `app/javascript/dashboard/routes/dashboard/internalChat/ProFeatureNudge.vue` (upgrade link)
+- `app/javascript/dashboard/routes/dashboard/settings/account/components/BuildInfo.vue` (footer link)
+- `app/javascript/v3/views/login/Index.vue` (footer link)
+- `app/javascript/dashboard/i18n/locale/{en,pt_BR}/kanban.json` (paywall copy)
+- `app/javascript/dashboard/constants/globals.js` (`PROPRIACLOUD_GUIDES_URL` + back-compat `FAZER_AI_GUIDES_URL` alias)
+- `app/views/super_admin/devise/sessions/new.html.erb` (page title)
+- `app/controllers/health_controller.rb` (health JSON `platform` field)
+- `lib/middleware/fazer_ai_platform_header.rb` (X-Platform header value)
+- `lib/tasks/branding.rake` (NOTE comment)
+
 ## Overview
 
 This document catalogs all custom modifications made by Fazer.AI to the official Chatwoot open-source customer engagement platform. These customizations represent **87 commits** authored by the Fazer.AI team, primarily focused on WhatsApp integration alternatives, infrastructure-as-code branding, and Brazilian market adaptations.

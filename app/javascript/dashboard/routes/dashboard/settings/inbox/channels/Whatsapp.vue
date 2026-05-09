@@ -136,7 +136,7 @@ const availableProviders = computed(() => {
   // Apply codi feature-flag gating on top of the upstream picker shape
   // (CONVERT_PICKER_KEYS / CREATE_PICKER_KEYS). The catalog already lists
   // all providers; the flags decide which extras (Twilio/Baileys/Whatsmeow/
-  // Click2Run/Z-API) are exposed to the user.
+  // Própria Cloud/Z-API) are exposed to the user.
   const flagFor = key => {
     switch (key) {
       case PROVIDER_TYPES.TWILIO:
@@ -270,7 +270,7 @@ const shouldShowZApiPromo = computed(() => false);
           "
           variant="success"
           logo-src=""
-          logo-alt="Click2Run"
+          logo-alt="Própria Cloud"
           :cta-text="
             $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.CTA')
           "

@@ -14,7 +14,7 @@ const isSuperAdmin = computed(() => {
   return currentUser.value.type === 'SuperAdmin';
 });
 
-const upgradeUrl = 'https://fazer.ai/kanban';
+const upgradeUrl = 'https://multicanal.propria.cloud/kanban';
 </script>
 
 <template>

@@ -30,7 +30,7 @@ class Webhooks::WhatsappController < ActionController::API
   end
 
   # Includes the request signature header and raw body so that providers
-  # using HMAC-SHA256 (e.g. whatsapp-api / Click2Run) can verify in the job.
+  # using HMAC-SHA256 (e.g. Própria Cloud whatsapp-api) can verify in the job.
   def job_params
     params.to_unsafe_hash.merge(
       _webhook_signature: request.headers['X-Webhook-Signature'],
