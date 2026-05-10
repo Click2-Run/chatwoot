@@ -166,6 +166,67 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     render json: friendly_pair_error(e), status: :unprocessable_entity
   end
 
+  # POST /api/v1/accounts/:account_id/inboxes/:id/resync_history
+  # Force a (re)backfill of contacts/conversations/messages for a paired
+  # propriacloud inbox. Idempotent at the dedup layer (Message#source_id),
+  # but rate-limited to once per hour per channel to prevent runaway
+  # /sync/* calls. Useful after a long Chatwoot outage where the upstream
+  # webhook retry budget was exhausted and tail events were dropped.
+  def resync_history
+    authorize @inbox, :update?
+
+    channel = @inbox.channel
+    unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'propriacloud'
+      render json: { error: 'Resync is only available for Própria Cloud channels' }, status: :unprocessable_entity and return
+    end
+
+    if channel.provider_config['paired_at'].blank?
+      render json: { error: 'Pair the inbox first before resyncing history' }, status: :unprocessable_entity and return
+    end
+
+    rate_key = "propriacloud:resync_history:#{channel.id}"
+    if Redis::Alfred.get(rate_key)
+      render json: { error: 'Resync already requested in the last hour' }, status: :too_many_requests and return
+    end
+    Redis::Alfred.setex(rate_key, true, 1.hour.to_i)
+
+    Whatsapp::Propriacloud::HistoryBackfillJob.perform_later(channel.id, force: true)
+
+    render json: { enqueued: true, channel_id: channel.id }
+  rescue StandardError => e
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
+  # POST /api/v1/accounts/:account_id/inboxes/:id/request_chat_history
+  # Body: { chat_jid: '5511999...@s.whatsapp.net', count: 50 }
+  # Asks the API to fetch older messages from the WhatsApp servers for a
+  # specific chat. The response is async — the API returns 202 and the
+  # additional messages arrive later as ON_DEMAND HistorySync events
+  # (which we ingest the same way as initial backfill).
+  def request_chat_history
+    authorize @inbox, :update?
+
+    channel = @inbox.channel
+    unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'propriacloud'
+      render json: { error: 'On-demand history is only available for Própria Cloud channels' }, status: :unprocessable_entity and return
+    end
+
+    chat_jid = params[:chat_jid].to_s
+    count = params[:count].to_i
+    count = 50 if count <= 0
+    count = 200 if count > 200
+
+    if chat_jid.blank?
+      render json: { error: 'chat_jid is required' }, status: :bad_request and return
+    end
+
+    result = channel.provider_service.request_chat_history(chat_jid: chat_jid, count: count)
+    render json: { enqueued: true, chat_jid: chat_jid, count: count, response: result }
+  rescue StandardError => e
+    Rails.logger.warn "request_chat_history failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: e.message }, status: :unprocessable_entity
+  end
+
   # Reconciles the cached provider_connection on the channel with the
   # truth from the upstream API (e.g. propriacloud's /instances/status).
   # Used by the dashboard on inbox open to clear stale "connecting"

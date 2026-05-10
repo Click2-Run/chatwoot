@@ -17,7 +17,7 @@
 # Indexes
 #
 #  index_channel_whatsapp_on_phone_number      (phone_number) UNIQUE
-#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text])) USING gin
+#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text, ('whatsmeow'::character varying)::text, ('propriacloud'::character varying)::text])) USING gin
 #
 # rubocop:enable Layout/LineLength
 
@@ -45,17 +45,18 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   before_destroy :disconnect_channel_provider, if: -> { provider_service.respond_to?(:disconnect_channel_provider) }
   after_commit :setup_webhooks, on: :create, if: :should_auto_setup_webhooks?
 
-  # Propriacloud inboxes default to mark_as_read=true and
-  # presence_subscribe=true so agents get full read receipts and
-  # contact-typing/recording indicators out of the box. The user can
-  # still flip them off later under Inbox → Configuration. Other
-  # providers keep their own defaults untouched.
+  # Propriacloud inboxes default to `mark_as_read = true` so the WhatsApp
+  # sender sees blue ticks the moment an agent opens the conversation.
+  # We intentionally do NOT seed `presence_subscribe` because no code
+  # path on the Chatwoot side actually subscribes to per-contact
+  # presence today; the toggle was carried over from an older fazer-ai
+  # implementation that exposed contact-typing indicators. Re-introduce
+  # the key only if/when we wire up POST /presence/subscribe.
   def apply_propriacloud_defaults
     return unless provider == 'propriacloud'
 
     self.provider_config ||= {}
     provider_config['mark_as_read'] = true unless provider_config.key?('mark_as_read')
-    provider_config['presence_subscribe'] = true unless provider_config.key?('presence_subscribe')
   end
 
   def name

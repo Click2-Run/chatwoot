@@ -95,10 +95,13 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
   end
 
   def extract_qr_data_url(data)
-    # whatsapp-api QR delivery fields (in order of preference):
-    #   - `img`: full base64 PNG (preferred for direct UI rendering)
-    #   - `code`: the WhatsApp pairing code (text); UI generates QR from it
-    #   - `qr_code`: legacy fazer-ai naming
+    # whatsapp-api QR delivery fields:
+    #   - `img`: full base64 PNG (the only field renderable as `data:image/png;base64,…`)
+    #   - `qr_code` / `qrcode`: legacy fazer-ai naming, kept as fallback
+    # `code` is the pairing TEXT (not an image) and is intentionally NOT
+    # accepted here — using it as a base64 image source produced broken
+    # QR images in the dashboard. If only `code` is present the UI
+    # should regenerate the QR client-side.
     qr = data[:img] || data['img'] ||
          data[:qr_code] || data['qr_code'] ||
          data[:qrcode] || data['qrcode']

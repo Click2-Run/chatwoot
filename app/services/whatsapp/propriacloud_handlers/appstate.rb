@@ -44,14 +44,44 @@ module Whatsapp::PropriacloudHandlers::Appstate
       contact_inbox.conversations.order(created_at: :desc).first
   end
 
+  # AppState events arriving out of order (e.g. retries, slow webhooks)
+  # could otherwise toggle a conversation back to a stale state. Drop
+  # any event whose own `timestamp` is older than the last update we
+  # already applied to the conversation.
+  def appstate_event_stale_for?(conversation, data)
+    return false if conversation.blank?
+
+    raw = data[:timestamp] || data['timestamp'] ||
+          processed_params[:timestamp] || processed_params['timestamp']
+    return false if raw.blank?
+
+    event_time = parse_appstate_timestamp(raw)
+    return false if event_time.blank?
+
+    conversation.updated_at.present? && event_time < conversation.updated_at
+  end
+
+  def parse_appstate_timestamp(raw)
+    case raw
+    when Integer then Time.at(raw)
+    when Float then Time.at(raw)
+    when String
+      raw.match?(/\A\d+\z/) ? Time.at(raw.to_i) : Time.iso8601(raw) rescue nil # rubocop:disable Style/RescueModifier
+    when Time, ActiveSupport::TimeWithZone then raw
+    end
+  end
+
   def appstate_mark_read(data)
     conv = conversation_for(data[:chat_jid] || data['chat_jid'])
+    return if appstate_event_stale_for?(conv, data)
+
     conv&.update!(contact_last_seen_at: Time.current)
   end
 
   def appstate_archive(data)
     conv = conversation_for(data[:chat_jid] || data['chat_jid'])
     return unless conv
+    return if appstate_event_stale_for?(conv, data)
 
     archived = data.fetch(:archived, data['archived'])
     archived ? conv.toggle_status('resolved') : conv.toggle_status('open')
@@ -59,6 +89,8 @@ module Whatsapp::PropriacloudHandlers::Appstate
 
   def appstate_delete_chat(data)
     conv = conversation_for(data[:chat_jid] || data['chat_jid'])
+    return if appstate_event_stale_for?(conv, data)
+
     conv&.toggle_status('resolved')
   end
 

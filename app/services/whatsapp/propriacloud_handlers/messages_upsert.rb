@@ -150,6 +150,16 @@ module Whatsapp::PropriacloudHandlers::MessagesUpsert
   end
 
   def handle_attach_media
+    # WhatsApp Status / Story media (`contextInfo.statusSourceType: 1`)
+    # routinely fails to download from the CDN with `invalid media hmac`
+    # because the encryption keys we receive are stale. The embedded
+    # `jpegThumbnail` is always present, so attach that instead and skip
+    # the round-trip to /media/download.
+    if status_message?
+      attach_status_thumbnail_or_skip
+      return
+    end
+
     attachment_file = download_attachment_file
 
     attachment = @message.attachments.build(
@@ -160,11 +170,49 @@ module Whatsapp::PropriacloudHandlers::MessagesUpsert
 
     # Check if it's a recorded audio message (PTT - Push-to-Talk)
     msg = @raw_message[:message] || @raw_message
-    is_ptt = msg.dig(:audio_message, :ptt) || msg.dig(:audio_message, 'ptt')
+    is_ptt = msg.dig(:audio_message, :ptt) || msg.dig(:audio_message, 'ptt') ||
+             msg.dig(:audioMessage, :ptt) || msg.dig(:audioMessage, 'ptt')
     attachment.meta = { is_recorded_audio: true } if is_ptt
   rescue Down::Error => e
     @message.update!(is_unsupported: true)
     Rails.logger.error "Failed to download attachment for message #{raw_message_id}: #{e.message}"
+  end
+
+  def status_message?
+    msg = @raw_message[:message] || @raw_message
+    return false unless msg.is_a?(Hash)
+
+    %i[image_message imageMessage video_message videoMessage audio_message audioMessage].any? do |key|
+      next false unless msg[key].is_a?(Hash)
+
+      ctx = msg[key][:context_info] || msg[key]['context_info'] ||
+            msg[key][:contextInfo] || msg[key]['contextInfo']
+      next false unless ctx.is_a?(Hash)
+
+      [(ctx[:status_source_type] || ctx['status_source_type'] || ctx[:statusSourceType] || ctx['statusSourceType'])].compact.any? { |v| v.to_i == 1 }
+    end
+  end
+
+  def attach_status_thumbnail_or_skip
+    msg = @raw_message[:message] || @raw_message
+    media_node = msg[:image_message] || msg['image_message'] || msg[:imageMessage] || msg['imageMessage'] ||
+                 msg[:video_message] || msg['video_message'] || msg[:videoMessage] || msg['videoMessage']
+    thumbnail = media_node && (media_node[:jpeg_thumbnail] || media_node['jpeg_thumbnail'] ||
+                               media_node[:jpegThumbnail] || media_node['jpegThumbnail'])
+    if thumbnail.present?
+      io = StringIO.new(Base64.decode64(thumbnail.to_s))
+      @message.attachments.build(
+        account_id: @message.account_id,
+        file_type: file_content_type.to_s,
+        file: { io: io, filename: "status_#{raw_message_id}.jpg", content_type: 'image/jpeg' }
+      )
+      return
+    end
+
+    # No embedded thumbnail — surface as unsupported so the agent UI doesn't
+    # show a half-broken bubble.
+    @message.update!(is_unsupported: true)
+    Rails.logger.info "Propriacloud: skipping CDN download for status message #{raw_message_id} (no thumbnail available)"
   end
 
   def download_attachment_file

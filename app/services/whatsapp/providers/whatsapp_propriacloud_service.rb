@@ -230,7 +230,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     return unless response.success?
 
     body = unwrap(response.parsed_response)
-    qr = body['img'] || body['code'] || body['qr_code']
+    # OpenAPI `QRCodeResponse` exposes `img` (base64 PNG, ready for
+    # `data:image/png;base64,…`) and `code` (the plain pairing string,
+    # NOT a base64 image). Only `img` is renderable as-is. We do not fall
+    # back to `code` because stuffing it into a data: URL produces a
+    # broken image; `qr_code` is kept as a tolerant fallback for any
+    # legacy build that named the field differently.
+    qr = body['img'] || body['qr_code']
     return if qr.blank?
 
     qr_data_url = qr.start_with?('data:image/') ? qr : "data:image/png;base64,#{qr}"
@@ -322,22 +328,80 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     "#{provider_url}/media/download#{instance_query}"
   end
 
-  # POST the raw message back to whatsapp-api and return the decrypted bytes
-  # as a StringIO. See OpenAPI: /media/download (line 6666).
+  # POST the inner WhatsApp message wrapper back to whatsapp-api and return
+  # the decrypted bytes as a StringIO.
+  #
+  # whatsapp-api `/media/download` accepts either a wrapped form
+  # (`{imageMessage: {...}}` / `{videoMessage: {...}}` / etc.) or a flat form
+  # (`{url, mediaKey, mimetype, ...}` at root). It rejects anything else
+  # with `unable to detect media type from payload`. Webhook events arrive
+  # as `{key: {...}, message: {imageMessage: {...}}, push_name, ...}`; we
+  # therefore unwrap to the inner `message.<typeMessage>` payload before
+  # posting, normalizing both casings (snake_case `image_message` and
+  # camelCase `imageMessage`) so we are tolerant of upstream format drift.
+  #
+  # Response field is `base64` per OpenAPI `DownloadMediaResponse`. Older
+  # field names (`data`, `body`, `file`) are kept as fallbacks for forward
+  # compatibility with non-canonical deployments.
   def download_media(raw_message)
+    body_payload = build_media_download_body(raw_message)
+    raise Down::Error, "media download failed: missing media payload in #{raw_message.inspect[0..200]}" if body_payload.blank?
+
     response = HTTParty.post(
       "#{provider_url}/media/download#{instance_query}",
       headers: api_headers,
-      body: { message: raw_message }.to_json
+      body: body_payload.to_json
     )
 
     raise Down::Error, "media download failed: #{response.code} #{response.body}" unless response.success?
 
     body = unwrap(response.parsed_response)
-    encoded = body['data'] || body['body'] || body['file']
-    raise Down::Error, "media download response missing data: #{response.body}" if encoded.blank?
+    encoded = body['base64'] || body['data'] || body['body'] || body['file']
+    raise Down::Error, "media download response missing base64 payload: #{response.body[0..200]}" if encoded.blank?
 
     StringIO.new(Base64.decode64(encoded))
+  end
+
+  # Webhook media-message keys we forward to /media/download. We accept both
+  # casings the upstream API has used historically — current `develop`
+  # publishes camelCase per the protobuf JSON tag, while legacy fazer-ai
+  # builds emitted snake_case. The Go normalizer
+  # (`client.NormalizeMediaMessageMap`) only matches camelCase, so we always
+  # remap to camelCase before posting.
+  MEDIA_MESSAGE_WRAPPERS = {
+    'imageMessage' => 'imageMessage',
+    'videoMessage' => 'videoMessage',
+    'audioMessage' => 'audioMessage',
+    'documentMessage' => 'documentMessage',
+    'documentWithCaptionMessage' => 'documentMessage',
+    'stickerMessage' => 'stickerMessage',
+    'extendedTextMessage' => 'extendedTextMessage',
+    'image_message' => 'imageMessage',
+    'video_message' => 'videoMessage',
+    'audio_message' => 'audioMessage',
+    'document_message' => 'documentMessage',
+    'document_with_caption_message' => 'documentMessage',
+    'sticker_message' => 'stickerMessage',
+    'extended_text_message' => 'extendedTextMessage'
+  }.freeze
+
+  def build_media_download_body(raw_message)
+    return nil if raw_message.blank?
+
+    raw = raw_message.respond_to?(:deep_stringify_keys) ? raw_message.deep_stringify_keys : raw_message
+    inner = raw.is_a?(Hash) ? (raw['message'] || raw) : raw
+    return nil unless inner.is_a?(Hash)
+
+    MEDIA_MESSAGE_WRAPPERS.each do |source_key, canonical_key|
+      payload = inner[source_key]
+      next if payload.blank?
+      # `documentWithCaptionMessage` nests the actual document in
+      # `message.documentMessage`; unwrap it.
+      payload = payload.dig('message', 'documentMessage') || payload.dig('message', 'document_message') || payload if source_key.match?(/document_with_caption|documentWithCaption/)
+      return { canonical_key => payload }
+    end
+
+    nil
   end
 
   def api_headers
@@ -469,6 +533,29 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   def list_labels(page: 1, page_size: 100)
     paged_get('/labels', page: page, page_size: page_size, scope: :tenant)
+  end
+
+  # POST /sync/request-history — ask whatsapp-api to fetch older messages for
+  # a specific chat from the WhatsApp servers. Returns 202 immediately; the
+  # actual messages arrive asynchronously as ON_DEMAND HistorySync events
+  # which we ingest via the existing webhook → handler pipeline.
+  #
+  # Raises if the upstream returns a non-2xx response so the controller can
+  # surface a friendly 422 to the dashboard.
+  def request_chat_history(chat_jid:, count: 50)
+    response = HTTParty.post(
+      "#{provider_url}/sync/request-history",
+      headers: api_headers,
+      body: {
+        instance_id: instance_id,
+        chat_jid: chat_jid,
+        count: count
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, "request-history failed: #{response.code} #{response.body[0..200]}" unless [200, 201, 202].include?(response.code)
+
+    unwrap(response.parsed_response)
   end
 
   # Self-healing post-pair convergence. Called on inbox-visit (via the
@@ -608,9 +695,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # Response is an array of IsOnWhatsAppResponse — pick first.
     entry = parsed.is_a?(Array) ? parsed.first : unwrap(parsed)
     entry ||= {}
+    # OpenAPI `IsOnWhatsAppResponse` exposes `is_on_whatsapp`; legacy aliases
+    # (`is_in`, `exists`, `is_registered`) are kept as fallbacks for older
+    # deployments that pre-date the canonical field name.
+    exists = entry['is_on_whatsapp'].nil? ? (entry['is_in'] || entry['exists'] || entry['is_registered']) : entry['is_on_whatsapp']
     {
       'jid' => entry['jid'],
-      'exists' => entry['is_in'] || entry['exists'] || entry['is_registered'] || false,
+      'exists' => exists ? true : false,
       'lid' => entry['lid']
     }
   end
@@ -641,10 +732,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
     if process_response(response)
       body = unwrap(response.parsed_response)
+      # OpenAPI `PhoneCodeResponse` exposes only `{code, success}`. WhatsApp
+      # Web pairing codes are always valid for ~60s — surface that as the
+      # default countdown rather than reading a non-existent field.
       return {
         'code' => body['code'] || body['pairingCode'] || body['pairing_code'],
         'phone' => digits,
-        'expires_in' => body['expires_in'] || body['timeout']
+        'expires_in' => body['expires_in'] || body['timeout'] || 60
       }
     end
 
@@ -824,7 +918,6 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
         instance_id: instance_id,
         url: inbox_webhook_url,
         events: DEFAULT_WEBHOOK_EVENTS,
-        enabled: true,
         active: true,
         secret: whatsapp_channel.provider_config['webhook_verify_token']
       }.to_json
@@ -880,7 +973,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     HTTParty.patch(
       "#{provider_url}/webhooks/#{primary_id}",
       headers: api_headers,
-      body: { url: desired_url, events: DEFAULT_WEBHOOK_EVENTS, enabled: true, active: true }.to_json
+      body: { url: desired_url, events: DEFAULT_WEBHOOK_EVENTS, active: true }.to_json
     )
 
     items.each do |w|
@@ -926,8 +1019,40 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     unwrap(response.parsed_response)['message_id']
   end
 
+  # whatsapp-api `/messages/send-media` accepts up to 12 items per call
+  # (with a 1s server-side delay between each). We send everything attached
+  # to the Chatwoot message in a single round-trip and apply the message
+  # body as the caption of the FIRST item only — WhatsApp shows the caption
+  # under each media item individually, so duplicating it across all 12
+  # would spam the recipient.
+  MEDIA_PER_CALL_LIMIT = 12
+
   def send_media_message
-    attachment = @message.attachments.first
+    attachments = @message.attachments.first(MEDIA_PER_CALL_LIMIT)
+    media_payload = attachments.each_with_index.map do |attachment, index|
+      build_media_item(attachment, caption: index.zero? ? @message.content.presence : nil)
+    end
+
+    response = HTTParty.post(
+      "#{provider_url}/messages/send-media#{instance_query}",
+      headers: api_headers,
+      body: {
+        to: { user: normalized_to_user, server: 's.whatsapp.net' },
+        media: media_payload
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, 'Failed to send media message' unless process_response(response)
+
+    update_external_created_at(response)
+    body = unwrap(response.parsed_response)
+    # `/messages/send-media` returns `{status, results: [{message_id, ...}], ...}`
+    # — surface the first item's id (the "primary" attachment) for parity
+    # with the single-media `/messages/send` flow callers used to expect.
+    Array(body['results']).first&.dig('message_id') || body['message_id']
+  end
+
+  def build_media_item(attachment, caption: nil)
     media_type = case attachment.file_type
                  when 'image' then 'image'
                  when 'audio' then 'audio'
@@ -936,35 +1061,21 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
                  else 'document'
                  end
 
-    # PTT (push-to-talk = voice note) is the default UX for audio
-    # captured from Chatwoot's mic recorder, which produces audio/ogg
-    # (opus). File-style audio uploads (mp3/m4a/wav) ship as a regular
-    # audio attachment so the recipient sees a player, not a voice note.
+    # PTT (push-to-talk = voice note) is the default UX for audio captured
+    # from Chatwoot's mic recorder, which produces audio/ogg (opus). File-
+    # style audio uploads (mp3/m4a/wav) ship as a regular audio attachment
+    # so the recipient sees a player, not a voice note.
     is_voice_note = media_type == 'audio' &&
                     attachment.file.content_type.to_s.match?(%r{^audio/(ogg|opus|webm)})
 
-    media_item = {
+    {
       type: media_type,
       data: Base64.strict_encode64(attachment.file.download),
       mime_type: attachment.file.content_type,
-      caption: @message.content.presence,
+      caption: caption,
       file_name: attachment.file.filename.to_s,
       ptt: is_voice_note ? true : nil
     }.compact
-
-    response = HTTParty.post(
-      "#{provider_url}/messages/send-media#{instance_query}",
-      headers: api_headers,
-      body: {
-        to: { user: normalized_to_user, server: 's.whatsapp.net' },
-        media: [media_item]
-      }.to_json
-    )
-
-    raise ProviderUnavailableError, 'Failed to send media message' unless process_response(response)
-
-    update_external_created_at(response)
-    unwrap(response.parsed_response)['message_id']
   end
 
   def send_reaction_message

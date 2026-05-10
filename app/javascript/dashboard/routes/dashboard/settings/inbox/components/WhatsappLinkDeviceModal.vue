@@ -253,12 +253,7 @@ watchEffect(() => {
 
       <div class="flex flex-col gap-4 p-8 pt-4">
         <div class="flex flex-col gap-4 items-center">
-          <InboxName
-            :inbox="inbox"
-            class="!text-lg"
-            with-phone-number
-            with-provider-connection-status
-          />
+          <InboxName :inbox="inbox" class="!text-lg" with-phone-number />
 
           <!-- Non-propriacloud (Baileys / Zapi / Whatsmeow) keeps the
                existing one-button "Link device" flow that auto-fetches QR. -->

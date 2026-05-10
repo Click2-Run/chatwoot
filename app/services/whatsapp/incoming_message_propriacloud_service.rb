@@ -30,21 +30,23 @@ class Whatsapp::IncomingMessagePropriacloudService < Whatsapp::IncomingMessageBa
   class InvalidWebhookCustomId < StandardError; end
 
   def perform # rubocop:disable Metrics/AbcSize
-    validate_webhook_token!
-    validate_custom_id!
-    return if event_name.blank? || processed_params[:data].blank?
+    Rails.logger.tagged('propriacloud', "inbox=#{inbox.id}", "event=#{event_name || '?'}") do
+      validate_webhook_token!
+      validate_custom_id!
+      return if event_name.blank? || processed_params[:data].blank?
 
-    # Dispatch provider event for tracking/analytics
-    Rails.configuration.dispatcher.dispatch(
-      PROVIDER_EVENT_RECEIVED,
-      Time.zone.now,
-      inbox: inbox,
-      event: event_name,
-      payload: processed_params[:data]
-    )
+      # Dispatch provider event for tracking/analytics
+      Rails.configuration.dispatcher.dispatch(
+        PROVIDER_EVENT_RECEIVED,
+        Time.zone.now,
+        inbox: inbox,
+        event: event_name,
+        payload: processed_params[:data]
+      )
 
-    # Process event based on type
-    process_event
+      # Process event based on type
+      process_event
+    end
   end
 
   # whatsapp-api delivers webhook events with `event_type` (e.g.

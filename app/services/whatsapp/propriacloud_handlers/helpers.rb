@@ -184,19 +184,25 @@ module Whatsapp::PropriacloudHandlers::Helpers # rubocop:disable Metrics/ModuleL
     ::Avatar::AvatarFromUrlJob.perform_later(@contact, profile_pic_url) if profile_pic_url
   end
 
+  # Redis lock key includes inbox.id so two propriacloud inboxes that happen
+  # to receive a message with the same WhatsApp `key.id` don't shadow each
+  # other's processing. WhatsApp message ids are random 10-byte strings so
+  # collisions are vanishingly rare in practice, but the prefix keeps us
+  # consistent with the baileys/zapi paths and removes a future foot-gun.
+  def message_processing_lock_key
+    format(Redis::RedisKeys::MESSAGE_SOURCE_KEY, id: "#{inbox.id}_#{raw_message_id}")
+  end
+
   def message_under_process?
-    key = format(Redis::RedisKeys::MESSAGE_SOURCE_KEY, id: raw_message_id)
-    Redis::Alfred.get(key)
+    Redis::Alfred.get(message_processing_lock_key)
   end
 
   def cache_message_source_id_in_redis
-    key = format(Redis::RedisKeys::MESSAGE_SOURCE_KEY, id: raw_message_id)
-    ::Redis::Alfred.setex(key, true)
+    ::Redis::Alfred.setex(message_processing_lock_key, true)
   end
 
   def clear_message_source_id_from_redis
-    key = format(Redis::RedisKeys::MESSAGE_SOURCE_KEY, id: raw_message_id)
-    ::Redis::Alfred.delete(key)
+    ::Redis::Alfred.delete(message_processing_lock_key)
   end
 
   # Propriacloud uses Unix timestamps (int64), not Baileys' {low, high, unsigned}
