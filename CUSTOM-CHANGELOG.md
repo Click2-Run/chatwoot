@@ -47,6 +47,14 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`3b3cbf531`** — refactor(whatsapp-propriacloud): faithful port of propriacloud.git/apps/minha instance-tags + side-by-side connection+pair badges
+  - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +13/-9
+  - `app/javascript/dashboard/composables/usePropriacloudStatus.js` +201/-91
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +3/-0
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +3/-0
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` +32/-10
+- **`18adb1d2e`** — docs: refresh CUSTOM-CHANGELOG with transient 500 retry + friendly setup errors
+  - `CUSTOM-CHANGELOG.md` +6/-0
 - **`83ac55615`** — fix(whatsapp-propriacloud): retry transient 500 on /instances/create + friendly setup errors
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +20/-0
   - `app/javascript/dashboard/store/modules/inboxes.js` +7/-1
