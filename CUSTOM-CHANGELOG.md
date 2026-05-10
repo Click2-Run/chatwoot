@@ -47,6 +47,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`c181c10f2`** — feat(whatsapp-propriacloud): two-axis status resolver + per-state action button (mirrors propriacloud.git/minha)
+  - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +23/-79
+  - `app/javascript/dashboard/composables/usePropriacloudStatus.js` +159/-0
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +6/-0
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +6/-0
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` +61/-25
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +7/-0
+- **`3ad506390`** — docs: refresh CUSTOM-CHANGELOG with WhatsApp pair cooldown countdown
+  - `CUSTOM-CHANGELOG.md` +9/-0
 - **`c6a1d3d8b`** — feat(whatsapp-propriacloud): honor WhatsApp's recommended pair cooldown with persisted lock + live countdown
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +28/-0
   - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +2/-1
