@@ -402,9 +402,19 @@ export const actions = {
     const response = await InboxesAPI.getAvailableCSATTemplates(inboxId);
     return response.data;
   },
-  setupChannelProvider: async (_, inboxId) => {
+  // Optional second arg can be either a plain inboxId (legacy callers)
+  // or { inboxId, fetch_qr } so the propriacloud phone-code flow can
+  // ensure the instance is connecting WITHOUT triggering a QR pull —
+  // pulling a QR counts as a pair attempt and burns the WhatsApp
+  // rate-limit budget that the phone-code request needs.
+  setupChannelProvider: async (_, payload) => {
+    const inboxId = typeof payload === 'object' ? payload.inboxId : payload;
+    const params =
+      typeof payload === 'object' && 'fetch_qr' in payload
+        ? { fetch_qr: payload.fetch_qr }
+        : {};
     try {
-      await InboxesAPI.setupChannelProvider(inboxId);
+      await InboxesAPI.setupChannelProvider(inboxId, params);
     } catch (error) {
       throwErrorMessage(error);
     }
@@ -421,8 +431,15 @@ export const actions = {
       const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
       return response.data;
     } catch (error) {
-      throwErrorMessage(error);
-      return null;
+      // Backend already maps known errors (rate-limit / device-limit /
+      // expired-code) to a friendly { error, code, cooldown_seconds }
+      // payload. Propagate it as a plain Error so the modal can render
+      // a user-safe message without leaking the raw axios shape or the
+      // upstream provider's internal JSON.
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not request a pairing code. Please try again in a moment.';
+      throw new Error(friendly);
     }
   },
   // Hits the rate-limited /refresh_provider_status endpoint and merges

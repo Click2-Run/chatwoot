@@ -158,7 +158,15 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   # Three-call setup: create instance → register webhook → connect.
   # Idempotent against existing instances (409 on create is treated as success).
-  def setup_channel_provider
+  #
+  # `fetch_qr:` controls whether the final step pulls a QR via
+  # /instances/pair/qrcode. Pulling a QR counts as a pairing attempt on
+  # the WhatsApp side and contributes to the same rate-limit budget that
+  # /instances/pair/phonecode uses. The phone-code flow MUST pass
+  # fetch_qr: false so the user's explicit Emparelhar click is the only
+  # pairing attempt registered. Default true keeps the legacy QR
+  # "Connect" path unchanged.
+  def setup_channel_provider(fetch_qr: true)
     # custom_id is the Chatwoot account (organization) id, set server-side
     # from the channel's inbox association. The client never has a chance to
     # influence this — setup_channel_provider only reads it off the
@@ -198,7 +206,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # has no QR to show. Pull the current QR explicitly so the user sees it
     # immediately. If the instance is already paired, this returns nothing
     # and the channel stays in whatever state the webhook last set.
-    fetch_and_publish_qr_code
+    fetch_and_publish_qr_code if fetch_qr
 
     true
   end

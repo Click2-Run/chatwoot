@@ -81,7 +81,12 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
       render json: { error: 'Channel does not support setup' }, status: :unprocessable_entity and return
     end
 
-    channel.setup_channel_provider
+    fetch_qr_param = params.key?(:fetch_qr) ? ActiveModel::Type::Boolean.new.cast(params[:fetch_qr]) : true
+    if channel.provider_service.method(:setup_channel_provider).parameters.any? { |kind, name| kind == :key && name == :fetch_qr }
+      channel.provider_service.setup_channel_provider(fetch_qr: fetch_qr_param)
+    else
+      channel.setup_channel_provider
+    end
     head :ok
   end
 
@@ -109,7 +114,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     result = channel.provider_service.request_phone_pairing_code(phone)
     render json: result
   rescue StandardError => e
-    render json: { error: e.message }, status: :unprocessable_entity
+    render json: friendly_pair_error(e), status: :unprocessable_entity
   end
 
   # Reconciles the cached provider_connection on the channel with the
@@ -128,23 +133,32 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
       render json: { error: 'Channel does not support status refresh' }, status: :unprocessable_entity and return
     end
 
-    key = "propriacloud:status_refresh:#{channel.id}"
-    if Redis::Alfred.get(key)
-      render json: { rate_limited: true, provider_connection: channel.provider_connection }
-      return
-    end
-    Redis::Alfred.setex(key, true, 30)
+    # Two-tier rate limit:
+    #  - "soft" 5s window: still calls refresh_status_from_api! (cheap GET
+    #    /instances/status, ~50ms). Cap concurrent UI navigation from
+    #    spamming the upstream while still keeping the cached state honest.
+    #  - "hard" 60s window: skip the heavier reconcile! path (which also
+    #    re-registers webhook + enqueues backfill). Webhook re-registration
+    #    is expensive and only needs to run periodically.
+    soft_key = "propriacloud:soft_refresh:#{channel.id}"
+    hard_key = "propriacloud:hard_refresh:#{channel.id}"
+    soft_blocked = Redis::Alfred.get(soft_key)
+    hard_blocked = Redis::Alfred.get(hard_key)
 
-    # Prefer reconcile! when available — it not only refreshes status
-    # but also re-registers the webhook + enqueues the history backfill
-    # if it never ran (covers the "server was down when pairing
-    # succeeded" recovery case).
-    result = if channel.provider_service.respond_to?(:reconcile!)
-               channel.provider_service.reconcile!
-             else
-               channel.provider_service.refresh_status_from_api!
-             end
-    render json: { result: result, provider_connection: channel.reload.provider_connection }
+    unless soft_blocked
+      Redis::Alfred.setex(soft_key, true, 5)
+      if !hard_blocked && channel.provider_service.respond_to?(:reconcile!)
+        Redis::Alfred.setex(hard_key, true, 60)
+        channel.provider_service.reconcile!
+      else
+        channel.provider_service.refresh_status_from_api!
+      end
+    end
+
+    render json: {
+      rate_limited: !!soft_blocked,
+      provider_connection: channel.reload.provider_connection
+    }
   rescue StandardError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
@@ -188,6 +202,38 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     response = channel.on_whatsapp(phone_number)
 
     render json: response, status: :ok
+  end
+
+  # Translate provider raw errors (especially WhatsApp rate-limit /
+  # device-limit responses) into a compact, locale-friendly shape the
+  # dashboard can show without leaking server internals (proxy IPs,
+  # raw IQ XML, file paths). Keeps the original message available
+  # under `details` for support tooling but strips it from the user
+  # surface.
+  def friendly_pair_error(exception)
+    raw = exception.message.to_s
+    code = nil
+    user_message = nil
+    cooldown = nil
+
+    if raw.include?('PAIR_RATE_LIMITED') || raw.match?(/429.*rate-overlimit|rate-?overlimit/i)
+      code = 'PAIR_RATE_LIMITED'
+      user_message = 'WhatsApp temporarily blocked new pair attempts. ' \
+                     'Wait at least 5 minutes before trying again.'
+      cooldown = 300
+    elsif raw.match?(/PAIR_DEVICE_LIMIT|too many.*linked|maximum.*devices/i)
+      code = 'PAIR_DEVICE_LIMIT'
+      user_message = 'WhatsApp limit of linked devices reached. ' \
+                     'Open WhatsApp → Settings → Linked devices and remove an old one, then retry.'
+    elsif raw.match?(/expired|invalid.*code/i)
+      code = 'PAIR_CODE_EXPIRED'
+      user_message = 'The pairing code expired. Click Emparelhar again to generate a fresh one.'
+    else
+      code = 'PAIR_FAILED'
+      user_message = 'Could not request a pairing code. Please try again in a moment.'
+    end
+
+    { error: user_message, code: code, cooldown_seconds: cooldown }.compact
   end
 
   private

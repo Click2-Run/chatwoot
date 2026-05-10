@@ -109,9 +109,24 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
     "data:image/png;base64,#{qr}"
   end
 
+  # Whitelist of events that legitimately carry an error message — every
+  # other connection.* / pairing.* event is non-error, even if its name
+  # contains useful suffix info we don't want leaking into the UI.
+  ERROR_EVENT_TYPES = %w[
+    connection.disconnected
+    connection.logged_out
+    connection.stream_replaced
+    connection.connect_failure
+    connection.client_outdated
+    connection.temporary_ban
+    connection.stream_error
+    connection.keepalive_timeout
+    pairing.error
+  ].freeze
+
   def extract_error_message(data, event = nil)
     error = data[:error] || data['error']
-    error ||= event.split('.', 2).last if event.to_s.start_with?('connection.', 'pairing.error')
+    error ||= event.split('.', 2).last if event.to_s.in?(ERROR_EVENT_TYPES)
     return nil if error.blank?
 
     I18n.t("errors.inboxes.channel.provider_connection.#{error}", default: error.to_s)

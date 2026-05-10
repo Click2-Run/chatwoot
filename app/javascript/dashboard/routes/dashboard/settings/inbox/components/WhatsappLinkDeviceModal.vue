@@ -60,7 +60,14 @@ const startQrPairing = () => {
 };
 const ensureConnectingForPhoneCode = async () => {
   if (!connection.value || connection.value === 'close') {
-    await store.dispatch('inboxes/setupChannelProvider', props.inbox.id);
+    // Pass fetch_qr=false so the backend doesn't pull a QR as part of
+    // the implicit setup — the QR pull counts as a pair attempt and
+    // would burn the WhatsApp rate-limit budget that the phone-code
+    // request needs.
+    await store.dispatch('inboxes/setupChannelProvider', {
+      inboxId: props.inbox.id,
+      fetch_qr: false,
+    });
   }
 };
 const disconnect = () => {

@@ -65,8 +65,8 @@ class Inboxes extends CacheEnabledApiClient {
     );
   }
 
-  setupChannelProvider(inboxId) {
-    return axios.post(`${this.url}/${inboxId}/setup_channel_provider`);
+  setupChannelProvider(inboxId, params = {}) {
+    return axios.post(`${this.url}/${inboxId}/setup_channel_provider`, params);
   }
 
   disconnectChannelProvider(inboxId) {
