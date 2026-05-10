@@ -46,6 +46,16 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 
 ## 2026-05
 
+### 2026-05-10
+- **`29338e6d6`** — feat(whatsapp-propriacloud): self-healing reconcile + auto-close on pair + Multicanal product brand
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +11/-2
+  - `app/javascript/dashboard/i18n/locale/en/login.json` +1/-1
+  - `app/javascript/dashboard/i18n/locale/pt_BR/login.json` +1/-1
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +22/-0
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +36/-0
+- **`39253e4cc`** — docs: refresh CUSTOM-CHANGELOG to include latest changelog refresh entry
+  - `CUSTOM-CHANGELOG.md` +2/-0
+
 ### 2026-05-09
 - **`9b40aadef`** — docs: refresh changelog with status-reconciliation + sidebar fixes
   - `CUSTOM-CHANGELOG.md` +10/-0
