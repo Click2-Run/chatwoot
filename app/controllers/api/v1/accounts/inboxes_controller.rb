@@ -5,7 +5,7 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   # rubocop:disable Rails/LexicallyScopedActionFilter -- health is defined in WhatsappHealthManagement concern
-  before_action :check_authorization, except: [:show, :health, :setup_channel_provider]
+  before_action :check_authorization, except: [:show, :health, :setup_channel_provider, :refresh_provider_status]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
   # rubocop:enable Rails/LexicallyScopedActionFilter
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
@@ -118,6 +118,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
   # state left over from abandoned pairing attempts. Rate-limited via
   # Redis so a chatty UI cannot flood the upstream API.
   def refresh_provider_status
+    # Read-only state reconciliation — anyone who can show? the inbox
+    # may trigger it. Rate-limited via Redis below to 1/30s/channel.
+    authorize @inbox, :show?
+
     channel = @inbox.channel
     unless channel.provider_service.respond_to?(:reconcile!) ||
            channel.provider_service.respond_to?(:refresh_status_from_api!)
