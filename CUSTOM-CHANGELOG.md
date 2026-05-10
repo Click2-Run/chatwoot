@@ -47,6 +47,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`bc05cf45e`** — fix(whatsapp-propriacloud): no implicit QR on phone-code path + friendly pair errors + correct error semantics
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +64/-18
+  - `app/javascript/dashboard/api/inboxes.js` +2/-2
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +8/-1
+  - `app/javascript/dashboard/store/modules/inboxes.js` +21/-4
+  - `app/services/whatsapp/propriacloud_handlers/connection_update.rb` +16/-1
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +10/-2
+- **`8939018b6`** — docs: refresh CUSTOM-CHANGELOG with refresh-status authz fix
+  - `CUSTOM-CHANGELOG.md` +4/-0
 - **`827a5f2dc`** — fix(inboxes-controller): refresh_provider_status authz uses inbox instance, not class
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +5/-1
 - **`e76027a16`** — docs: refresh CUSTOM-CHANGELOG with backfill auth + Unpair fixes
