@@ -47,6 +47,12 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`83ac55615`** — fix(whatsapp-propriacloud): retry transient 500 on /instances/create + friendly setup errors
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +20/-0
+  - `app/javascript/dashboard/store/modules/inboxes.js` +7/-1
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +18/-10
+- **`eabe40b97`** — docs: refresh CUSTOM-CHANGELOG with two-axis status resolver
+  - `CUSTOM-CHANGELOG.md` +9/-0
 - **`c181c10f2`** — feat(whatsapp-propriacloud): two-axis status resolver + per-state action button (mirrors propriacloud.git/minha)
   - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +23/-79
   - `app/javascript/dashboard/composables/usePropriacloudStatus.js` +159/-0
