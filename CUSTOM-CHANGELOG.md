@@ -47,6 +47,8 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-09
+- **`9b40aadef`** — docs: refresh changelog with status-reconciliation + sidebar fixes
+  - `CUSTOM-CHANGELOG.md` +10/-0
 - **`8c21657f5`** — fix(whatsapp-propriacloud): tolerant validate_provider_config + status reconciliation + sidebar polish
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +24/-0
   - `app/javascript/dashboard/components-next/sidebar/Sidebar.vue` +18/-15
