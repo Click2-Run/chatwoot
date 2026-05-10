@@ -46,6 +46,55 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 
 ## 2026-05
 
+### 2026-05-10 (Própria Cloud audit follow-ups)
+
+> Production-readiness sweep against the whatsapp-api `develop @ a5f5471d`
+> OpenAPI 3.1 v1.4.0 contract. Closes 20 audit findings from
+> [`CUSTOM-PROPRIACLOUD-INTEGRATION.md`](./CUSTOM-PROPRIACLOUD-INTEGRATION.md)
+> (PEND-01..PEND-20). Manual entries — `.codi/scripts/build-changelog.rb`
+> regenerates the per-commit blocks below.
+
+- **fix(whatsapp-propriacloud): align media download with whatsapp-api OpenAPI contract**
+  - `download_media` was POSTing `{ message: <full webhook payload> }`, which the upstream `client.NormalizeMediaMessageMap` rejects with `unable to detect media type from payload`. Now sends the inner `imageMessage`/`videoMessage`/`audioMessage`/`documentMessage`/`stickerMessage`/`extendedTextMessage` wrapper, accepting both camelCase (current `develop`) and snake_case (legacy fazer-ai) input keys and remapping to camelCase for the Go normalizer.
+  - Reads response field `base64` (per OpenAPI `DownloadMediaResponse`); legacy `data`/`body`/`file` kept as fallbacks.
+  - Closes **PEND-01**, **PEND-02**, **PEND-03**.
+- **fix(whatsapp-propriacloud): read canonical `is_on_whatsapp` field**
+  - `on_whatsapp` previously read `is_in`/`exists`/`is_registered`; the API actually returns `is_on_whatsapp`. The check returned `false` for every contact. Now reads the canonical field, with legacy aliases kept for older deployments. Closes **PEND-04**.
+- **feat(whatsapp-propriacloud): on-demand history + manual resync**
+  - `POST /api/v1/accounts/:id/inboxes/:id/resync_history` — admin-triggered re-backfill, rate-limited 1/hour/channel. Closes **PEND-05**.
+  - `POST /api/v1/accounts/:id/inboxes/:id/request_chat_history` with `{chat_jid, count}` — fronts whatsapp-api's `/sync/request-history` for "load older messages" UX. Closes **PEND-06**.
+- **fix(whatsapp-propriacloud): inbox-prefix Redis dedup lock**
+  - `MESSAGE_SOURCE_KEY` now matches the baileys/zapi pattern (`"<inbox.id>_<wa_msg_id>"`) so a colliding WhatsApp id across two inboxes can't shadow each other's processing. Closes **PEND-07**.
+- **fix(whatsapp-propriacloud): drop out-of-order appstate events**
+  - `appstate.archive`, `delete_chat`, and `mark_chat_as_read` now compare the event `timestamp` against `Conversation#updated_at` and skip stale deliveries — prevents toggle-back when the API redelivers events out of order. Closes **PEND-08**.
+- **chore(whatsapp-propriacloud): drop undocumented `enabled` field on `/webhooks` POST**
+  - OpenAPI `CreateWebhookRequest` only documents `active`. The extra field was silently ignored; removed for cleanliness. Closes **PEND-09**.
+- **fix(whatsapp-propriacloud): stop using QR `code` as a base64-image fallback**
+  - `body['code']` from `QRCodeResponse` is the plain pairing TEXT, not base64 PNG bytes. Stuffing it into a `data:image/png;base64,…` URL produced broken images in the dashboard. Now uses `img` only (with `qr_code`/`qrcode` legacy fallbacks). Same fix in the live `pairing.qrcode` webhook handler. Closes **PEND-10**.
+- **chore(whatsapp-propriacloud): default phone-pair `expires_in` to 60s**
+  - `PhoneCodeResponse` exposes only `{code, success}` — no `expires_in`/`timeout`. The countdown was always blank; now defaults to WhatsApp's standard 60-second pair window. Closes **PEND-11**.
+- **feat(whatsapp-propriacloud): cap history backfill (page + age cutoff)**
+  - `MAX_PAGES_PER_CHAT = 25` (≈5,000 msgs/chat) prevents runaway backfill on accounts with multi-year histories. Per-channel `provider_config['history_backfill_max_age_days']` (default 180) lets ops trim further; messages older than the cutoff stop the chat's pagination early. Closes **PEND-12**.
+- **feat(whatsapp-propriacloud): wire `/sync/push-names` into backfill**
+  - The pre-existing `sync_push_names` provider helper is now consumed before the contact pass, providing a richer name lookup for contacts seeded only via @lid. Closes **PEND-13**.
+- **chore(whatsapp-propriacloud): drop unused `presence_subscribe` default**
+  - No code path subscribes per-contact presence today. Carrying the toggle on every new propriacloud inbox was misleading. Re-introduce only if/when `POST /presence/subscribe` is wired. Closes **PEND-15**.
+- **feat(whatsapp-propriacloud): send up to 12 attachments per `/messages/send-media` call**
+  - The API supports an array of media items; we previously sent only `media[0]` and silently dropped the rest. Now iterates `@message.attachments` (capped to API's 12-item limit) with the caption applied to the first item only (so the recipient doesn't see it duplicated under each media). Closes **PEND-16**.
+- **feat(whatsapp-propriacloud): detect WhatsApp Status messages, attach embedded thumbnail**
+  - `contextInfo.statusSourceType: 1` reliably fails CDN download with `invalid media hmac`; we now skip the round-trip and attach the embedded `jpegThumbnail` (always present), or fall back to `is_unsupported` if absent. Closes **PEND-17**.
+- **chore(db): replace stale `click2run` partial GIN index predicate with `propriacloud`**
+  - `db/migrate/20260510170000_update_provider_connection_index_for_propriacloud.rb` re-creates `index_channel_whatsapp_provider_connection` with `provider IN ('baileys','zapi','whatsmeow','propriacloud')`. JSONB queries on propriacloud rows once again hit the index. Closes **PEND-18**.
+- **test(whatsapp-propriacloud): regression specs for the audit fixes**
+  - `spec/services/whatsapp/providers/whatsapp_propriacloud_service_spec.rb` — media download shape + response, on_whatsapp field, webhook registration body, QR/phonecode handling, multi-attachment send, request-history.
+  - `spec/services/whatsapp/propriacloud_handlers/appstate_spec.rb` — out-of-order timestamp guard.
+  - `spec/services/whatsapp/propriacloud_handlers/helpers_spec.rb` — inbox-prefixed Redis lock key.
+  - `spec/services/whatsapp/propriacloud/history_backfill_service_spec.rb` — page cap, age cutoff, push-name pre-pass. Closes **PEND-19**.
+- **chore(whatsapp-propriacloud): tag webhook log lines with `propriacloud` + inbox + event**
+  - `Whatsapp::IncomingMessagePropriacloudService#perform` now wraps in `Rails.logger.tagged('propriacloud', "inbox=…", "event=…")` so cross-channel debugging stops being a grep-by-class-name exercise. Closes **PEND-20**.
+- **docs: source-of-truth integration reference**
+  - New `CUSTOM-PROPRIACLOUD-INTEGRATION.md` consolidating provider architecture, endpoint compatibility matrix vs whatsapp-api `develop @ a5f5471d` (OpenAPI 3.1 v1.4.0), webhook config, sync flows, dedup, media handling, storage notes, and the running pending-issues ledger. Lives at the repo root alongside the other `CUSTOM-*.md` references.
+
 ### 2026-05-10
 - **`6232db3ce`** — feat(whatsapp-propriacloud): per-axis Connect/Disconnect/Pair/Unpair actions, confirms, read-only Advanced tab, Informações tab rename
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +28/-0
