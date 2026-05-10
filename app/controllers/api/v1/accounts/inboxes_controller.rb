@@ -88,6 +88,12 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
       channel.setup_channel_provider
     end
     head :ok
+  rescue StandardError => e
+    # Bubble the upstream provider failures up as a friendly 422 instead
+    # of a raw 500 / Rails error page → axios surfaces them as
+    # `e.response.data.error` and the modal renders user-safe copy.
+    Rails.logger.warn "setup_channel_provider failed: #{e.class}: #{e.message[0..240]}"
+    render json: friendly_setup_error(e), status: :unprocessable_entity
   end
 
   def disconnect_channel_provider
@@ -249,6 +255,20 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     end
 
     { error: user_message, code: code, cooldown_seconds: cooldown }.compact
+  end
+
+  def friendly_setup_error(exception)
+    raw = exception.message.to_s
+    user_message = if raw.match?(/Failed to create whatsapp-api instance/i)
+                     'Could not start the WhatsApp instance. Please try again in a moment.'
+                   elsif raw.match?(/Failed to register webhook/i)
+                     'WhatsApp instance is up but webhook registration failed. Please try again.'
+                   elsif raw.match?(/Failed to connect/i)
+                     'Could not connect to the WhatsApp instance. Please try again in a moment.'
+                   else
+                     'Could not start pairing. Please try again in a moment.'
+                   end
+    { error: user_message, code: 'SETUP_FAILED' }
   end
 
   def pair_locked_response(channel)

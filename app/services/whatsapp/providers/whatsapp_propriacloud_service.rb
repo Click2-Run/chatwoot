@@ -172,16 +172,24 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # influence this — setup_channel_provider only reads it off the
     # persisted record. Same value is sent regardless of the entry point
     # (UI inbox creation, future API onboarding, agent invite, etc.).
-    create_response = HTTParty.post(
-      "#{provider_url}/instances/create",
-      headers: api_headers,
-      body: {
-        instance_id: instance_id,
-        name: whatsapp_channel.inbox.name,
-        phone: normalized_phone_number,
-        custom_id: whatsapp_channel.inbox.account_id.to_s
-      }.compact.to_json
-    )
+    create_body = {
+      instance_id: instance_id,
+      name: whatsapp_channel.inbox.name,
+      phone: normalized_phone_number,
+      custom_id: whatsapp_channel.inbox.account_id.to_s
+    }.compact.to_json
+
+    # whatsapp-api occasionally returns 500 on /instances/create when an
+    # earlier partial insert is racing with the new request — retrying
+    # 500ms later returns 409 ("already exists") which we already treat
+    # as success. Single retry is enough; persistent 500 is a real
+    # outage and should still bubble up.
+    create_response = HTTParty.post("#{provider_url}/instances/create", headers: api_headers, body: create_body)
+    if create_response.code == 500
+      Rails.logger.warn "Propriacloud /instances/create transient 500, retrying in 500ms: #{create_response.body[0..200]}"
+      sleep 0.5
+      create_response = HTTParty.post("#{provider_url}/instances/create", headers: api_headers, body: create_body)
+    end
 
     unless [200, 201, 409].include?(create_response.code)
       Rails.logger.error create_response.body

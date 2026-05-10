@@ -416,7 +416,13 @@ export const actions = {
     try {
       await InboxesAPI.setupChannelProvider(inboxId, params);
     } catch (error) {
-      throwErrorMessage(error);
+      // Backend now returns 422 with a friendly { error, code } payload.
+      // Surface that string as a plain Error so the modal can render
+      // it cleanly instead of leaking raw axios shape (status code, etc.).
+      const data = error?.response?.data || {};
+      const friendly =
+        data.error || 'Could not start pairing. Please try again in a moment.';
+      throw new Error(friendly);
     }
   },
   disconnectChannelProvider: async (_, inboxId) => {
