@@ -217,14 +217,33 @@ function actionUnpair(t) {
   };
 }
 
+// Derive the two side-by-side actions (connection axis + pair axis).
+// We DO NOT mutate `disabled` based on transitioning state here — the
+// reference impl (propriacloud.git/apps/minha) keeps buttons rendered
+// throughout transitions and leaves "should I block this click" to the
+// caller (which knows whether an action is currently in flight).
+//
+// The resolver only adds a `transitioning` advisory flag the UI can use
+// to gate clicks (e.g. while connection_state === 'connecting' it makes
+// no sense to fire another connect/disconnect — the API returns
+// "already connecting" anyway). Loading spinner is the caller's job and
+// must follow the in-flight HTTP request, NOT the steady-state.
 function deriveActions(t, state) {
-  const { isWebSocketConnected, isPaired, isPairing, connectionState } = state;
-  if (connectionState === 'connecting' || isPairing) return [];
+  const { isWebSocketConnected, isPaired, connectionState, isPairing } = state;
 
-  const result = [];
-  result.push(isWebSocketConnected ? actionDisconnect(t) : actionConnect(t));
-  result.push(isPaired ? actionUnpair(t) : actionPair(t));
-  return result;
+  const connAction = isWebSocketConnected
+    ? actionDisconnect(t)
+    : actionConnect(t);
+  const pairAction = isPaired ? actionUnpair(t) : actionPair(t);
+
+  // Mark the in-axis action that's actively transitioning so the UI can
+  // disable JUST that button (the other axis is still free to act on).
+  // Connection-axis actions are blocked while the WS is mid-handshake;
+  // pair-axis actions are blocked while a pair handshake is mid-flight.
+  connAction.transitioning = connectionState === 'connecting';
+  pairAction.transitioning = isPairing;
+
+  return [connAction, pairAction];
 }
 
 // ---------------------------------------------------------------------------

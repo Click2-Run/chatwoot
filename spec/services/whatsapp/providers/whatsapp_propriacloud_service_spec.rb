@@ -163,6 +163,25 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
     end
   end
 
+  describe '#connect_only (Conectar action)' do
+    it 'POSTs /instances/connect and flips provider_connection to `connecting`' do
+      stub = stub_request(:post, "#{provider_url}/instances/connect?instance_id=inst-123")
+             .to_return(status: 200, body: { data: { connection_state: 'connecting', pair_state: 'paired' } }.to_json)
+
+      service.connect_only
+
+      expect(stub).to have_been_requested
+      whatsapp_channel.reload
+      expect(whatsapp_channel.provider_connection['connection']).to eq('connecting')
+      expect(whatsapp_channel.provider_connection['error']).to be_nil
+    end
+
+    it 'raises ProviderUnavailableError on non-2xx' do
+      stub_request(:post, "#{provider_url}/instances/connect?instance_id=inst-123").to_return(status: 503, body: 'unavailable')
+      expect { service.connect_only }.to raise_error(described_class::ProviderUnavailableError, /503/)
+    end
+  end
+
   describe '#request_chat_history (PEND-06)' do
     it 'POSTs to /sync/request-history with chat_jid and count' do
       stub = stub_request(:post, "#{provider_url}/sync/request-history")

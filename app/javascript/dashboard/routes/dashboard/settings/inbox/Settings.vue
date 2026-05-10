@@ -113,6 +113,16 @@ export default {
       widgetBubbleLauncherTitle: '',
       showConvertGate: false,
       showLinkDeviceModal: false,
+      // Propriacloud action button currently in flight. Mirrors the
+      // reference impl's `isSubmitting` / `pendingAction` pattern —
+      // only the in-flight button shows a spinner; the other axis stays
+      // clickable. null means no action pending.
+      propriacloudPendingKind: null,
+      // Holds setTimeout id from `schedulePropriacloudReRefresh`. Lives
+      // in data() (instead of `this._foo`) because ESLint's
+      // no-underscore-dangle rejects the leading underscore. Not used
+      // in the template so reactivity is irrelevant.
+      propriacloudRefreshTimer: null,
     };
   },
   computed: {
@@ -413,6 +423,11 @@ export default {
     this.fetchSharedData();
     this.refreshPropriacloudStatusIfApplicable();
   },
+  beforeUnmount() {
+    if (this.propriacloudRefreshTimer) {
+      clearTimeout(this.propriacloudRefreshTimer);
+    }
+  },
   methods: {
     // Reconcile the cached provider_connection on the inbox with the
     // truth from the upstream API. Backend is rate-limited (1 / 30s
@@ -426,48 +441,80 @@ export default {
       this.showLinkDeviceModal = true;
     },
     // Click handler for any propriacloud action button. Receives the
-    // resolved action object: { kind, variant, label, confirm? }.
-    // Destructive kinds (disconnect / unpair) require an explicit user
-    // confirm() before firing.
-    //   connect     → setupChannelProvider({ fetch_qr: false }) — brings
-    //                 the websocket up; if instance is unpaired the
-    //                 user still needs to click Emparelhar afterwards.
-    //   disconnect  → disconnectOnly — graceful, KEEPS the pair.
-    //   pair        → opens the LinkDeviceModal (user picks QR/phone).
-    //   unpair      → unpairOnly — removes device link, keeps instance.
+    // resolved action object: { kind, variant, label, transitioning?, confirm? }.
+    //
+    // Mapping (faithful port of propriacloud.git/apps/minha):
+    //   connect     → POST /instances/connect (connectOnly) — bare
+    //                 websocket-up. Distinct from setupChannelProvider
+    //                 (which would also re-create the instance + re-
+    //                 register the webhook).
+    //   disconnect  → POST /instances/disconnect (disconnectOnly) —
+    //                 graceful, KEEPS the pair. Confirmed.
+    //   pair        → opens the LinkDeviceModal (user picks QR or
+    //                 phone-code path).
+    //   unpair      → POST /instances/unpair (unpairOnly) — removes
+    //                 device link, keeps instance. Confirmed.
+    //
+    // Concurrency model: only one propriacloud action runs at a time
+    // (we set propriacloudPendingKind so the template knows which
+    // button to spin and to disable both buttons while it's busy).
+    // Click is also a no-op if `transitioning` is true — firing another
+    // connect on top of a connecting state just gets us
+    // "already connecting" from the API.
     async onPropriacloudAction(act) {
-      if (!act || act.disabled) return;
+      if (!act) return;
+      if (this.propriacloudPendingKind) return; // serialize
+      if (act.transitioning) return; // axis is mid-handshake
       if (act.confirm) {
+        // eslint-disable-next-line no-alert
         const ok = window.confirm(
           `${act.confirm.title}\n\n${act.confirm.message}`
         );
         if (!ok) return;
       }
+
+      // Pair just opens the modal — no HTTP yet, no spinner.
+      if (act.kind === 'pair') {
+        this.onOpenLinkDeviceModal();
+        return;
+      }
+
+      this.propriacloudPendingKind = act.kind;
       try {
-        if (act.kind === 'pair') {
-          this.onOpenLinkDeviceModal();
-          return;
-        }
         if (act.kind === 'connect') {
-          await this.$store.dispatch('inboxes/setupChannelProvider', {
-            inboxId: this.inbox.id,
-            fetch_qr: false,
-          });
+          await this.$store.dispatch('inboxes/connectOnly', this.inbox.id);
         } else if (act.kind === 'disconnect') {
           await this.$store.dispatch('inboxes/disconnectOnly', this.inbox.id);
         } else if (act.kind === 'unpair') {
           await this.$store.dispatch('inboxes/unpairOnly', this.inbox.id);
         }
+        // Two-pass refresh — immediate one to flip the badge out of
+        // 'connecting' if the API already settled, plus a delayed one
+        // to catch the connection.* / pairing.* webhook tail (3s is
+        // typically enough; the upstream is rate-limited so calling
+        // sooner is harmless).
         await this.$store.dispatch(
           'inboxes/refreshProviderStatus',
           this.inbox.id
         );
+        this.schedulePropriacloudReRefresh();
       } catch (e) {
         useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
+      } finally {
+        this.propriacloudPendingKind = null;
       }
     },
     onCloseLinkDeviceModal() {
       this.showLinkDeviceModal = false;
+      this.schedulePropriacloudReRefresh();
+    },
+    schedulePropriacloudReRefresh() {
+      if (this.propriacloudRefreshTimer) {
+        clearTimeout(this.propriacloudRefreshTimer);
+      }
+      this.propriacloudRefreshTimer = setTimeout(() => {
+        this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
+      }, 3000);
     },
     async copyWebhookSecret(value) {
       await copyTextToClipboard(value);
@@ -865,7 +912,12 @@ export default {
               :slate="act.variant !== 'destructive'"
               :ruby="act.variant === 'destructive'"
               :label="act.label"
-              :disabled="act.disabled"
+              :disabled="
+                act.transitioning ||
+                (propriacloudPendingKind &&
+                  propriacloudPendingKind !== act.kind)
+              "
+              :is-loading="propriacloudPendingKind === act.kind"
               @click="onPropriacloudAction(act)"
             />
           </div>

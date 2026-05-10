@@ -81,6 +81,10 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/refresh_provider_status`);
   }
 
+  connectOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/connect_only`);
+  }
+
   disconnectOnly(inboxId) {
     return axios.post(`${this.url}/${inboxId}/disconnect_only`);
   }

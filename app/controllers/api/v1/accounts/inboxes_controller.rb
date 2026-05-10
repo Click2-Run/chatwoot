@@ -109,8 +109,24 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     channel.update_provider_connection!(connection: 'close') if channel.respond_to?(:update_provider_connection!)
   end
 
+  # POST /instances/connect — bring the websocket up against an
+  # already-existing instance. Reverse of disconnect_only. Distinct
+  # from setup_channel_provider (which would also re-create the
+  # instance record + re-register the webhook).
+  def connect_only
+    channel = @inbox.channel
+    unless channel.provider_service.respond_to?(:connect_only)
+      render json: { error: 'Channel does not support connect-only' }, status: :unprocessable_entity and return
+    end
+    channel.provider_service.connect_only
+    head :ok
+  rescue StandardError => e
+    Rails.logger.warn "connect_only failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: 'Could not connect the WhatsApp instance. Please try again.', code: 'CONNECT_FAILED' }, status: :unprocessable_entity
+  end
+
   # POST /instances/disconnect — graceful disconnect that KEEPS the pair.
-  # Reverse with setup_channel_provider({ fetch_qr: false }) (Conectar).
+  # Reverse with connect_only.
   def disconnect_only
     channel = @inbox.channel
     unless channel.provider_service.respond_to?(:disconnect_only)

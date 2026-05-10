@@ -640,12 +640,7 @@ export default {
         "
       >
         <div class="flex flex-col gap-2">
-          <InboxName
-            :inbox="inbox"
-            class="!text-lg !m-0"
-            with-phone-number
-            with-provider-connection-status
-          />
+          <InboxName :inbox="inbox" class="!text-lg !m-0" with-phone-number />
           <!-- Propriacloud: Advanced tab is READ-ONLY for the connection
                status. Connect/Disconnect/Pair/Unpair buttons live on
                the main Information tab to avoid duplication and

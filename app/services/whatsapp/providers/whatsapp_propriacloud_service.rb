@@ -282,6 +282,35 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     true
   end
 
+  # POST /instances/connect — bring the websocket up against an
+  # already-existing instance record. Distinct from setup_channel_provider:
+  # this is the lightweight "Conectar" action used after a graceful
+  # disconnect (or any time the WS dropped). It does NOT touch the
+  # instance record, the webhook subscription, or the QR cache. If the
+  # instance is paired the call returns immediately with the session
+  # restored; if unpaired the API moves into pairing state and the user
+  # is expected to follow up with Emparelhar (QR or phone code).
+  #
+  # Faithful port of propriacloud.git/apps/minha/app/services/whatsapp.server.ts::connectInstance.
+  # Idempotent: re-calling on an already-connected instance returns the
+  # current state (which the API surfaces as "already connected").
+  def connect_only
+    response = HTTParty.post(
+      "#{provider_url}/instances/connect#{instance_query}",
+      headers: api_headers
+    )
+    raise ProviderUnavailableError, "Failed to connect instance: #{response.code} #{response.body[0..200]}" unless process_response(response)
+
+    # Mirror the optimistic provider_connection update from
+    # setup_channel_provider so the UI can switch out of `disconnected`
+    # immediately without waiting for the connection.* webhook tail.
+    whatsapp_channel.update_provider_connection!(
+      connection: 'connecting',
+      error: nil
+    )
+    true
+  end
+
   # POST /instances/unpair — remove the device link with WhatsApp but
   # KEEP the instance record on the api side. After this the instance
   # is connected+unpaired (or disconnected+unpaired depending on api

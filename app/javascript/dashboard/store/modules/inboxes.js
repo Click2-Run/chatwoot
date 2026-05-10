@@ -453,12 +453,22 @@ export const actions = {
       throw wrapped;
     }
   },
-  // Hits the rate-limited /refresh_provider_status endpoint and merges
-  // the fresh provider_connection back into the cached inbox so the UI
-  // stops showing the value Vuex saw at boot. Used by the inbox
-  // settings panel + conversation-header badge on mount.
+  // Lightweight Conectar — just brings the websocket up against an
+  // existing instance. Distinct from setupChannelProvider (which would
+  // also re-create the instance + re-register the webhook). Faithful
+  // port of propriacloud.git/apps/minha::connectInstance.
+  connectOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.connectOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not connect the WhatsApp instance. Please try again.';
+      throw new Error(friendly);
+    }
+  },
   // Graceful disconnect — keeps pair, just brings the websocket down.
-  // Reverse with setupChannelProvider({ fetch_qr: false }) (Conectar).
+  // Reverse with connectOnly.
   disconnectOnly: async (_, inboxId) => {
     try {
       await InboxesAPI.disconnectOnly(inboxId);
