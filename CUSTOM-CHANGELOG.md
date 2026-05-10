@@ -47,6 +47,22 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`6232db3ce`** — feat(whatsapp-propriacloud): per-axis Connect/Disconnect/Pair/Unpair actions, confirms, read-only Advanced tab, Informações tab rename
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +28/-0
+  - `app/javascript/dashboard/api/inboxes.js` +8/-0
+  - `app/javascript/dashboard/composables/usePropriacloudStatus.js` +69/-49
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +7/-2
+  - `app/javascript/dashboard/i18n/locale/es/inboxMgmt.json` +2/-2
+  - `app/javascript/dashboard/i18n/locale/pt/inboxMgmt.json` +2/-2
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +7/-2
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` +65/-53
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/settingsPage/ConfigurationPage.vue` +37/-1
+  - `app/javascript/dashboard/store/modules/inboxes.js` +24/-0
+  - `app/policies/inbox_policy.rb` +8/-0
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +32/-0
+  - `config/routes.rb` +2/-0
+- **`ac937c1d4`** — docs: refresh CUSTOM-CHANGELOG with per-tab activation flags
+  - `CUSTOM-CHANGELOG.md` +4/-0
 - **`56393d75c`** — fix(whatsapp-propriacloud): per-tab activation flags so phone-code path can't reveal QR
   - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +32/-15
 - **`f2df5d3bd`** — docs: refresh CUSTOM-CHANGELOG with minha-tag faithful port
