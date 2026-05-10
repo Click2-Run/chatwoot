@@ -47,6 +47,10 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`827a5f2dc`** — fix(inboxes-controller): refresh_provider_status authz uses inbox instance, not class
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +5/-1
+- **`e76027a16`** — docs: refresh CUSTOM-CHANGELOG with backfill auth + Unpair fixes
+  - `CUSTOM-CHANGELOG.md` +9/-0
 - **`cfad7bcd4`** — fix(whatsapp-propriacloud): bypass webhook auth on backfill dispatch + rename Disconnect to Unpair
   - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +1/-1
   - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +1/-1
