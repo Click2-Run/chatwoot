@@ -596,6 +596,18 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # Paginated GET for /sync/* and /labels endpoints. Returns an Array
   # of records (already symbolized). On non-2xx responses it logs and
   # returns [] so the backfill job can proceed without raising.
+  # whatsapp-api response shapes for list endpoints, in observed order
+  # of nesting:
+  #   { success: true, data: { contacts: [...], pagination: {...} } }
+  #   { success: true, data: { conversations: [...], pagination: {...} } }
+  #   { success: true, data: { messages: [...], pagination: {...} } }
+  #   { success: true, data: { labels: [...] } }
+  # Some plain endpoints also return:
+  #   { data: [...] } or [...]
+  # paged_get walks through every plausible shape and returns the
+  # array of records (deep-symbolized) or [] when nothing applies.
+  RESOURCE_KEYS = %w[contacts conversations messages labels push_names call_logs items results data].freeze
+
   def paged_get(path, page: 1, page_size: 200, extra: {}, scope: :instance)
     qs = { page: page, page_size: page_size }
     qs.merge!(extra)
@@ -606,11 +618,34 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     )
     return [] unless response.success?
 
-    body = unwrap(response.parsed_response)
-    rows = body.is_a?(Array) ? body : (body['data'] || body['items'] || body['results'] || [])
+    rows = extract_paged_rows(response.parsed_response)
     rows.map { |r| r.respond_to?(:deep_symbolize_keys) ? r.deep_symbolize_keys : r }
   rescue StandardError => e
     Rails.logger.warn "Propriacloud paged_get(#{path}) failed: #{e.class}: #{e.message[0..120]}"
+    []
+  end
+
+  def extract_paged_rows(parsed)
+    parsed = safe_parse_json(parsed) if parsed.is_a?(String)
+    return parsed if parsed.is_a?(Array)
+    return [] unless parsed.is_a?(Hash)
+
+    # Top-level convenience keys.
+    RESOURCE_KEYS.each do |k|
+      v = parsed[k]
+      return v if v.is_a?(Array)
+    end
+
+    inner = parsed['data']
+    return inner if inner.is_a?(Array)
+    return [] unless inner.is_a?(Hash)
+
+    # data.<resource>[]
+    RESOURCE_KEYS.each do |k|
+      v = inner[k]
+      return v if v.is_a?(Array)
+    end
+
     []
   end
 

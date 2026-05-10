@@ -65,7 +65,12 @@ class Whatsapp::Propriacloud::HistoryBackfillService
     each_page(:sync_conversations) do |conv|
       chat_jid = conv[:chat_jid] || conv['chat_jid']
       next if chat_jid.blank?
-      next unless chat_jid.end_with?('@s.whatsapp.net') # skip groups/broadcasts in v1
+      # Skip groups/broadcasts/newsletters/status — Chatwoot has no
+      # surface for those today. Accept both @s.whatsapp.net and @lid
+      # (WhatsApp's Linked-Identity JID variant for privacy-preserving
+      # 1:1 chats); the messages upsert handler downgrades @lid to a
+      # phone number via pn_jid when present.
+      next if chat_jid.match?(/@(g\.us|broadcast|newsletter|status)\b/)
 
       backfill_messages_for(chat_jid)
     end
