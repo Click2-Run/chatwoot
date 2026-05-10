@@ -53,12 +53,24 @@ const pairLockedFormatted = computed(() => {
   const r = s % 60;
   return m > 0 ? `${m}m ${r.toString().padStart(2, '0')}s` : `${r}s`;
 });
-// True only after the user has explicitly clicked "Emparelhar" in this
-// modal session. Until then we never render an existing QR or phone
-// code from provider_connection — even if the inbox row carries one
-// from a previous attempt — so the modal opens to the tab picker
-// every time and never implies pairing was already initiated.
-const userInitiatedPairing = ref(false);
+// Per-tab activation flags. The previous single `userInitiatedPairing`
+// was shared across both tabs, so clicking Emparelhar on Phone Code
+// (which still triggers /instances/connect on the api side, which can
+// emit a spontaneous pairing.qrcode webhook) populated qr_data_url and
+// IMMEDIATELY rendered the QR if the user switched tabs. Splitting the
+// flag per tab guarantees:
+//   - QR tab renders the QR ONLY after the user clicked Emparelhar
+//     while the QR tab was active
+//   - Phone Code tab renders the 8-char code ONLY after the user
+//     clicked Emparelhar while that tab was active
+//   - Tab switching alone never reveals output
+//   - Modal close + reopen / page refresh resets both flags
+const qrInitiated = ref(false);
+const phoneInitiated = ref(false);
+// Convenience for the auto-close-on-success watcher: any tab counts.
+const userInitiatedPairing = computed(
+  () => qrInitiated.value || phoneInitiated.value
+);
 
 const handleError = e => {
   useAlert(e.message);
@@ -72,7 +84,7 @@ const setup = () => {
 };
 const startQrPairing = () => {
   pairingMode.value = 'qr';
-  userInitiatedPairing.value = true;
+  qrInitiated.value = true;
   setup();
 };
 const ensureConnectingForPhoneCode = async () => {
@@ -95,7 +107,7 @@ const disconnect = () => {
 };
 
 const requestPhoneCode = async () => {
-  userInitiatedPairing.value = true;
+  phoneInitiated.value = true;
   phoneCodeError.value = '';
   phoneCode.value = '';
   phoneCodeLoading.value = true;
@@ -144,7 +156,8 @@ watch(
   () => props.show,
   val => {
     if (val) {
-      userInitiatedPairing.value = false;
+      qrInitiated.value = false;
+      phoneInitiated.value = false;
       phoneCode.value = '';
       phoneCodeError.value = '';
       phoneCodeLoading.value = false;
@@ -327,16 +340,20 @@ watchEffect(() => {
 
             <template v-if="pairingMode === 'qr'">
               <!-- Render the QR only after the user has explicitly
-                   clicked Emparelhar in THIS modal session.
-                   `userInitiatedPairing` is reset on every modal open. -->
+                   clicked Emparelhar with the QR tab active. The
+                   backend's /instances/connect call (triggered by the
+                   Phone Code path too) can produce a spontaneous
+                   pairing.qrcode webhook that populates qr_data_url —
+                   without this gate, switching to the QR tab would
+                   reveal that QR even though the user never asked. -->
               <img
-                v-if="userInitiatedPairing && qrDataUrl"
+                v-if="qrInitiated && qrDataUrl"
                 :src="qrDataUrl"
                 alt="QR Code"
                 class="w-[276px] h-[276px]"
               />
               <div
-                v-else-if="userInitiatedPairing && loading"
+                v-else-if="qrInitiated && loading"
                 class="flex flex-col gap-4 items-center"
               >
                 <p>
@@ -369,7 +386,7 @@ watchEffect(() => {
                   }}
                 </p>
                 <p
-                  v-if="phoneCodeError"
+                  v-if="phoneInitiated && phoneCodeError"
                   class="text-xs text-red-500 text-center"
                 >
                   {{ phoneCodeError }}
@@ -383,7 +400,7 @@ watchEffect(() => {
                   </span>
                 </p>
                 <div
-                  v-if="phoneCode"
+                  v-if="phoneInitiated && phoneCode"
                   class="mt-2 px-4 py-3 bg-n-solid-2 rounded text-center"
                 >
                   <p class="text-xs text-n-slate-11 mb-1">
