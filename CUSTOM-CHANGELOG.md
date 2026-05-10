@@ -47,6 +47,10 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`56393d75c`** — fix(whatsapp-propriacloud): per-tab activation flags so phone-code path can't reveal QR
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +32/-15
+- **`f2df5d3bd`** — docs: refresh CUSTOM-CHANGELOG with minha-tag faithful port
+  - `CUSTOM-CHANGELOG.md` +8/-0
 - **`3b3cbf531`** — refactor(whatsapp-propriacloud): faithful port of propriacloud.git/apps/minha instance-tags + side-by-side connection+pair badges
   - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +13/-9
   - `app/javascript/dashboard/composables/usePropriacloudStatus.js` +201/-91
