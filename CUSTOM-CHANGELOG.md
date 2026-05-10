@@ -47,6 +47,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`c6a1d3d8b`** — feat(whatsapp-propriacloud): honor WhatsApp's recommended pair cooldown with persisted lock + live countdown
+  - `app/controllers/api/v1/accounts/inboxes_controller.rb` +28/-0
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +2/-1
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +2/-1
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/components/WhatsappLinkDeviceModal.vue` +48/-0
+  - `app/javascript/dashboard/store/modules/inboxes.js` +12/-7
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +69/-7
+- **`efa74eaac`** — docs: refresh CUSTOM-CHANGELOG with QR-on-phone-code fix
+  - `CUSTOM-CHANGELOG.md` +9/-0
 - **`bc05cf45e`** — fix(whatsapp-propriacloud): no implicit QR on phone-code path + friendly pair errors + correct error semantics
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +64/-18
   - `app/javascript/dashboard/api/inboxes.js` +2/-2
