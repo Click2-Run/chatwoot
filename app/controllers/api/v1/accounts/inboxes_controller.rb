@@ -111,8 +111,23 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
       render json: { error: 'Channel does not support phone-code pairing' }, status: :unprocessable_entity and return
     end
 
+    # Short-circuit if we already know the WhatsApp side is locked out:
+    # don't spam another /instances/pair/phonecode call that will just
+    # come back with the same 429 and (worse) extend the cooldown.
+    locked_until = channel.provider_config['pair_locked_until']
+    if locked_until.present? && Time.parse(locked_until).future?
+      render json: pair_locked_response(channel), status: :unprocessable_entity and return
+    end
+
     result = channel.provider_service.request_phone_pairing_code(phone)
     render json: result
+  rescue Whatsapp::Providers::WhatsappPropriacloudService::PairRateLimitedError => e
+    render json: {
+      error: e.message,
+      code: e.code,
+      cooldown_seconds: e.cooldown_seconds,
+      locked_until: e.locked_until
+    }.compact, status: :unprocessable_entity
   rescue StandardError => e
     render json: friendly_pair_error(e), status: :unprocessable_entity
   end
@@ -234,6 +249,19 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     end
 
     { error: user_message, code: code, cooldown_seconds: cooldown }.compact
+  end
+
+  def pair_locked_response(channel)
+    locked_until = channel.provider_config['pair_locked_until']
+    code = channel.provider_config['pair_lock_code'] || 'PAIR_RATE_LIMITED'
+    seconds_left = locked_until ? (Time.parse(locked_until) - Time.current).to_i : nil
+    {
+      error: 'WhatsApp is still cooling down pair attempts on this number. ' \
+             'Try again after the timer below.',
+      code: code,
+      cooldown_seconds: [seconds_left, 0].compact.max,
+      locked_until: locked_until
+    }.compact
   end
 
   private

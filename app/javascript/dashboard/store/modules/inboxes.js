@@ -431,15 +431,20 @@ export const actions = {
       const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
       return response.data;
     } catch (error) {
-      // Backend already maps known errors (rate-limit / device-limit /
-      // expired-code) to a friendly { error, code, cooldown_seconds }
-      // payload. Propagate it as a plain Error so the modal can render
-      // a user-safe message without leaking the raw axios shape or the
-      // upstream provider's internal JSON.
+      // Backend maps known errors to a friendly
+      // { error, code, cooldown_seconds, locked_until } payload.
+      // Re-throw a plain Error whose .message is the user-safe text and
+      // attach the structured fields on the error object so the modal
+      // can render a countdown without leaking the raw axios shape.
+      const data = error?.response?.data || {};
       const friendly =
-        error?.response?.data?.error ||
+        data.error ||
         'Could not request a pairing code. Please try again in a moment.';
-      throw new Error(friendly);
+      const wrapped = new Error(friendly);
+      wrapped.code = data.code;
+      wrapped.cooldownSeconds = data.cooldown_seconds;
+      wrapped.lockedUntil = data.locked_until;
+      throw wrapped;
     }
   },
   // Hits the rate-limited /refresh_provider_status endpoint and merges

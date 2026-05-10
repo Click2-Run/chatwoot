@@ -573,6 +573,17 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # number" flow on their phone instead of scanning a QR. The instance must
   # be in `connected: true, pair_state: unpaired` state when called.
   # See OpenAPI: POST /instances/pair/phonecode
+  class PairRateLimitedError < StandardError
+    attr_reader :code, :cooldown_seconds, :locked_until
+
+    def initialize(code:, message:, cooldown_seconds:, locked_until: nil)
+      super(message)
+      @code = code
+      @cooldown_seconds = cooldown_seconds
+      @locked_until = locked_until
+    end
+  end
+
   def request_phone_pairing_code(phone_number)
     digits = phone_number.to_s.delete('+').gsub(/\D/, '')
     response = HTTParty.post(
@@ -581,14 +592,65 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       body: { phone: digits }.to_json
     )
 
-    raise ProviderUnavailableError, "Failed to request pairing code: #{response.code} #{response.body}" unless process_response(response)
+    if process_response(response)
+      body = unwrap(response.parsed_response)
+      return {
+        'code' => body['code'] || body['pairingCode'] || body['pairing_code'],
+        'phone' => digits,
+        'expires_in' => body['expires_in'] || body['timeout']
+      }
+    end
 
-    body = unwrap(response.parsed_response)
-    {
-      'code' => body['code'] || body['pairingCode'] || body['pairing_code'],
-      'phone' => digits,
-      'expires_in' => body['expires_in'] || body['timeout']
-    }
+    parsed_error = extract_pair_error(response)
+    if parsed_error[:rate_limited]
+      until_at = Time.current + parsed_error[:cooldown_seconds].to_i
+      stamp_pair_lock!(parsed_error[:cooldown_seconds].to_i, parsed_error[:code])
+      raise PairRateLimitedError.new(
+        code: parsed_error[:code],
+        message: parsed_error[:user_message],
+        cooldown_seconds: parsed_error[:cooldown_seconds].to_i,
+        locked_until: until_at.iso8601
+      )
+    end
+
+    raise ProviderUnavailableError, parsed_error[:user_message] || "Failed to request pairing code: #{response.code}"
+  end
+
+  # Parse the structured error body whatsapp-api returns on 4xx/5xx
+  # pairing failures and surface the bits useful to the dashboard:
+  #   { rate_limited:, code:, user_message:, cooldown_seconds: }
+  def extract_pair_error(response)
+    parsed = response.parsed_response
+    parsed = JSON.parse(parsed) rescue nil if parsed.is_a?(String) # rubocop:disable Style/RescueModifier
+    err = (parsed.is_a?(Hash) && parsed['error']) || {}
+    code = err['code'].to_s
+    cooldown = err.dig('details', 'recommended_cooldown_seconds')
+    rate_limited = code == 'PAIR_RATE_LIMITED' ||
+                   response.code.to_i == 429 ||
+                   err['message'].to_s.match?(/rate-?overlimit/i)
+    user_message = if rate_limited
+                     'WhatsApp temporarily blocked new pair attempts on this number. ' \
+                       'Please wait the cooldown out before trying again.'
+                   elsif code == 'PAIR_DEVICE_LIMIT'
+                     'WhatsApp limit of linked devices reached. Open the app, remove an old linked device, and retry.'
+                   else
+                     'Could not request a pairing code. Please try again in a moment.'
+                   end
+    { rate_limited: rate_limited, code: code.presence || 'PAIR_FAILED',
+      user_message: user_message, cooldown_seconds: cooldown }
+  end
+
+  # Persist when the channel is allowed to retry a pair so the
+  # dashboard can disable the Emparelhar button and the controller
+  # can short-circuit further requests instead of round-tripping to
+  # WhatsApp just to re-collect the same 429.
+  def stamp_pair_lock!(cooldown_seconds, code)
+    return if cooldown_seconds.to_i <= 0
+
+    config = whatsapp_channel.provider_config || {}
+    config['pair_locked_until'] = (Time.current + cooldown_seconds.to_i).iso8601
+    config['pair_lock_code'] = code
+    whatsapp_channel.update!(provider_config: config)
   end
 
   private
