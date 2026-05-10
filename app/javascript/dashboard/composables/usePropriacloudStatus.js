@@ -1,22 +1,119 @@
-// Two-axis status resolver for the propriacloud whatsapp-api provider,
-// modelled directly on propriacloud.git/apps/minha/app/components/whatsapp/instance-tags.ts
-// and the documented state matrix at /api/v1/instances/status.
+// Two-axis status resolver for the propriacloud whatsapp-api provider.
 //
-// State matrix (Web mode, waba=false):
-//   connection_state | pair_state | meaning                         | next action
-//   ---------------- | ---------- | ------------------------------- | ------------
-//   connected        | paired     | ready (Conectada e emparelhada) | Desemparelhar
-//   connected        | pairing    | awaiting QR/phone confirmation  | (in progress)
-//   connected        | unpaired   | online but not paired           | Emparelhar
-//   connecting       | any        | bringing the websocket up       | (in progress)
-//   disconnected     | paired     | session paired but offline      | Conectar (reconnect-only)
-//   disconnected     | unpaired   | not paired, not connected       | Emparelhar
+// FAITHFUL PORT of propriacloud.git/apps/minha/app/components/whatsapp/instance-tags.ts
+//   tag definitions (connectionTags, pairTags, readyTags, listStatusTags)
+//   resolvers       (resolveConnectionTag, resolvePairTag, resolveReadyTag)
+//
+// Source-of-truth fields read from inbox.provider_connection (set by
+// refresh_status_from_api! against /api/v1/instances/status):
+//   connection_state ∈ { connected, connecting, disconnected }
+//   pair_state       ∈ { paired, pairing, unpaired }
+//   is_paired        boolean
+//   is_connected     boolean
+//
+// Action button is intentionally minimal — minha's UX uses a single
+// primary "Conectar" / "Desemparelhar" button next to two badges, and
+// pairing flows live in a dedicated authentication tab (here: the
+// LinkDeviceModal). When connected-but-unpaired we surface "Emparelhar"
+// since Chatwoot's inbox settings doesn't have a separate auth tab.
 
 import { computed } from 'vue';
 
-// Legacy provider_connection.connection (open/close/connecting/reconnecting)
-// → API connection_state vocabulary so resolver works against pre-refresh
-// records that haven't been hit by refresh_status_from_api! yet.
+// ---------------------------------------------------------------------------
+// connectionTags — straight port from instance-tags.ts:55
+// ---------------------------------------------------------------------------
+export const connectionTags = {
+  connected: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTED', // "Conectada"
+    chipClass: 'text-green-700 bg-green-50 border-green-200',
+    dotClass: 'bg-green-500',
+  },
+  connecting: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTING', // "Conectando"
+    chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
+    dotClass: 'bg-amber-500 animate-pulse',
+  },
+  disconnected: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECTED', // "Desconectada"
+    chipClass: 'text-red-700 bg-red-50 border-red-200',
+    dotClass: 'bg-red-500',
+  },
+};
+
+// ---------------------------------------------------------------------------
+// pairTags — straight port from instance-tags.ts:64
+// ---------------------------------------------------------------------------
+export const pairTags = {
+  paired: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.PAIRED', // "Emparelhada"
+    chipClass: 'text-green-700 bg-green-50 border-green-200',
+    dotClass: 'bg-green-500',
+  },
+  pairing: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.PAIRING', // "Emparelhando"
+    chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
+    dotClass: 'bg-amber-500 animate-pulse',
+  },
+  unpaired: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIRED', // "Desemparelhada"
+    chipClass: 'text-red-700 bg-red-50 border-red-200',
+    dotClass: 'bg-red-500',
+  },
+};
+
+// ---------------------------------------------------------------------------
+// readyTags — straight port from instance-tags.ts:80, used as the single
+// chip on conversation headers / list rows where space is tight.
+// ---------------------------------------------------------------------------
+export const readyTags = {
+  ready: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.READY', // "Pronta"
+    chipClass: 'text-green-700 bg-green-50 border-green-200',
+    dotClass: 'bg-green-500',
+  },
+  connected: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTED', // "Conectada" (warning — not paired)
+    chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
+    dotClass: 'bg-amber-500',
+  },
+  disconnected: {
+    labelKey: 'INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECTED', // "Desconectada"
+    chipClass: 'text-red-700 bg-red-50 border-red-200',
+    dotClass: 'bg-red-500',
+  },
+};
+
+// ---------------------------------------------------------------------------
+// resolveConnectionTag — port of instance-tags.ts:107
+// ---------------------------------------------------------------------------
+export function resolveConnectionTag(connectionState) {
+  if (connectionState === 'connected') return 'connected';
+  if (connectionState === 'connecting') return 'connecting';
+  return 'disconnected';
+}
+
+// ---------------------------------------------------------------------------
+// resolvePairTag — port of instance-tags.ts:114
+// ---------------------------------------------------------------------------
+export function resolvePairTag(pairState, isPaired) {
+  if (isPaired) return 'paired';
+  if (pairState === 'pairing') return 'pairing';
+  return 'unpaired';
+}
+
+// ---------------------------------------------------------------------------
+// resolveReadyTag — port of instance-tags.ts:124
+// ---------------------------------------------------------------------------
+export function resolveReadyTag(isReady, isWebSocketConnected) {
+  if (isReady) return 'ready';
+  if (isWebSocketConnected) return 'connected';
+  return 'disconnected';
+}
+
+// ---------------------------------------------------------------------------
+// Legacy fallbacks — keep resolver useful against pre-refresh inboxes
+// whose provider_connection only carries the old `connection` field.
+// ---------------------------------------------------------------------------
 function mapLegacyConnection(connection) {
   if (connection === 'open') return 'connected';
   if (connection === 'connecting' || connection === 'reconnecting')
@@ -31,53 +128,49 @@ function legacyPairState(pc) {
   return 'unpaired';
 }
 
-function deriveStatus(t, flags) {
-  const { isReady, isConnecting, isPairing, isConnected, isPaired } = flags;
-  if (isReady) {
-    return {
-      key: 'ready',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.READY'),
-      dotClass: 'bg-green-500',
-      chipClass: 'text-green-700 bg-green-50 border-green-200',
-    };
-  }
-  if (isConnecting || isPairing) {
-    return {
-      key: 'connecting',
-      label: isPairing
-        ? t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIRING')
-        : t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTING'),
-      dotClass: 'bg-amber-500 animate-pulse',
-      chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
-    };
-  }
-  if (isConnected && !isPaired) {
-    return {
-      key: 'connected_unpaired',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTED_UNPAIRED'),
-      dotClass: 'bg-amber-500',
-      chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
-    };
-  }
-  if (isPaired && !isConnected) {
-    return {
-      key: 'paired_offline',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIRED_OFFLINE'),
-      dotClass: 'bg-amber-500',
-      chipClass: 'text-amber-700 bg-amber-50 border-amber-200',
-    };
-  }
+// ---------------------------------------------------------------------------
+// Inbox → state extraction. Reads the new fields written by
+// refresh_status_from_api! and falls back to the legacy `connection`
+// vocabulary so pre-refresh inboxes still render meaningfully.
+// ---------------------------------------------------------------------------
+function extractState(inbox) {
+  const pc = inbox?.provider_connection || {};
+  const connectionState =
+    pc.connection_state || mapLegacyConnection(pc.connection);
+  const pairState = pc.pair_state || legacyPairState(pc);
+  const isWebSocketConnected = connectionState === 'connected';
+  const isPaired = pc.is_paired === true || pairState === 'paired';
+  const isPairing = pairState === 'pairing';
+  const isReady = isWebSocketConnected && isPaired;
   return {
-    key: 'disconnected',
-    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECTED'),
-    dotClass: 'bg-red-500',
-    chipClass: 'text-red-700 bg-red-50 border-red-200',
+    connectionState,
+    pairState,
+    isWebSocketConnected,
+    isPaired,
+    isPairing,
+    isReady,
   };
 }
 
-function deriveAction(t, flags) {
-  const { isReady, isConnecting, isPairing, isConnected, isPaired } = flags;
-  if (isPairing || isConnecting) {
+// ---------------------------------------------------------------------------
+// Action button derivation — minha's $instanceId header pattern
+// (instance-detail.tsx:2640):
+//   isWebSocketConnected ? <DisconnectMenu /> : <Conectar />
+// We collapse DisconnectMenu into a single "Desemparelhar" entry since
+// Chatwoot only exposes the unpair action; minha's full menu also
+// offers Reiniciar / Recriar which are propriacloud-admin-only.
+// Plus: when connected-but-unpaired we surface "Emparelhar" because
+// Chatwoot doesn't have minha's separate authentication tab.
+// ---------------------------------------------------------------------------
+function deriveAction(t, state) {
+  const {
+    isReady,
+    isWebSocketConnected,
+    isPaired,
+    isPairing,
+    connectionState,
+  } = state;
+  if (connectionState === 'connecting' || isPairing) {
     return {
       kind: 'in_progress',
       label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.IN_PROGRESS'),
@@ -87,73 +180,90 @@ function deriveAction(t, flags) {
   if (isReady) {
     return {
       kind: 'unpair',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT'),
+      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_ACTION'),
       disabled: false,
     };
   }
-  if (isPaired && !isConnected) {
+  if (isWebSocketConnected && !isPaired) {
+    return {
+      kind: 'pair',
+      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR'),
+      disabled: false,
+    };
+  }
+  if (isPaired && !isWebSocketConnected) {
     return {
       kind: 'connect',
       label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECT'),
       disabled: false,
     };
   }
+  // Disconnected + unpaired → "Conectar" first (matches minha) which
+  // takes the user through the LinkDeviceModal where pair happens.
   return {
     kind: 'pair',
-    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR'),
+    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECT'),
     disabled: false,
   };
 }
 
+// ---------------------------------------------------------------------------
+// Tag → chip view-model with i18n applied. Shape matches what the
+// templates render: { label, chipClass, dotClass }.
+// ---------------------------------------------------------------------------
+function tagView(tagDict, key, t) {
+  const def = tagDict[key];
+  return {
+    key,
+    label: t(def.labelKey),
+    chipClass: def.chipClass,
+    dotClass: def.dotClass,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Pure resolver — works against any inbox-shaped object and a t() fn.
-// Used both from Vue 3 setup() (via usePropriacloudStatus composable)
-// and from Vue 2 options-API computed properties.
+// Returns:
+//   isPropriacloud — gate so non-propriacloud inboxes render nothing
+//   connection / pair / ready — chip view-models for each tag set
+//   action — { kind, label, disabled } for the primary button
+//   raw flags for callers that need finer control
+// ---------------------------------------------------------------------------
 export function resolvePropriacloudStatus(inbox, t = key => key) {
   const isPropriacloud =
     inbox?.channel_type === 'Channel::Whatsapp' &&
     inbox?.provider === 'propriacloud';
-  const pc = inbox?.provider_connection || {};
-  const connectionState =
-    pc.connection_state || mapLegacyConnection(pc.connection);
-  const pairState = pc.pair_state || legacyPairState(pc);
-  const error = pc.error || null;
+  const state = extractState(inbox);
+  const error = inbox?.provider_connection?.error || null;
 
-  const isConnected = connectionState === 'connected';
-  const isConnecting = connectionState === 'connecting';
-  const isPaired = pairState === 'paired';
-  const isPairing = pairState === 'pairing';
-  const isReady = isConnected && isPaired;
-  const flags = { isReady, isConnecting, isPairing, isConnected, isPaired };
+  const connectionKey = resolveConnectionTag(state.connectionState);
+  const pairKey = resolvePairTag(state.pairState, state.isPaired);
+  const readyKey = resolveReadyTag(state.isReady, state.isWebSocketConnected);
 
   return {
     isPropriacloud,
-    connectionState,
-    pairState,
     error,
-    isConnected,
-    isConnecting,
-    isPaired,
-    isPairing,
-    isReady,
-    status: deriveStatus(t, flags),
-    action: deriveAction(t, flags),
+    state,
+    connection: tagView(connectionTags, connectionKey, t),
+    pair: tagView(pairTags, pairKey, t),
+    ready: tagView(readyTags, readyKey, t),
+    action: deriveAction(t, state),
   };
 }
 
+// ---------------------------------------------------------------------------
+// Vue 3 setup() composable wrapping the pure resolver in computed refs.
+// ---------------------------------------------------------------------------
 export function usePropriacloudStatus(inboxRef, options = {}) {
   const t = options.t || (key => key);
   const resolved = computed(() => resolvePropriacloudStatus(inboxRef.value, t));
   return {
     isPropriacloud: computed(() => resolved.value.isPropriacloud),
-    connectionState: computed(() => resolved.value.connectionState),
-    pairState: computed(() => resolved.value.pairState),
+    state: computed(() => resolved.value.state),
     error: computed(() => resolved.value.error),
-    isConnected: computed(() => resolved.value.isConnected),
-    isConnecting: computed(() => resolved.value.isConnecting),
-    isPaired: computed(() => resolved.value.isPaired),
-    isPairing: computed(() => resolved.value.isPairing),
-    isReady: computed(() => resolved.value.isReady),
-    status: computed(() => resolved.value.status),
+    connection: computed(() => resolved.value.connection),
+    pair: computed(() => resolved.value.pair),
+    ready: computed(() => resolved.value.ready),
     action: computed(() => resolved.value.action),
   };
 }

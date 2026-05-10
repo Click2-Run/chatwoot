@@ -4,18 +4,22 @@ import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
 import { usePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
 
-// Inline status pill rendered next to the InboxName on every
-// conversation header. Only shows for propriacloud channels.
-// Status taxonomy + label/color logic is centralized in
-// usePropriacloudStatus so badge + Settings panel render the same
-// thing. See app/javascript/dashboard/composables/usePropriacloudStatus.js.
+// Compact single chip rendered next to the InboxName on every
+// conversation header. Uses the `ready` taxonomy from
+// propriacloud.git/apps/minha/instance-tags.ts (resolveReadyTag) which
+// collapses connection × pair into 3 states tuned for tight space:
+//   ready        (green)  — connected + paired
+//   connected    (warning) — connected but not yet paired
+//   disconnected (red)    — anything else
+// The full two-axis breakdown (connection + pair badges) is shown on
+// the Inbox Settings panel.
 const props = defineProps({
   inbox: { type: Object, required: true },
 });
 
 const { t } = useI18n();
 const inboxRef = toRef(props, 'inbox');
-const { isPropriacloud, status, error } = usePropriacloudStatus(inboxRef, {
+const { isPropriacloud, ready, error } = usePropriacloudStatus(inboxRef, {
   t,
 });
 
@@ -39,9 +43,9 @@ const tooltip = computed(() => error.value || '');
     v-if="isPropriacloud"
     :title="tooltip"
     class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xxs font-medium border rounded-full"
-    :class="status.chipClass"
+    :class="ready.chipClass"
   >
-    <span class="w-1.5 h-1.5 rounded-full" :class="status.dotClass" />
-    {{ status.label }}
+    <span class="w-1.5 h-1.5 rounded-full" :class="ready.dotClass" />
+    {{ ready.label }}
   </span>
 </template>

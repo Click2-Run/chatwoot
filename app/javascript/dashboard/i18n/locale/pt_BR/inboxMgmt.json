@@ -5,7 +5,9 @@
       "CONNECTED": "Conectada",
       "CONNECTING": "Conectando",
       "RECONNECTING": "Reconectando",
+      "PAIRED": "Emparelhada",
       "PAIRING": "Emparelhando",
+      "UNPAIRED": "Desemparelhada",
       "CONNECTED_UNPAIRED": "Conectada · sem pareamento",
       "PAIRED_OFFLINE": "Emparelhada · desconectada",
       "DISCONNECTED": "Desconectada",
@@ -13,6 +15,7 @@
       "PAIR": "Emparelhar",
       "CONNECT": "Conectar",
       "DISCONNECT": "Desemparelhar",
+      "UNPAIR_ACTION": "Desemparelhar",
       "META_INSTANCE": "{provider} · Instância: {instanceId}"
     },
     "HEADER": "Caixas de Entrada",

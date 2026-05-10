@@ -5,7 +5,9 @@
       "CONNECTED": "Connected",
       "CONNECTING": "Connecting",
       "RECONNECTING": "Reconnecting",
+      "PAIRED": "Paired",
       "PAIRING": "Pairing",
+      "UNPAIRED": "Unpaired",
       "CONNECTED_UNPAIRED": "Connected · not paired",
       "PAIRED_OFFLINE": "Paired · offline",
       "DISCONNECTED": "Disconnected",
@@ -13,6 +15,7 @@
       "PAIR": "Pair",
       "CONNECT": "Connect",
       "DISCONNECT": "Unpair",
+      "UNPAIR_ACTION": "Unpair",
       "META_INSTANCE": "{provider} · Instance: {instanceId}"
     },
     "HEADER": "Inboxes",

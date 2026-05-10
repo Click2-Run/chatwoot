@@ -167,8 +167,13 @@ export default {
     propriacloudResolved() {
       return resolvePropriacloudStatus(this.inbox, this.$t);
     },
-    propriacloudStatus() {
-      return this.propriacloudResolved.status;
+    // Two separate chips, mirroring propriacloud.git/apps/minha header
+    // (instance-tags.ts connectionTags + pairTags rendered side by side).
+    propriacloudConnectionTag() {
+      return this.propriacloudResolved.connection;
+    },
+    propriacloudPairTag() {
+      return this.propriacloudResolved.pair;
     },
     propriacloudAction() {
       return this.propriacloudResolved.action;
@@ -805,14 +810,31 @@ export default {
           class="mx-6 mb-4 max-w-4xl flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-n-strong bg-n-solid-1"
         >
           <div class="flex items-center gap-3 min-w-0">
-            <span
-              class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-              :class="propriacloudStatus.dotClass"
-            />
-            <div class="flex flex-col min-w-0">
-              <span class="text-sm font-medium text-n-slate-12 truncate">
-                {{ propriacloudStatus.label }}
-              </span>
+            <div class="flex flex-col min-w-0 gap-1">
+              <!-- Two badges side-by-side, mirroring propriacloud.git/apps/minha
+                   header layout: connection tag + pair tag. -->
+              <div class="flex items-center gap-2">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudConnectionTag.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudConnectionTag.dotClass"
+                  />
+                  {{ propriacloudConnectionTag.label }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudPairTag.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudPairTag.dotClass"
+                  />
+                  {{ propriacloudPairTag.label }}
+                </span>
+              </div>
               <span
                 v-if="inbox.provider_connection?.error"
                 class="text-xs text-red-500 truncate"
