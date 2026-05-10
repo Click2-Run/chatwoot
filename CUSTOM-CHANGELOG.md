@@ -47,6 +47,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`cfad7bcd4`** — fix(whatsapp-propriacloud): bypass webhook auth on backfill dispatch + rename Disconnect to Unpair
+  - `app/javascript/dashboard/i18n/locale/en/inboxMgmt.json` +1/-1
+  - `app/javascript/dashboard/i18n/locale/pt_BR/inboxMgmt.json` +1/-1
+  - `app/services/whatsapp/propriacloud/history_backfill_service.rb` +5/-0
+- **`0ad2155cc`** — fix(whatsapp-propriacloud): paged_get must walk data.<resource>[]; accept @lid chats in backfill
+  - `app/services/whatsapp/propriacloud/history_backfill_service.rb` +6/-1
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +37/-2
+- **`1912ee844`** — docs: refresh CUSTOM-CHANGELOG with frontend status auto-reconcile commit
+  - `CUSTOM-CHANGELOG.md` +7/-0
 - **`bafe4bd94`** — feat(whatsapp-propriacloud): auto-reconcile cached provider_connection on inbox visit
   - `app/javascript/dashboard/api/inboxes.js` +4/-0
   - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +19/-1
