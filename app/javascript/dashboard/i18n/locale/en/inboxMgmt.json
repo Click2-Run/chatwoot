@@ -1,11 +1,17 @@
 {
   "INBOX_MGMT": {
     "PROPRIACLOUD_STATUS": {
+      "READY": "Ready",
       "CONNECTED": "Connected",
       "CONNECTING": "Connecting",
       "RECONNECTING": "Reconnecting",
+      "PAIRING": "Pairing",
+      "CONNECTED_UNPAIRED": "Connected · not paired",
+      "PAIRED_OFFLINE": "Paired · offline",
       "DISCONNECTED": "Disconnected",
+      "IN_PROGRESS": "Working…",
       "PAIR": "Pair",
+      "CONNECT": "Connect",
       "DISCONNECT": "Unpair",
       "META_INSTANCE": "{provider} · Instance: {instanceId}"
     },

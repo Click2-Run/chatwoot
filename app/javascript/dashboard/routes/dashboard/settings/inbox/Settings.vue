@@ -9,6 +9,7 @@ import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsTo
 import SettingsFieldSection from 'dashboard/components-next/Settings/SettingsFieldSection.vue';
 import SettingsAccordion from 'dashboard/components-next/Settings/SettingsAccordion.vue';
 import inboxMixin from 'shared/mixins/inboxMixin';
+import { resolvePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
 import FacebookReauthorize from './facebook/Reauthorize.vue';
 import InstagramReauthorize from './channels/instagram/Reauthorize.vue';
 import TiktokReauthorize from './channels/tiktok/Reauthorize.vue';
@@ -158,6 +159,19 @@ export default {
         this.isAWhatsAppZapiChannel ||
         this.is360DialogWhatsAppChannel
       );
+    },
+    // Propriacloud-specific status + next-action resolver (mirrors
+    // propriacloud.git/apps/minha). Exposed as plain computed so the
+    // template can read .propriacloudStatus / .propriacloudAction
+    // without setup() composition gymnastics.
+    propriacloudResolved() {
+      return resolvePropriacloudStatus(this.inbox, this.$t);
+    },
+    propriacloudStatus() {
+      return this.propriacloudResolved.status;
+    },
+    propriacloudAction() {
+      return this.propriacloudResolved.action;
     },
     tabs() {
       let visibleToAllChannelTabs = [
@@ -405,6 +419,48 @@ export default {
     },
     onOpenLinkDeviceModal() {
       this.showLinkDeviceModal = true;
+    },
+    // Click handler for the propriacloud connection panel button.
+    // Dispatches based on the resolver's `kind`:
+    //   pair      → open the QR/phone-code modal (user-driven)
+    //   connect   → reconnect existing pair (no QR pull, no rate-limit hit)
+    //   unpair    → tear down the device link via disconnect_channel_provider
+    //   in_progress → no-op (button is disabled in this case anyway)
+    async onPropriacloudAction() {
+      const kind = this.propriacloudAction.kind;
+      if (kind === 'pair') {
+        this.onOpenLinkDeviceModal();
+        return;
+      }
+      if (kind === 'connect') {
+        try {
+          await this.$store.dispatch('inboxes/setupChannelProvider', {
+            inboxId: this.inbox.id,
+            fetch_qr: false,
+          });
+          await this.$store.dispatch(
+            'inboxes/refreshProviderStatus',
+            this.inbox.id
+          );
+        } catch (e) {
+          useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
+        }
+        return;
+      }
+      if (kind === 'unpair') {
+        try {
+          await this.$store.dispatch(
+            'inboxes/disconnectChannelProvider',
+            this.inbox.id
+          );
+          await this.$store.dispatch(
+            'inboxes/refreshProviderStatus',
+            this.inbox.id
+          );
+        } catch (e) {
+          useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
+        }
+      }
     },
     onCloseLinkDeviceModal() {
       this.showLinkDeviceModal = false;
@@ -751,28 +807,11 @@ export default {
           <div class="flex items-center gap-3 min-w-0">
             <span
               class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
-              :class="{
-                'bg-green-500':
-                  inbox.provider_connection?.connection === 'open',
-                'bg-amber-500':
-                  inbox.provider_connection?.connection === 'connecting' ||
-                  inbox.provider_connection?.connection === 'reconnecting',
-                'bg-red-500':
-                  !inbox.provider_connection?.connection ||
-                  inbox.provider_connection?.connection === 'close',
-              }"
+              :class="propriacloudStatus.dotClass"
             />
             <div class="flex flex-col min-w-0">
               <span class="text-sm font-medium text-n-slate-12 truncate">
-                {{
-                  inbox.provider_connection?.connection === 'open'
-                    ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTED')
-                    : inbox.provider_connection?.connection === 'connecting'
-                      ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECTING')
-                      : inbox.provider_connection?.connection === 'reconnecting'
-                        ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.RECONNECTING')
-                        : $t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECTED')
-                }}
+                {{ propriacloudStatus.label }}
               </span>
               <span
                 v-if="inbox.provider_connection?.error"
@@ -792,12 +831,9 @@ export default {
           </div>
           <NextButton
             slate
-            :label="
-              inbox.provider_connection?.connection === 'open'
-                ? $t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT')
-                : $t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR')
-            "
-            @click="onOpenLinkDeviceModal"
+            :label="propriacloudAction.label"
+            :disabled="propriacloudAction.disabled"
+            @click="onPropriacloudAction"
           />
         </div>
         <WhatsappLinkDeviceModal

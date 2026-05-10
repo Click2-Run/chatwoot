@@ -505,6 +505,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       new_conn['error'] = nil if chat_state == 'open'
     end
     new_conn['connection'] = chat_state
+    # Surface the raw two-axis state from the API so the dashboard can
+    # render the full propriacloud.git status taxonomy (paired+disconnected
+    # → just needs reconnect, unpaired+connected → needs Emparelhar, etc.)
+    new_conn['connection_state'] = status['connection_state']
+    new_conn['pair_state'] = status['pair_state']
+    new_conn['is_paired'] = status['is_paired']
+    new_conn['is_connected'] = status['is_connected']
     whatsapp_channel.update_provider_connection!(new_conn)
 
     # Sync paired_at with API truth for the auto-recovery gate.
