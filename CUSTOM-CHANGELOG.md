@@ -47,6 +47,13 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`bafe4bd94`** — feat(whatsapp-propriacloud): auto-reconcile cached provider_connection on inbox visit
+  - `app/javascript/dashboard/api/inboxes.js` +4/-0
+  - `app/javascript/dashboard/components/widgets/conversation/PropriacloudStatusBadge.vue` +19/-1
+  - `app/javascript/dashboard/routes/dashboard/settings/inbox/Settings.vue` +9/-0
+  - `app/javascript/dashboard/store/modules/inboxes.js` +24/-0
+- **`3b093e0ca`** — docs: refresh CUSTOM-CHANGELOG with cross-stack webhook fix
+  - `CUSTOM-CHANGELOG.md` +5/-0
 - **`b8671f163`** — fix(whatsapp-propriacloud): publish rails on host port + reconcile webhook URL changes
   - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +38/-12
   - `docker-compose.yaml` +12/-2
