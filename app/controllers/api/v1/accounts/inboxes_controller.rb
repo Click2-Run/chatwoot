@@ -119,7 +119,8 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
   # Redis so a chatty UI cannot flood the upstream API.
   def refresh_provider_status
     channel = @inbox.channel
-    unless channel.provider_service.respond_to?(:refresh_status_from_api!)
+    unless channel.provider_service.respond_to?(:reconcile!) ||
+           channel.provider_service.respond_to?(:refresh_status_from_api!)
       render json: { error: 'Channel does not support status refresh' }, status: :unprocessable_entity and return
     end
 
@@ -130,7 +131,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     end
     Redis::Alfred.setex(key, true, 30)
 
-    result = channel.provider_service.refresh_status_from_api!
+    # Prefer reconcile! when available — it not only refreshes status
+    # but also re-registers the webhook + enqueues the history backfill
+    # if it never ran (covers the "server was down when pairing
+    # succeeded" recovery case).
+    result = if channel.provider_service.respond_to?(:reconcile!)
+               channel.provider_service.reconcile!
+             else
+               channel.provider_service.refresh_status_from_api!
+             end
     render json: { result: result, provider_connection: channel.reload.provider_connection }
   rescue StandardError => e
     render json: { error: e.message }, status: :unprocessable_entity

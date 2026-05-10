@@ -423,6 +423,42 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     paged_get('/labels', page: page, page_size: page_size, scope: :tenant)
   end
 
+  # Self-healing post-pair convergence. Called on inbox-visit (via the
+  # refresh_provider_status controller action) so a paired channel
+  # always settles into the same end state regardless of which side
+  # was offline when the pairing happened:
+  #
+  #   1. Pull truth from /instances/status — refreshes connection,
+  #      pair_state, paired_at.
+  #   2. Re-register the webhook with the curated DEFAULT_WEBHOOK_EVENTS
+  #      list. register_webhook! is idempotent (409 → PATCH events).
+  #   3. If paired but history_backfill_completed_at is blank,
+  #      enqueue HistoryBackfillJob — itself idempotent (skips when
+  #      completed_at is present).
+  #
+  # Effect: a freshly-paired session that landed during a Chatwoot
+  # outage / HMR restart still ends up with webhook registered + full
+  # history pulled the moment the user opens the inbox again.
+  def reconcile!
+    refresh_status_from_api!
+
+    begin
+      register_webhook!
+    rescue StandardError => e
+      Rails.logger.warn "Propriacloud reconcile webhook step skipped: #{e.class}: #{e.message[0..120]})"
+    end
+
+    paired = whatsapp_channel.provider_config['paired_at'].present?
+    backfilled = whatsapp_channel.provider_config['history_backfill_completed_at'].present?
+    Whatsapp::Propriacloud::HistoryBackfillJob.perform_later(whatsapp_channel.id) if paired && !backfilled
+
+    {
+      connection: whatsapp_channel.provider_connection['connection'],
+      paired_at: whatsapp_channel.provider_config['paired_at'],
+      history_backfill_completed_at: whatsapp_channel.provider_config['history_backfill_completed_at']
+    }
+  end
+
   # Hit /instances/status and reconcile our cached provider_connection
   # with what the API actually reports. Used on user-driven inbox
   # opens so a stale `connecting` (left over from an abandoned pairing

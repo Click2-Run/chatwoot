@@ -127,6 +127,28 @@ watch(
   }
 );
 
+// Auto-close the modal once pairing succeeds. Only fires when the
+// user explicitly initiated pairing in this session AND the modal
+// is currently visible, so background webhook drift on an already-
+// connected inbox can never auto-dismiss the modal. A short delay
+// lets the "Connected" state flash so the agent understands what
+// happened.
+watch(
+  () => connection.value,
+  val => {
+    if (
+      props.show &&
+      userInitiatedPairing.value &&
+      val === 'open' &&
+      typeof props.onClose === 'function'
+    ) {
+      setTimeout(() => {
+        if (props.show) props.onClose();
+      }, 1500);
+    }
+  }
+);
+
 // No auto-setup or auto-disconnect on mount/unmount — let the user
 // pick the auth method and trigger explicitly. Only Propriacloud uses
 // this modal; for Baileys/Zapi the prior auto-setup behaviour kicks in.
