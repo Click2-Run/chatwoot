@@ -77,6 +77,10 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/pair_phone_code`, { phone });
   }
 
+  refreshProviderStatus(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/refresh_provider_status`);
+  }
+
   convertProvider(inboxId, { provider, providerConfig }) {
     return axios.post(`${this.url}/${inboxId}/convert_provider`, {
       provider,

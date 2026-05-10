@@ -425,6 +425,30 @@ export const actions = {
       return null;
     }
   },
+  // Hits the rate-limited /refresh_provider_status endpoint and merges
+  // the fresh provider_connection back into the cached inbox so the UI
+  // stops showing the value Vuex saw at boot. Used by the inbox
+  // settings panel + conversation-header badge on mount.
+  refreshProviderStatus: async (context, inboxId) => {
+    try {
+      const response = await InboxesAPI.refreshProviderStatus(inboxId);
+      const { provider_connection: providerConnection } = response.data || {};
+      if (!providerConnection) return null;
+      const cached = context.state.records.find(i => i.id === inboxId);
+      if (cached) {
+        context.commit(types.default.SET_INBOXES_ITEM, {
+          ...cached,
+          provider_connection: providerConnection,
+        });
+      }
+      return response.data;
+    } catch (error) {
+      // Refresh is best-effort — never block the UI on a backend hiccup.
+      // eslint-disable-next-line no-console
+      console.warn('refreshProviderStatus failed', error);
+      return null;
+    }
+  },
 };
 
 export const mutations = {

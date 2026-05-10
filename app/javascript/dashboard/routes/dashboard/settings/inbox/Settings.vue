@@ -392,8 +392,17 @@ export default {
   },
   mounted() {
     this.fetchSharedData();
+    this.refreshPropriacloudStatusIfApplicable();
   },
   methods: {
+    // Reconcile the cached provider_connection on the inbox with the
+    // truth from the upstream API. Backend is rate-limited (1 / 30s
+    // per channel) so calling this on every mount is safe. Only fires
+    // for propriacloud — other providers don't expose a status endpoint.
+    refreshPropriacloudStatusIfApplicable() {
+      if (!this.inbox || this.inbox.provider !== 'propriacloud') return;
+      this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
+    },
     onOpenLinkDeviceModal() {
       this.showLinkDeviceModal = true;
     },

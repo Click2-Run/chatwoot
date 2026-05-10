@@ -1,5 +1,6 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
+import { useStore } from 'vuex';
 
 // Tiny status pill that surfaces the propriacloud instance's
 // connection state inline in the conversation header (next to the
@@ -21,6 +22,23 @@ const isPropriacloud = computed(
   () =>
     props.inbox?.channel_type === 'Channel::Whatsapp' &&
     props.inbox?.provider === 'propriacloud'
+);
+
+// Reconcile the cached provider_connection with API truth whenever
+// the conversation header surfaces a propriacloud inbox. Backend
+// rate-limits to 1/30s per channel, so opening multiple conversations
+// on the same inbox in rapid succession only hits the upstream once.
+const store = useStore();
+const triggerRefresh = inboxId => {
+  if (!inboxId) return;
+  store.dispatch('inboxes/refreshProviderStatus', inboxId);
+};
+watch(
+  () => [isPropriacloud.value, props.inbox?.id],
+  ([isPC, id]) => {
+    if (isPC) triggerRefresh(id);
+  },
+  { immediate: true }
 );
 
 const connection = computed(() => props.inbox?.provider_connection?.connection);
