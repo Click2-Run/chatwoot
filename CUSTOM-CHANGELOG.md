@@ -47,6 +47,11 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 ## 2026-05
 
 ### 2026-05-10
+- **`b8671f163`** — fix(whatsapp-propriacloud): publish rails on host port + reconcile webhook URL changes
+  - `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` +38/-12
+  - `docker-compose.yaml` +12/-2
+- **`1bad70e49`** — docs: refresh CUSTOM-CHANGELOG with reconcile + Multicanal brand commits
+  - `CUSTOM-CHANGELOG.md` +10/-0
 - **`29338e6d6`** — feat(whatsapp-propriacloud): self-healing reconcile + auto-close on pair + Multicanal product brand
   - `app/controllers/api/v1/accounts/inboxes_controller.rb` +11/-2
   - `app/javascript/dashboard/i18n/locale/en/login.json` +1/-1
