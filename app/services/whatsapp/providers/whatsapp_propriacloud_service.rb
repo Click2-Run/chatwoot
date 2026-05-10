@@ -678,13 +678,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       }.to_json
     )
 
-    return if process_response(response)
-
-    # 409 Conflict — the same {scope, instance_id, url} webhook already
-    # exists. setup_channel_provider is idempotent, so this is a success,
-    # but the existing record may have a STALE event subscription. Push
-    # the canonical DEFAULT_WEBHOOK_EVENTS list to it so re-runs converge.
-    if response.code == 409
+    if process_response(response) || response.code == 409
+      # ALWAYS run the dedupe sweep — even on a successful POST. The
+      # webhook record is keyed on (scope, instance_id, url), so a URL
+      # change (e.g. swapping a cross-stack container name for
+      # host.docker.internal) creates a NEW row instead of replacing
+      # the old one. sync_webhook_subscription! patches the canonical
+      # entry to the desired (url, events) and deletes any orphans
+      # left over from previous configurations.
       sync_webhook_subscription!
       return
     end
@@ -697,20 +698,45 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # its event filter to DEFAULT_WEBHOOK_EVENTS. Best-effort — a sync
   # failure must not break setup_channel_provider; the next setup run
   # retries.
+  # Reconcile the upstream webhook record with our current desired
+  # state: the canonical Chatwoot URL (which can change when the host
+  # mapping is changed, e.g. host.docker.internal:3003 vs the legacy
+  # cross-stack container name) and the curated event subscription.
+  # Strategy:
+  #   1. List all instance-scoped webhooks for this instance_id.
+  #   2. If one already matches the current URL, just PATCH events.
+  #   3. Otherwise, PATCH the first stale entry with both url+events
+  #      (single-instance webhooks are 1:1 in our model).
+  #   4. Delete any leftover orphans pointing at obsolete URLs so the
+  #      provider doesn't fan-out duplicate webhook deliveries.
   def sync_webhook_subscription!
     list = HTTParty.get("#{provider_url}/webhooks?scope=instance&instance_id=#{CGI.escape(instance_id)}",
                         headers: api_headers)
     return unless list.success?
 
-    items = extract_webhook_list(list.parsed_response)
-    target = items.find { |w| (w['url'] || w[:url]) == inbox_webhook_url }
-    return unless target
+    items = extract_webhook_list(list.parsed_response).select do |w|
+      iid = w['instance_id'] || w[:instance_id] || w.dig('scope_target', 'instance_id')
+      iid.to_s == instance_id.to_s
+    end
+    desired_url = inbox_webhook_url
+    primary = items.find { |w| (w['url'] || w[:url]) == desired_url } ||
+              items.find { |w| (w['url'] || w[:url]).to_s.include?('/webhooks/whatsapp/') } ||
+              items.first
+    return unless primary
 
+    primary_id = primary['id'] || primary[:id]
     HTTParty.patch(
-      "#{provider_url}/webhooks/#{target['id'] || target[:id]}",
+      "#{provider_url}/webhooks/#{primary_id}",
       headers: api_headers,
-      body: { events: DEFAULT_WEBHOOK_EVENTS, enabled: true, active: true }.to_json
+      body: { url: desired_url, events: DEFAULT_WEBHOOK_EVENTS, enabled: true, active: true }.to_json
     )
+
+    items.each do |w|
+      id = w['id'] || w[:id]
+      next if id == primary_id
+
+      HTTParty.delete("#{provider_url}/webhooks/#{id}", headers: api_headers)
+    end
   rescue StandardError => e
     Rails.logger.warn "Propriacloud: webhook subscription sync skipped (#{e.class}: #{e.message[0..120]})"
   end

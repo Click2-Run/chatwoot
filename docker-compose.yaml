@@ -32,8 +32,18 @@ services:
       - postgres
       - redis
       - mailhog
-    # ports:
-    #   - 3000:3000
+    # Publish rails directly on host port 3003 so containers from other
+    # docker-compose stacks (e.g. the whatsapp-api propriacloud
+    # provider) can reach Chatwoot via `host.docker.internal:3003`
+    # without depending on cross-stack container DNS, which doesn't
+    # survive teardown/recreation of either side. Host port 3000 is
+    # owned by Caddy (HTTPS terminator); 3001/3002 already in use on
+    # this dev host, so 3003 is the first free slot.
+    ports:
+      # Bind to all host interfaces so containers from other compose
+      # stacks reach us via the bridge gateway (host.docker.internal).
+      # 127.0.0.1 binding would only accept loopback traffic.
+      - "0.0.0.0:3003:3000"
     env_file: .env
     environment:
       - VITE_DEV_SERVER_HOST=vite
