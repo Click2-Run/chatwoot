@@ -46,7 +46,32 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 
 ## 2026-05
 
-### 2026-05-10 (Própria Cloud audit follow-ups)
+### 2026-05-10 (Própria Cloud action wiring — `c2857673f`)
+
+- **feat(whatsapp-propriacloud): faithful `Conectar` / `Emparelhar` / `Desconectar` / `Desemparelhar` wiring**
+  - Backend: new `POST /api/v1/accounts/:id/inboxes/:id/connect_only` (mirrors `disconnect_only`/`unpair_only`) calling whatsapp-api `POST /instances/connect` directly. Distinct from the heavyweight `setup_channel_provider` (which would also re-create the instance + re-register the webhook); Conectar after a graceful disconnect should NOT touch those.
+  - Frontend: new Vuex `inboxes/connectOnly` + `InboxesAPI.connectOnly` client wired into the Informações tab's button row.
+  - `usePropriacloudStatus.deriveActions`: stops mutating `disabled` from steady state — buttons stay rendered+clickable across transitions. Now exposes axis-specific `transitioning` so the matching button can ignore clicks while the WS or pair handshake is in flight.
+  - `Settings.vue`: per-action `propriacloudPendingKind` tracks which of the four buttons is currently submitting, so we spin **only** that one and disable the other while the API call resolves. Replaces the `:is-loading="act.disabled"` bug that turned every disabled button into a never-resolving spinner.
+  - `onPropriacloudAction`: serialized (one action at a time), short-circuits if the axis is already mid-handshake, runs the matching `connect_only` / `disconnect_only` / `unpair_only` (or opens the Pair modal), then a 2-pass refresh (immediate + 3s delayed) to catch the `connection.*` / `pairing.*` webhook tail.
+  - "Advanced" tab renamed to "Configuration" / "Configurações" (en/es/pt/pt_BR). Configurações is read-only; the four action buttons live exclusively on Informações to avoid duplication and accidental firing from a tab the user wandered into.
+  - Reference port: `propriacloud.git/apps/minha/app/services/whatsapp.server.ts` (connectInstance/disconnectInstance/unpairInstance pattern), `app/components/whatsapp/DisconnectMenu.tsx` (per-axis disabled flag + transient submitting spinner), `app/routes/whatsapp/$instanceId.tsx` (state matrix → button label & enablement).
+  - Spec: `connect_only` happy path (state flip) + 503 raise.
+
+State matrix now in effect (Informações tab, two side-by-side buttons):
+
+| connection_state | pair_state | Connection axis    | Pair axis          |
+| :--------------- | :--------- | :----------------- | :----------------- |
+| disconnected     | unpaired   | Conectar           | Emparelhar         |
+| disconnected     | paired     | Conectar           | Desemparelhar (★)  |
+| connecting       | any        | Conectar (•)       | (other axis)       |
+| connected        | unpaired   | Desconectar (★)    | Emparelhar         |
+| connected        | paired     | Desconectar (★)    | Desemparelhar (★)  |
+| any              | pairing    | Desconectar        | Emparelhar (•)     |
+
+★ = `window.confirm()` before firing • = transitioning, click ignored
+
+### 2026-05-10 (Própria Cloud audit follow-ups — `82bbaa624b`)
 
 > Production-readiness sweep against the whatsapp-api `develop @ a5f5471d`
 > OpenAPI 3.1 v1.4.0 contract. Closes 20 audit findings from
