@@ -90,10 +90,15 @@ class Whatsapp::Propriacloud::HistoryBackfillService
   # Reuses the live-tail messages_upsert handler so backfill goes through
   # the SAME pipeline as webhook deliveries — same dedupe, same content
   # parsing, same Conversation/Message creation. Avoids forking logic.
+  # We must pass `webhook_verify_token` and `custom_id` matching what the
+  # live webhook would carry, because IncomingMessagePropriacloudService
+  # validates both before dispatching to handlers.
   def dispatch_via_live_tail(messages)
     payload = {
       'event_type' => 'message.received',
       'instance_id' => @channel.provider_config['instance_id'],
+      'custom_id' => @inbox.account_id.to_s,
+      'webhook_verify_token' => @channel.provider_config['webhook_verify_token'],
       'data' => { 'messages' => messages.map { |m| m.deep_stringify_keys } }
     }
     Whatsapp::IncomingMessagePropriacloudService.new(inbox: @inbox, params: payload).perform

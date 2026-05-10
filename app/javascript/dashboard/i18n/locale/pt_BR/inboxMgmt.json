@@ -6,7 +6,7 @@
       "RECONNECTING": "Reconectando",
       "DISCONNECTED": "Desconectada",
       "PAIR": "Emparelhar",
-      "DISCONNECT": "Desconectar",
+      "DISCONNECT": "Desemparelhar",
       "META_INSTANCE": "{provider} · Instância: {instanceId}"
     },
     "HEADER": "Caixas de Entrada",

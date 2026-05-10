@@ -6,7 +6,7 @@
       "RECONNECTING": "Reconnecting",
       "DISCONNECTED": "Disconnected",
       "PAIR": "Pair",
-      "DISCONNECT": "Disconnect",
+      "DISCONNECT": "Unpair",
       "META_INSTANCE": "{provider} · Instance: {instanceId}"
     },
     "HEADER": "Inboxes",
