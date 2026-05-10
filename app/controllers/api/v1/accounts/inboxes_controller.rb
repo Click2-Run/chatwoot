@@ -109,6 +109,34 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     channel.update_provider_connection!(connection: 'close') if channel.respond_to?(:update_provider_connection!)
   end
 
+  # POST /instances/disconnect — graceful disconnect that KEEPS the pair.
+  # Reverse with setup_channel_provider({ fetch_qr: false }) (Conectar).
+  def disconnect_only
+    channel = @inbox.channel
+    unless channel.provider_service.respond_to?(:disconnect_only)
+      render json: { error: 'Channel does not support disconnect-only' }, status: :unprocessable_entity and return
+    end
+    channel.provider_service.disconnect_only
+    head :ok
+  rescue StandardError => e
+    Rails.logger.warn "disconnect_only failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: 'Could not disconnect the WhatsApp instance. Please try again.', code: 'DISCONNECT_FAILED' }, status: :unprocessable_entity
+  end
+
+  # POST /instances/unpair — remove the device link but KEEP the instance.
+  # User must pair again afterwards via QR or phone code.
+  def unpair_only
+    channel = @inbox.channel
+    unless channel.provider_service.respond_to?(:unpair_only)
+      render json: { error: 'Channel does not support unpair' }, status: :unprocessable_entity and return
+    end
+    channel.provider_service.unpair_only
+    head :ok
+  rescue StandardError => e
+    Rails.logger.warn "unpair_only failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: 'Could not unpair the WhatsApp device. Please try again.', code: 'UNPAIR_FAILED' }, status: :unprocessable_entity
+  end
+
   def pair_phone_code
     channel = @inbox.channel
     phone = params[:phone].presence || channel.phone_number

@@ -81,6 +81,14 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/refresh_provider_status`);
   }
 
+  disconnectOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/disconnect_only`);
+  }
+
+  unpairOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/unpair_only`);
+  }
+
   convertProvider(inboxId, { provider, providerConfig }) {
     return axios.post(`${this.url}/${inboxId}/convert_provider`, {
       provider,

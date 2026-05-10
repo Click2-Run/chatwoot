@@ -1,6 +1,7 @@
 <script>
 import { useAlert } from 'dashboard/composables';
 import inboxMixin from 'shared/mixins/inboxMixin';
+import { resolvePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
 import SettingsSection from '../../../../../components/SettingsSection.vue';
 import SettingsFieldSection from 'dashboard/components-next/Settings/SettingsFieldSection.vue';
 import SettingsToggleSection from 'dashboard/components-next/Settings/SettingsToggleSection.vue';
@@ -81,6 +82,13 @@ export default {
   computed: {
     isEmbeddedSignupWhatsApp() {
       return this.inbox.provider_config?.source === 'embedded_signup';
+    },
+    // Read-only status snapshot for the propriacloud Advanced tab.
+    // Action buttons are NOT rendered here on purpose (they live on
+    // the main Information tab); this computed only powers the chip
+    // display.
+    propriacloudResolved() {
+      return resolvePropriacloudStatus(this.inbox, this.$t);
     },
     whatsappAppId() {
       return window.chatwootConfig?.whatsappAppId;
@@ -638,7 +646,35 @@ export default {
             with-phone-number
             with-provider-connection-status
           />
-          <NextButton class="w-fit" @click="onOpenLinkDeviceModal">
+          <!-- Propriacloud: Advanced tab is READ-ONLY for the connection
+               status. Connect/Disconnect/Pair/Unpair buttons live on
+               the main Information tab to avoid duplication and
+               accidental firing from a tab the user wandered into. -->
+          <template v-if="isAWhatsAppPropriacloudChannel">
+            <div class="flex items-center gap-2 flex-wrap mt-1">
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                :class="propriacloudResolved.connection.chipClass"
+              >
+                <span
+                  class="w-1.5 h-1.5 rounded-full"
+                  :class="propriacloudResolved.connection.dotClass"
+                />
+                {{ propriacloudResolved.connection.label }}
+              </span>
+              <span
+                class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                :class="propriacloudResolved.pair.chipClass"
+              >
+                <span
+                  class="w-1.5 h-1.5 rounded-full"
+                  :class="propriacloudResolved.pair.dotClass"
+                />
+                {{ propriacloudResolved.pair.label }}
+              </span>
+            </div>
+          </template>
+          <NextButton v-else class="w-fit" @click="onOpenLinkDeviceModal">
             {{
               $t(
                 'INBOX_MGMT.SETTINGS_POPUP.WHATSAPP_MANAGE_PROVIDER_CONNECTION_BUTTON'

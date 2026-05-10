@@ -15,7 +15,12 @@
       "PAIR": "Emparelhar",
       "CONNECT": "Conectar",
       "DISCONNECT": "Desemparelhar",
+      "DISCONNECT_ACTION": "Desconectar",
       "UNPAIR_ACTION": "Desemparelhar",
+      "DISCONNECT_CONFIRM_TITLE": "Desconectar a instância?",
+      "DISCONNECT_CONFIRM_MESSAGE": "A instância vai parar de receber e enviar mensagens até reconectar. O pareamento com o WhatsApp continua válido — depois é só clicar em Conectar.",
+      "UNPAIR_CONFIRM_TITLE": "Desemparelhar o dispositivo?",
+      "UNPAIR_CONFIRM_MESSAGE": "O vínculo com o WhatsApp será removido. Você precisará emparelhar novamente via QR Code ou Código por telefone para voltar a usar a caixa de entrada.",
       "META_INSTANCE": "{provider} · Instância: {instanceId}"
     },
     "HEADER": "Caixas de Entrada",
@@ -777,9 +782,9 @@
       }
     },
     "TABS": {
-      "SETTINGS": "Configurações",
+      "SETTINGS": "Informações",
       "COLLABORATORS": "Agentes",
-      "CONFIGURATION": "Configuração",
+      "CONFIGURATION": "Avançado",
       "CAMPAIGN": "Campanhas",
       "PRE_CHAT_FORM": "Formulário Chat Pré",
       "BUSINESS_HOURS": "Horário de funcionamento",

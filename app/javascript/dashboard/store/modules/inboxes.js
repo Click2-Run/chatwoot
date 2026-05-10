@@ -457,6 +457,30 @@ export const actions = {
   // the fresh provider_connection back into the cached inbox so the UI
   // stops showing the value Vuex saw at boot. Used by the inbox
   // settings panel + conversation-header badge on mount.
+  // Graceful disconnect — keeps pair, just brings the websocket down.
+  // Reverse with setupChannelProvider({ fetch_qr: false }) (Conectar).
+  disconnectOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.disconnectOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not disconnect the WhatsApp instance. Please try again.';
+      throw new Error(friendly);
+    }
+  },
+  // Unpair the device link but keep the instance. User must pair again
+  // afterwards via QR or phone code.
+  unpairOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.unpairOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not unpair the WhatsApp device. Please try again.';
+      throw new Error(friendly);
+    }
+  },
   refreshProviderStatus: async (context, inboxId) => {
     try {
       const response = await InboxesAPI.refreshProviderStatus(inboxId);

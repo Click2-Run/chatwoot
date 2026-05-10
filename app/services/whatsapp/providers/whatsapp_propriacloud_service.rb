@@ -243,6 +243,10 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     Rails.logger.warn "Propriacloud: could not fetch QR (#{e.class}: #{e.message[0..120]})"
   end
 
+  # Full teardown — disconnect AND delete the instance. Used by the
+  # Channel::Whatsapp before_destroy hook when the inbox itself is being
+  # removed from Chatwoot. NEVER call from a UI button — it permanently
+  # removes the instance record on the api side.
   def disconnect_channel_provider
     disconnect_response = HTTParty.post(
       "#{provider_url}/instances/disconnect#{instance_query}",
@@ -258,6 +262,34 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
     raise ProviderUnavailableError, 'Failed to delete whatsapp-api instance' unless process_response(delete_response)
 
+    true
+  end
+
+  # POST /instances/disconnect — bring the websocket down but KEEP the
+  # device pair on the api side. Re-Conectar later just brings the
+  # connection back up; no re-emparelhamento required. Idempotent: a
+  # second call when already disconnected is logged but does not raise.
+  def disconnect_only
+    response = HTTParty.post("#{provider_url}/instances/disconnect#{instance_query}",
+                             headers: api_headers)
+    Rails.logger.warn "disconnect_only: api returned #{response.code}" unless process_response(response)
+    true
+  end
+
+  # POST /instances/unpair — remove the device link with WhatsApp but
+  # KEEP the instance record on the api side. After this the instance
+  # is connected+unpaired (or disconnected+unpaired depending on api
+  # behaviour) and the user must pair again via QR or phone code.
+  def unpair_only
+    response = HTTParty.post("#{provider_url}/instances/unpair#{instance_query}",
+                             headers: api_headers)
+    raise ProviderUnavailableError, "Failed to unpair instance: #{response.code} #{response.body[0..200]}" unless process_response(response)
+
+    config = whatsapp_channel.provider_config || {}
+    if config['paired_at'].present?
+      config.delete('paired_at')
+      whatsapp_channel.update!(provider_config: config)
+    end
     true
   end
 

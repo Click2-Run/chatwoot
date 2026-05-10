@@ -15,7 +15,12 @@
       "PAIR": "Pair",
       "CONNECT": "Connect",
       "DISCONNECT": "Unpair",
+      "DISCONNECT_ACTION": "Disconnect",
       "UNPAIR_ACTION": "Unpair",
+      "DISCONNECT_CONFIRM_TITLE": "Disconnect the instance?",
+      "DISCONNECT_CONFIRM_MESSAGE": "The instance will stop sending and receiving messages until you reconnect. The WhatsApp pairing stays intact — just click Connect to bring it back.",
+      "UNPAIR_CONFIRM_TITLE": "Unpair the device?",
+      "UNPAIR_CONFIRM_MESSAGE": "The WhatsApp device link will be removed. You'll need to pair again via QR code or phone code to use this inbox.",
       "META_INSTANCE": "{provider} · Instance: {instanceId}"
     },
     "HEADER": "Inboxes",
@@ -777,9 +782,9 @@
       }
     },
     "TABS": {
-      "SETTINGS": "Settings",
+      "SETTINGS": "Information",
       "COLLABORATORS": "Collaborators",
-      "CONFIGURATION": "Configuration",
+      "CONFIGURATION": "Advanced",
       "CAMPAIGN": "Campaigns",
       "PRE_CHAT_FORM": "Pre Chat Form",
       "BUSINESS_HOURS": "Business Hours",

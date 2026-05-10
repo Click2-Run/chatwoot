@@ -175,8 +175,8 @@ export default {
     propriacloudPairTag() {
       return this.propriacloudResolved.pair;
     },
-    propriacloudAction() {
-      return this.propriacloudResolved.action;
+    propriacloudActions() {
+      return this.propriacloudResolved.actions;
     },
     tabs() {
       let visibleToAllChannelTabs = [
@@ -425,46 +425,45 @@ export default {
     onOpenLinkDeviceModal() {
       this.showLinkDeviceModal = true;
     },
-    // Click handler for the propriacloud connection panel button.
-    // Dispatches based on the resolver's `kind`:
-    //   pair      → open the QR/phone-code modal (user-driven)
-    //   connect   → reconnect existing pair (no QR pull, no rate-limit hit)
-    //   unpair    → tear down the device link via disconnect_channel_provider
-    //   in_progress → no-op (button is disabled in this case anyway)
-    async onPropriacloudAction() {
-      const kind = this.propriacloudAction.kind;
-      if (kind === 'pair') {
-        this.onOpenLinkDeviceModal();
-        return;
+    // Click handler for any propriacloud action button. Receives the
+    // resolved action object: { kind, variant, label, confirm? }.
+    // Destructive kinds (disconnect / unpair) require an explicit user
+    // confirm() before firing.
+    //   connect     → setupChannelProvider({ fetch_qr: false }) — brings
+    //                 the websocket up; if instance is unpaired the
+    //                 user still needs to click Emparelhar afterwards.
+    //   disconnect  → disconnectOnly — graceful, KEEPS the pair.
+    //   pair        → opens the LinkDeviceModal (user picks QR/phone).
+    //   unpair      → unpairOnly — removes device link, keeps instance.
+    async onPropriacloudAction(act) {
+      if (!act || act.disabled) return;
+      if (act.confirm) {
+        const ok = window.confirm(
+          `${act.confirm.title}\n\n${act.confirm.message}`
+        );
+        if (!ok) return;
       }
-      if (kind === 'connect') {
-        try {
+      try {
+        if (act.kind === 'pair') {
+          this.onOpenLinkDeviceModal();
+          return;
+        }
+        if (act.kind === 'connect') {
           await this.$store.dispatch('inboxes/setupChannelProvider', {
             inboxId: this.inbox.id,
             fetch_qr: false,
           });
-          await this.$store.dispatch(
-            'inboxes/refreshProviderStatus',
-            this.inbox.id
-          );
-        } catch (e) {
-          useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
+        } else if (act.kind === 'disconnect') {
+          await this.$store.dispatch('inboxes/disconnectOnly', this.inbox.id);
+        } else if (act.kind === 'unpair') {
+          await this.$store.dispatch('inboxes/unpairOnly', this.inbox.id);
         }
-        return;
-      }
-      if (kind === 'unpair') {
-        try {
-          await this.$store.dispatch(
-            'inboxes/disconnectChannelProvider',
-            this.inbox.id
-          );
-          await this.$store.dispatch(
-            'inboxes/refreshProviderStatus',
-            this.inbox.id
-          );
-        } catch (e) {
-          useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
-        }
+        await this.$store.dispatch(
+          'inboxes/refreshProviderStatus',
+          this.inbox.id
+        );
+      } catch (e) {
+        useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
       }
     },
     onCloseLinkDeviceModal() {
@@ -811,9 +810,21 @@ export default {
         >
           <div class="flex items-center gap-3 min-w-0">
             <div class="flex flex-col min-w-0 gap-1">
-              <!-- Two badges side-by-side, mirroring propriacloud.git/apps/minha
-                   header layout: connection tag + pair tag. -->
-              <div class="flex items-center gap-2">
+              <!-- Provider/instance header line in bold first, then the
+                   two status chips below. Order intentional: agents
+                   identify which inbox they're looking at before they
+                   read the live state. -->
+              <span class="text-sm font-semibold text-n-slate-12 truncate">
+                {{
+                  $t('INBOX_MGMT.PROPRIACLOUD_STATUS.META_INSTANCE', {
+                    provider: whatsAppAPIProviderName,
+                    instanceId: inbox.provider_config?.instance_id || '—',
+                  })
+                }}
+              </span>
+              <!-- Two side-by-side chips (connection tag + pair tag) —
+                   mirrors propriacloud.git/apps/minha layout. -->
+              <div class="flex items-center gap-2 flex-wrap">
                 <span
                   class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
                   :class="propriacloudConnectionTag.chipClass"
@@ -841,22 +852,23 @@ export default {
               >
                 {{ inbox.provider_connection.error }}
               </span>
-              <span v-else class="text-xs text-n-slate-10 truncate">
-                {{
-                  $t('INBOX_MGMT.PROPRIACLOUD_STATUS.META_INSTANCE', {
-                    provider: whatsAppAPIProviderName,
-                    instanceId: inbox.provider_config?.instance_id || '—',
-                  })
-                }}
-              </span>
             </div>
           </div>
-          <NextButton
-            slate
-            :label="propriacloudAction.label"
-            :disabled="propriacloudAction.disabled"
-            @click="onPropriacloudAction"
-          />
+          <!-- Action row: one button per axis (connection / pair).
+               Destructive ones (Desconectar / Desemparelhar) carry a
+               confirm payload from the resolver and prompt before
+               firing. -->
+          <div class="flex items-center gap-2 flex-wrap">
+            <NextButton
+              v-for="act in propriacloudActions"
+              :key="act.kind"
+              :slate="act.variant !== 'destructive'"
+              :ruby="act.variant === 'destructive'"
+              :label="act.label"
+              :disabled="act.disabled"
+              @click="onPropriacloudAction(act)"
+            />
+          </div>
         </div>
         <WhatsappLinkDeviceModal
           v-if="showLinkDeviceModal"

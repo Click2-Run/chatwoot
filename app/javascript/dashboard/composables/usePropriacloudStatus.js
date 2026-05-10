@@ -153,58 +153,78 @@ function extractState(inbox) {
 }
 
 // ---------------------------------------------------------------------------
-// Action button derivation — minha's $instanceId header pattern
-// (instance-detail.tsx:2640):
-//   isWebSocketConnected ? <DisconnectMenu /> : <Conectar />
-// We collapse DisconnectMenu into a single "Desemparelhar" entry since
-// Chatwoot only exposes the unpair action; minha's full menu also
-// offers Reiniciar / Recriar which are propriacloud-admin-only.
-// Plus: when connected-but-unpaired we surface "Emparelhar" because
-// Chatwoot doesn't have minha's separate authentication tab.
+// Action derivation — returns an ARRAY of buttons to render side-by-side,
+// each with its own kind + variant + optional confirm payload. The two
+// axes (connection / pair) are independent, so most states surface two
+// buttons (one per axis) instead of a single primary action. Destructive
+// actions carry a `confirm` block that the UI uses to prompt the user.
+//
+// State matrix:
+//   connected + paired       → [Desconectar (confirm), Desemparelhar (confirm)]
+//   connected + unpaired     → [Desconectar (confirm), Emparelhar]
+//   disconnected + paired    → [Conectar, Desemparelhar (confirm)]
+//   disconnected + unpaired  → [Conectar, Emparelhar]
+//   connecting / pairing     → [] (in progress, nothing actionable)
 // ---------------------------------------------------------------------------
-function deriveAction(t, state) {
-  const {
-    isReady,
-    isWebSocketConnected,
-    isPaired,
-    isPairing,
-    connectionState,
-  } = state;
-  if (connectionState === 'connecting' || isPairing) {
-    return {
-      kind: 'in_progress',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.IN_PROGRESS'),
-      disabled: true,
-    };
-  }
-  if (isReady) {
-    return {
-      kind: 'unpair',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_ACTION'),
-      disabled: false,
-    };
-  }
-  if (isWebSocketConnected && !isPaired) {
-    return {
-      kind: 'pair',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR'),
-      disabled: false,
-    };
-  }
-  if (isPaired && !isWebSocketConnected) {
-    return {
-      kind: 'connect',
-      label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECT'),
-      disabled: false,
-    };
-  }
-  // Disconnected + unpaired → "Conectar" first (matches minha) which
-  // takes the user through the LinkDeviceModal where pair happens.
+const KIND_CONNECT = 'connect';
+const KIND_DISCONNECT = 'disconnect';
+const KIND_PAIR = 'pair';
+const KIND_UNPAIR = 'unpair';
+
+function actionConnect(t) {
   return {
-    kind: 'pair',
+    kind: KIND_CONNECT,
     label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.CONNECT'),
+    variant: 'primary',
     disabled: false,
   };
+}
+
+function actionDisconnect(t) {
+  return {
+    kind: KIND_DISCONNECT,
+    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT_ACTION'),
+    variant: 'destructive',
+    disabled: false,
+    confirm: {
+      title: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT_CONFIRM_TITLE'),
+      message: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT_CONFIRM_MESSAGE'),
+      ok: t('INBOX_MGMT.PROPRIACLOUD_STATUS.DISCONNECT_ACTION'),
+    },
+  };
+}
+
+function actionPair(t) {
+  return {
+    kind: KIND_PAIR,
+    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.PAIR'),
+    variant: 'primary',
+    disabled: false,
+  };
+}
+
+function actionUnpair(t) {
+  return {
+    kind: KIND_UNPAIR,
+    label: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_ACTION'),
+    variant: 'destructive',
+    disabled: false,
+    confirm: {
+      title: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_CONFIRM_TITLE'),
+      message: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_CONFIRM_MESSAGE'),
+      ok: t('INBOX_MGMT.PROPRIACLOUD_STATUS.UNPAIR_ACTION'),
+    },
+  };
+}
+
+function deriveActions(t, state) {
+  const { isWebSocketConnected, isPaired, isPairing, connectionState } = state;
+  if (connectionState === 'connecting' || isPairing) return [];
+
+  const result = [];
+  result.push(isWebSocketConnected ? actionDisconnect(t) : actionConnect(t));
+  result.push(isPaired ? actionUnpair(t) : actionPair(t));
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -247,7 +267,7 @@ export function resolvePropriacloudStatus(inbox, t = key => key) {
     connection: tagView(connectionTags, connectionKey, t),
     pair: tagView(pairTags, pairKey, t),
     ready: tagView(readyTags, readyKey, t),
-    action: deriveAction(t, state),
+    actions: deriveActions(t, state),
   };
 }
 
@@ -264,6 +284,6 @@ export function usePropriacloudStatus(inboxRef, options = {}) {
     connection: computed(() => resolved.value.connection),
     pair: computed(() => resolved.value.pair),
     ready: computed(() => resolved.value.ready),
-    action: computed(() => resolved.value.action),
+    actions: computed(() => resolved.value.actions),
   };
 }

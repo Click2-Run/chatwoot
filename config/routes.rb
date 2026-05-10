@@ -279,6 +279,8 @@ Rails.application.routes.draw do
             post :set_agent_bot, on: :member
             post :setup_channel_provider, on: :member
             post :disconnect_channel_provider, on: :member
+            post :disconnect_only, on: :member
+            post :unpair_only, on: :member
             post :pair_phone_code, on: :member
             post :refresh_provider_status, on: :member
             post :convert_provider, on: :member
