@@ -938,9 +938,16 @@ export default {
                confirm payload from the resolver and prompt before
                firing. -->
           <div class="flex items-center gap-2 flex-wrap">
+            <!-- sm + outline keeps both axes visually equal weight and
+                 lets the connection/pair chips above stay the focal
+                 point. Destructive actions remain ruby-colored (text +
+                 border) so they're still clearly distinct from primary
+                 actions, just not screaming red fills. -->
             <NextButton
               v-for="act in propriacloudActions"
               :key="act.kind"
+              sm
+              outline
               :slate="act.variant !== 'destructive'"
               :ruby="act.variant === 'destructive'"
               :label="act.label"
