@@ -161,6 +161,26 @@ const pairingButtonLoading = computed(
 // rendered QR / phone-code never leaks across opens. The user must
 // click Emparelhar again on each modal session.
 let lockTickerId = null;
+// Pair-detection poll. While the modal is open mid-pairing, the
+// pair handshake fires server-side asynchronously and the Vuex inbox
+// snapshot only updates when SOMETHING refetches. The connection.*
+// webhook tail doesn't reliably refresh the Vuex cache (no cable
+// subscription on provider_connection), so we poll the rate-limited
+// /refresh_provider_status endpoint every 3s while pairing is in
+// flight, until we observe `is_paired=true`. Then auto-close.
+let pairPollId = null;
+const startPairPoll = () => {
+  if (pairPollId) return;
+  pairPollId = setInterval(() => {
+    store.dispatch('inboxes/refreshProviderStatus', props.inbox.id);
+  }, 3000);
+};
+const stopPairPoll = () => {
+  if (pairPollId) {
+    clearInterval(pairPollId);
+    pairPollId = null;
+  }
+};
 watch(
   () => props.show,
   val => {
@@ -183,9 +203,12 @@ watch(
           nowTick.value = Date.now();
         }, 1000);
       }
-    } else if (lockTickerId) {
-      clearInterval(lockTickerId);
-      lockTickerId = null;
+    } else {
+      if (lockTickerId) {
+        clearInterval(lockTickerId);
+        lockTickerId = null;
+      }
+      stopPairPoll();
     }
   }
 );
@@ -194,29 +217,35 @@ onUnmounted(() => {
     clearInterval(lockTickerId);
     lockTickerId = null;
   }
+  stopPairPoll();
 });
 
-// Auto-close the modal once pairing succeeds. Only fires when the
-// user explicitly initiated pairing in this session AND the modal
-// is currently visible, so background webhook drift on an already-
-// connected inbox can never auto-dismiss the modal. A short delay
-// lets the "Connected" state flash so the agent understands what
-// happened.
-watch(
-  () => connection.value,
-  val => {
-    if (
-      props.show &&
-      userInitiatedPairing.value &&
-      val === 'open' &&
-      typeof props.onClose === 'function'
-    ) {
-      setTimeout(() => {
-        if (props.show) props.onClose();
-      }, 1500);
-    }
+// Start polling for pair success the moment the user kicks off a
+// pair attempt (either QR or Phone-code tab). Stop polling +
+// auto-close when we see is_paired flip true.
+watch(userInitiatedPairing, val => {
+  if (val && props.show) startPairPoll();
+});
+
+// Auto-close the modal once the device is actually paired. Triggers
+// on `is_paired` flipping true via the Vuex inbox refresh — that's
+// the only thing that actually means "pairing succeeded" upstream.
+// The previous `connection === 'open'` watcher never fired because
+// connection was already 'open' before the user pressed Emparelhar
+// (the WS was up from the Conectar action).
+watch(isAlreadyPaired, val => {
+  if (
+    props.show &&
+    userInitiatedPairing.value &&
+    val === true &&
+    typeof props.onClose === 'function'
+  ) {
+    stopPairPoll();
+    setTimeout(() => {
+      if (props.show) props.onClose();
+    }, 1500);
   }
-);
+});
 
 // No auto-setup or auto-disconnect on mount/unmount — let the user
 // pick the auth method and trigger explicitly. Only Propriacloud uses
