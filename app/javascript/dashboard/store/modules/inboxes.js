@@ -432,7 +432,7 @@ export const actions = {
       throwErrorMessage(error);
     }
   },
-  pairQrcode: async (_, inboxId) => {
+  pairQrcode: async ({ dispatch }, inboxId) => {
     try {
       const response = await InboxesAPI.pairQrcode(inboxId);
       return response.data;
@@ -440,6 +440,14 @@ export const actions = {
       const data = error?.response?.data || {};
       const friendly =
         data.error || 'Could not generate a QR code. Please try again.';
+      // "client already logged in" / "already paired" from the API
+      // means our local Vuex inbox snapshot is stale (the device IS
+      // paired but the UI thinks it isn't, so Emparelhar was clickable).
+      // Force a status refresh so the chip flips to "Emparelhada" and
+      // the button row reflects truth on the very next render.
+      if (/already logged in|already paired|already.*pair/i.test(friendly)) {
+        dispatch('refreshProviderStatus', inboxId);
+      }
       const wrapped = new Error(friendly);
       wrapped.code = data.code;
       wrapped.cooldownSeconds = data.cooldown_seconds;
@@ -447,7 +455,7 @@ export const actions = {
       throw wrapped;
     }
   },
-  pairPhoneCode: async (_, { inboxId, phone }) => {
+  pairPhoneCode: async ({ dispatch }, { inboxId, phone }) => {
     try {
       const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
       return response.data;
@@ -461,6 +469,11 @@ export const actions = {
       const friendly =
         data.error ||
         'Could not request a pairing code. Please try again in a moment.';
+      // Same defense as pairQrcode: "already logged in" means the
+      // device IS paired and our cache is wrong — force a refresh.
+      if (/already logged in|already paired|already.*pair/i.test(friendly)) {
+        dispatch('refreshProviderStatus', inboxId);
+      }
       const wrapped = new Error(friendly);
       wrapped.code = data.code;
       wrapped.cooldownSeconds = data.cooldown_seconds;
