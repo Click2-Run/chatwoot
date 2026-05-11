@@ -341,13 +341,12 @@ const menuItems = computed(() => {
         count: 'internalChat/getUnreadCount',
       },
     },
-    {
-      name: 'Kanban',
-      label: t('SIDEBAR.KANBAN'),
-      icon: 'i-lucide-columns-3',
-      to: accountScopedRoute('kanban_view'),
-      activeOn: ['kanban_view'],
-    },
+    // Kanban is a paywalled fazer-ai feature (no "Chatwoot Pro
+    // Própria Cloud" plan exists in this fork — the paywall page
+    // would only advertise a SaaS upsell we don't sell). Hidden from
+    // the sidebar so new accounts don't see a teaser they can't act
+    // on. Route and paywall component remain intact as dead code so
+    // an upstream merge doesn't churn through a feature removal.
     {
       name: 'Captain',
       icon: 'i-woot-captain',
