@@ -133,6 +133,12 @@ export default {
       // Falls back transparently to the poll above when SSE is
       // unavailable.
       propriacloudEventSource: null,
+      // Gates the action button row until the first mount-time
+      // refresh roundtrip completes. Until then the chips render
+      // whatever Vuex had cached, but the buttons stay disabled so
+      // the user can't click Emparelhar against a stale "Desemparelhada"
+      // state and get the "client already logged in" rejection.
+      propriacloudInitialSyncDone: false,
       // True while the "Sincronizar imagem do canal" button is in flight.
       isSyncingPropriacloudAvatar: false,
     };
@@ -433,7 +439,15 @@ export default {
   },
   mounted() {
     this.fetchSharedData();
-    this.refreshPropriacloudStatusIfApplicable();
+    // Force a fresh fetch of the inbox AND a fresh provider_status on
+    // every mount of the propriacloud settings page. Without this the
+    // page could render with whatever provider_connection the Vuex
+    // store had cached from an earlier `inboxes/get` (which is what
+    // caused the "click Emparelhar on a paired instance and get
+    // already-logged-in" loop). The action row stays gated on
+    // `propriacloudInitialSyncDone` so the buttons aren't clickable
+    // before we've verified state.
+    this.refreshPropriacloudStatusOnMount();
     this.startPropriacloudLivePoll();
   },
   beforeUnmount() {
@@ -450,6 +464,25 @@ export default {
     refreshPropriacloudStatusIfApplicable() {
       if (!this.inbox || this.inbox.provider !== 'propriacloud') return;
       this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
+    },
+    // Mount-time hard refresh. Re-fetches the inbox list AND the
+    // provider_status. Flips `propriacloudInitialSyncDone` once both
+    // roundtrips complete, unblocking the action buttons.
+    async refreshPropriacloudStatusOnMount() {
+      if (!this.inbox || this.inbox.provider !== 'propriacloud') {
+        this.propriacloudInitialSyncDone = true;
+        return;
+      }
+      try {
+        await Promise.all([
+          this.$store.dispatch('inboxes/get', this.inbox.account_id),
+          this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id),
+        ]);
+      } catch (e) {
+        // Refresh is best-effort — never block the page on a hiccup.
+      } finally {
+        this.propriacloudInitialSyncDone = true;
+      }
     },
     onOpenLinkDeviceModal() {
       this.showLinkDeviceModal = true;
@@ -1032,6 +1065,7 @@ export default {
               :ruby="act.variant === 'destructive'"
               :label="act.label"
               :disabled="
+                !propriacloudInitialSyncDone ||
                 act.transitioning ||
                 (propriacloudPendingKind &&
                   propriacloudPendingKind !== act.kind)
