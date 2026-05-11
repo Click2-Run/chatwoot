@@ -123,6 +123,8 @@ export default {
       // no-underscore-dangle rejects the leading underscore. Not used
       // in the template so reactivity is irrelevant.
       propriacloudRefreshTimer: null,
+      // True while the "Sincronizar imagem do canal" button is in flight.
+      isSyncingPropriacloudAvatar: false,
     };
   },
   computed: {
@@ -507,6 +509,36 @@ export default {
     onCloseLinkDeviceModal() {
       this.showLinkDeviceModal = false;
       this.schedulePropriacloudReRefresh();
+    },
+    // Trigger the backend to fetch the WhatsApp account's profile
+    // picture and attach it as the inbox avatar (Imagem do Canal).
+    // Backend job runs async; we re-fetch the inbox a few seconds later
+    // so the avatar updates without a manual reload.
+    async onSyncPropriacloudAvatar() {
+      this.isSyncingPropriacloudAvatar = true;
+      try {
+        const result = await this.$store.dispatch(
+          'inboxes/syncAvatarFromProvider',
+          this.inbox.id
+        );
+        if (result?.synced === false) {
+          useAlert(this.$t('INBOX_MGMT.PROPRIACLOUD_STATUS.SYNC_AVATAR_NONE'));
+        } else {
+          useAlert(
+            this.$t('INBOX_MGMT.PROPRIACLOUD_STATUS.SYNC_AVATAR_QUEUED')
+          );
+          // Give Sidekiq ~3s to finish the download, then refresh the
+          // inbox record so the new avatar_url renders.
+          setTimeout(() => {
+            this.$store.dispatch('inboxes/get', this.inbox.account_id);
+            this.syncInboxData();
+          }, 3000);
+        }
+      } catch (e) {
+        useAlert(e?.message || this.$t('GENERAL_SETTINGS.UPDATE.ERROR'));
+      } finally {
+        this.isSyncingPropriacloudAvatar = false;
+      }
     },
     schedulePropriacloudReRefresh() {
       if (this.propriacloudRefreshTimer) {
@@ -944,16 +976,29 @@ export default {
               <label class="text-heading-3 text-n-slate-12">
                 {{ $t('INBOX_MGMT.ADD.WEBSITE_CHANNEL.CHANNEL_AVATAR.LABEL') }}
               </label>
-              <Avatar
-                :src="avatarUrl"
-                :size="64"
-                :icon-name="inboxIcon"
-                name=""
-                allow-upload
-                rounded-full
-                @upload="handleImageUpload"
-                @delete="handleAvatarDelete"
-              />
+              <div class="flex items-center gap-3">
+                <Avatar
+                  :src="avatarUrl"
+                  :size="64"
+                  :icon-name="inboxIcon"
+                  name=""
+                  allow-upload
+                  rounded-full
+                  @upload="handleImageUpload"
+                  @delete="handleAvatarDelete"
+                />
+                <!-- Pull the connected WhatsApp account's profile picture
+                     directly into the inbox avatar. Propriacloud-only —
+                     other providers don't expose the picture to us. -->
+                <NextButton
+                  v-if="isAWhatsAppPropriacloudChannel"
+                  slate
+                  :label="$t('INBOX_MGMT.PROPRIACLOUD_STATUS.SYNC_AVATAR')"
+                  :disabled="isSyncingPropriacloudAvatar"
+                  :is-loading="isSyncingPropriacloudAvatar"
+                  @click="onSyncPropriacloudAvatar"
+                />
+              </div>
             </div>
             <SettingsFieldSection :label="inboxNameLabel">
               <woot-input

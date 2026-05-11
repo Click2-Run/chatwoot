@@ -103,6 +103,10 @@ class InboxPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
+  def sync_avatar_from_provider?
+    @account_user.administrator?
+  end
+
   def convert_provider?
     @account_user.administrator?
   end

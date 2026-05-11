@@ -93,6 +93,10 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/unpair_only`);
   }
 
+  syncAvatarFromProvider(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/sync_avatar_from_provider`);
+  }
+
   convertProvider(inboxId, { provider, providerConfig }) {
     return axios.post(`${this.url}/${inboxId}/convert_provider`, {
       provider,

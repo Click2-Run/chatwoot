@@ -182,6 +182,34 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     render json: friendly_pair_error(e), status: :unprocessable_entity
   end
 
+  # POST /api/v1/accounts/:account_id/inboxes/:id/sync_avatar_from_provider
+  # Pulls the connected WhatsApp device's profile picture URL via
+  # propriacloud `/contacts/profile-picture` (using the channel's own
+  # phone number as the JID) and attaches it to `inbox.avatar` through
+  # `Avatar::AvatarFromUrlJob`. Async — returns immediately. Admin-only.
+  #
+  # Idempotent: the job's download path purges any previously-attached
+  # avatar before attaching the new one. If the URL is blank (e.g.
+  # the WhatsApp account has no profile picture set), the job no-ops
+  # via `url_valid?`.
+  def sync_avatar_from_provider
+    channel = @inbox.channel
+    unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'propriacloud'
+      render json: { error: 'Avatar sync is only available for Própria Cloud channels' }, status: :unprocessable_entity and return
+    end
+
+    url = channel.provider_service.fetch_own_profile_picture_url
+    if url.blank?
+      render json: { synced: false, reason: 'no_profile_picture' } and return
+    end
+
+    Avatar::AvatarFromUrlJob.perform_later(@inbox, url)
+    render json: { synced: true, url: url }
+  rescue StandardError => e
+    Rails.logger.warn "sync_avatar_from_provider failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: 'Could not sync the inbox avatar from WhatsApp. Please try again.' }, status: :unprocessable_entity
+  end
+
   # POST /api/v1/accounts/:account_id/inboxes/:id/resync_history
   # Force a (re)backfill of contacts/conversations/messages for a paired
   # propriacloud inbox. Idempotent at the dedup layer (Message#source_id),

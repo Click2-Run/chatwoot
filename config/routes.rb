@@ -286,6 +286,7 @@ Rails.application.routes.draw do
             post :refresh_provider_status, on: :member
             post :resync_history, on: :member
             post :request_chat_history, on: :member
+            post :sync_avatar_from_provider, on: :member
             post :convert_provider, on: :member
             delete :avatar, on: :member
             post :sync_templates, on: :member

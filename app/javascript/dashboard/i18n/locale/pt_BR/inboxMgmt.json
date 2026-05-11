@@ -21,7 +21,10 @@
       "DISCONNECT_CONFIRM_MESSAGE": "A instância vai parar de receber e enviar mensagens até reconectar. O pareamento com o WhatsApp continua válido — depois é só clicar em Conectar.",
       "UNPAIR_CONFIRM_TITLE": "Desemparelhar o dispositivo?",
       "UNPAIR_CONFIRM_MESSAGE": "O vínculo com o WhatsApp será removido. Você precisará emparelhar novamente via QR Code ou Código por telefone para voltar a usar a caixa de entrada.",
-      "META_INSTANCE": "{provider} · Instância: {instanceId}"
+      "META_INSTANCE": "{provider} · Instância: {instanceId}",
+      "SYNC_AVATAR": "Usar foto do WhatsApp",
+      "SYNC_AVATAR_QUEUED": "Buscando a foto de perfil do WhatsApp. A imagem do canal vai atualizar em instantes.",
+      "SYNC_AVATAR_NONE": "A conta de WhatsApp conectada não tem foto de perfil definida."
     },
     "HEADER": "Caixas de Entrada",
     "DESCRIPTION": "Um canal é o modo de comunicação que seu cliente escolhe para interagir com você. Uma caixa de entrada é onde você gerencia interações para um canal específico. Pode incluir comunicações de várias fontes, como e-mail, chat ao vivo e mídia social.",

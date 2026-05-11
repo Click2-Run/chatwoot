@@ -163,6 +163,33 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
     end
   end
 
+  describe '#fetch_own_profile_picture_url (Imagem do Canal sync)' do
+    it 'POSTs /contacts/profile-picture with the channel own JID and returns the url' do
+      stub = stub_request(:post, "#{provider_url}/contacts/profile-picture?instance_id=inst-123")
+             .with do |req|
+               body = JSON.parse(req.body)
+               body['jid']['user'].match?(/\A\d+\z/) &&
+                 body['jid']['server'] == 's.whatsapp.net' &&
+                 body['preview'] == false
+             end
+             .to_return(status: 200, body: { data: { url: 'https://wa.cdn/pic.jpg' } }.to_json)
+
+      expect(service.fetch_own_profile_picture_url).to eq('https://wa.cdn/pic.jpg')
+      expect(stub).to have_been_requested
+    end
+
+    it 'returns nil when the channel has no phone_number set' do
+      whatsapp_channel.update_columns(phone_number: '')
+      expect(service.fetch_own_profile_picture_url).to be_nil
+    end
+
+    it 'returns nil when the API returns no url' do
+      stub_request(:post, "#{provider_url}/contacts/profile-picture?instance_id=inst-123")
+        .to_return(status: 200, body: { data: { id: 'x' } }.to_json)
+      expect(service.fetch_own_profile_picture_url).to be_nil
+    end
+  end
+
   describe '#connect_only (Conectar action)' do
     it 'POSTs /instances/connect and flips provider_connection to `connecting`' do
       stub = stub_request(:post, "#{provider_url}/instances/connect?instance_id=inst-123")

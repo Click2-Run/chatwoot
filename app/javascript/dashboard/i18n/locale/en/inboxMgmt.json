@@ -21,7 +21,10 @@
       "DISCONNECT_CONFIRM_MESSAGE": "The instance will stop sending and receiving messages until you reconnect. The WhatsApp pairing stays intact — just click Connect to bring it back.",
       "UNPAIR_CONFIRM_TITLE": "Unpair the device?",
       "UNPAIR_CONFIRM_MESSAGE": "The WhatsApp device link will be removed. You'll need to pair again via QR code or phone code to use this inbox.",
-      "META_INSTANCE": "{provider} · Instance: {instanceId}"
+      "META_INSTANCE": "{provider} · Instance: {instanceId}",
+      "SYNC_AVATAR": "Use WhatsApp picture",
+      "SYNC_AVATAR_QUEUED": "Fetching the WhatsApp profile picture. The channel image will refresh in a moment.",
+      "SYNC_AVATAR_NONE": "The connected WhatsApp account has no profile picture set."
     },
     "HEADER": "Inboxes",
     "DESCRIPTION": "A channel is the mode of communication your customer chooses to interact with you. An inbox is where you manage interactions for a specific channel. It can include communications from various sources such as email, live chat, and social media.",

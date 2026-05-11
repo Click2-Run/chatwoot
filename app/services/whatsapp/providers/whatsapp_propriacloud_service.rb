@@ -694,6 +694,21 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     'close'
   end
 
+  # Fetch the OWN connected device's profile picture URL — i.e. the
+  # WhatsApp account that's currently paired with this inbox. Used to
+  # auto-populate the Chatwoot inbox avatar so agents see the brand the
+  # number actually identifies as on WhatsApp.
+  #
+  # Implementation: just call `/contacts/profile-picture` with the
+  # channel's own phone number as the JID. The connected device IS a
+  # WhatsApp contact from the API's point of view; there's no separate
+  # "own picture" endpoint, but the contact lookup works identically.
+  def fetch_own_profile_picture_url
+    return nil if whatsapp_channel.phone_number.blank?
+
+    get_profile_pic("#{normalized_phone_number}@s.whatsapp.net")
+  end
+
   def get_profile_pic(jid)
     response = HTTParty.post(
       "#{provider_url}/contacts/profile-picture#{instance_query}",

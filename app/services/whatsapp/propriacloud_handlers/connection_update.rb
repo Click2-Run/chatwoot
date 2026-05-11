@@ -38,6 +38,24 @@ module Whatsapp::PropriacloudHandlers::ConnectionUpdate
     log_connection_state(event, data)
     track_pair_state(event)
     enqueue_history_backfill_if_needed(previous_state, connection_data[:connection])
+    enqueue_avatar_sync_if_needed(event)
+  end
+
+  # First time the inbox lands on a paired+connected state, try to pull
+  # the WhatsApp account's profile picture as the inbox avatar. Only
+  # fires when the inbox has no avatar attached yet — manual uploads
+  # (or earlier syncs) are never overwritten. Idempotent because the
+  # underlying job is a no-op when the URL hashes match.
+  def enqueue_avatar_sync_if_needed(event)
+    return unless %w[pairing.success connection.connected].include?(event)
+    return if inbox.avatar.attached?
+
+    url = inbox.channel.provider_service.fetch_own_profile_picture_url
+    return if url.blank?
+
+    Avatar::AvatarFromUrlJob.perform_later(inbox, url)
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: avatar auto-sync skipped (#{e.class}: #{e.message[0..120]})"
   end
 
   # Record whether the upstream instance is currently paired so other

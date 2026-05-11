@@ -491,6 +491,23 @@ export const actions = {
       throw new Error(friendly);
     }
   },
+  // Pull the connected WhatsApp device's profile picture from the
+  // propriacloud API and attach it to the inbox as the channel image
+  // (Imagem do Canal). Async on the backend — returns immediately;
+  // the avatar appears once Sidekiq finishes the download. The caller
+  // is expected to refetch the inbox a few seconds later to see the
+  // updated avatar_url.
+  syncAvatarFromProvider: async (_, inboxId) => {
+    try {
+      const response = await InboxesAPI.syncAvatarFromProvider(inboxId);
+      return response.data;
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not sync the inbox avatar from WhatsApp. Please try again.';
+      throw new Error(friendly);
+    }
+  },
   refreshProviderStatus: async (context, inboxId) => {
     try {
       const response = await InboxesAPI.refreshProviderStatus(inboxId);
