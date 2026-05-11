@@ -117,6 +117,17 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
       data[:qr_data_url] = provider_connection['qr_data_url']
       data[:error] = provider_connection['error']
     end
+    # Propriacloud's frontend renders two independent chips (connection
+    # axis + pair axis) driven by the API's two-axis state. The legacy
+    # single `connection` field can't express paired+disconnected or
+    # connected+unpaired, so we also surface the raw axes when the
+    # provider is propriacloud. Other providers keep the legacy shape.
+    if provider == 'propriacloud'
+      data[:connection_state] = provider_connection['connection_state']
+      data[:pair_state] = provider_connection['pair_state']
+      data[:is_paired] = provider_connection['is_paired']
+      data[:is_connected] = provider_connection['is_connected']
+    end
     data
   end
 
