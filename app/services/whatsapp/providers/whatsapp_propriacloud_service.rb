@@ -654,8 +654,16 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     paged_get('/sync/push-names', page: page, page_size: page_size)
   end
 
+  # GET /labels — per OpenAPI the endpoint REQUIRES `instance_id`
+  # (openapi.yaml `InstanceIdQuery` is `required: true` on this op).
+  # Previous version passed `scope: :tenant` which stripped instance_id
+  # from `paged_get`, so the server returned 400 "instance_id is
+  # required" and our paged_get rescue silently returned []. Result:
+  # HistoryBackfillService.backfill_labels never imported anything.
+  # Now uses the default instance scope so the query string carries
+  # ?instance_id=… and labels actually come through.
   def list_labels(page: 1, page_size: 100)
-    paged_get('/labels', page: page, page_size: page_size, scope: :tenant)
+    paged_get('/labels', page: page, page_size: page_size)
   end
 
   # POST /sync/request-history — ask whatsapp-api to fetch older messages for
@@ -1059,11 +1067,16 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/webhooks",
       headers: api_headers,
       body: {
+        # OpenAPI `CreateWebhookRequest` lists: scope, instance_id, url,
+        # events, secret, description, headers, retry_config. `active`
+        # is not a documented create-time field — the server defaults
+        # new webhooks to active=true. Removed to keep the body matching
+        # the spec exactly. PATCH /webhooks/{id} DOES expose `active`
+        # in UpdateWebhookRequest, so sync_webhook_subscription! keeps it.
         scope: 'instance',
         instance_id: instance_id,
         url: inbox_webhook_url,
         events: DEFAULT_WEBHOOK_EVENTS,
-        active: true,
         secret: whatsapp_channel.provider_config['webhook_verify_token']
       }.to_json
     )
@@ -1244,7 +1257,10 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     raise ProviderUnavailableError, 'Failed to send reaction' unless process_response(response)
 
     update_external_created_at(response)
-    unwrap(response.parsed_response)['reaction_id'] || unwrap(response.parsed_response)['message_id']
+    # Spec: /messages/react returns SendMessageResponse which exposes
+    # only `message_id`. The `reaction_id` fallback was dead code from
+    # an earlier API draft; dropped for clarity.
+    unwrap(response.parsed_response)['message_id']
   end
 
   def normalized_to_user
