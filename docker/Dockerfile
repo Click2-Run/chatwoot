@@ -153,3 +153,28 @@ COPY --from=pre-builder /app/.git_sha /app/.git_sha
 WORKDIR /app
 
 EXPOSE 3000
+
+# Auto-migrate on every container start.
+#
+# `docker/entrypoints/rails.sh` waits for Postgres, runs
+# `bundle exec rake db:chatwoot_prepare`, then `exec "$@"` into CMD.
+# `db:chatwoot_prepare` is migrate-only against existing DBs and is
+# idempotent across replicas (Rails advisory lock serializes them).
+# It NEVER calls `db:create` — the rescue branch only fires on
+# `NoDatabaseError`, which doesn't happen when you deliver a
+# pre-created DB with DDL-capable credentials.
+#
+# Behavior matrix:
+#   - K8s / Nomad / ECS / bare `docker run` → uses these defaults and
+#     auto-migrates before booting the rails server. No initContainer
+#     needed in your Deployment YAML.
+#   - Sidekiq worker pods: K8s Deployment overrides only `args:` (not
+#     `command:`) to `["bundle", "exec", "sidekiq", "-C",
+#     "config/sidekiq.yml"]`. The ENTRYPOINT still fires so the worker
+#     also waits for postgres + sees a migrated schema.
+#   - docker-compose.production.yaml + docker-compose.coolify.yaml
+#     explicitly override BOTH `entrypoint:` and `command:`, so this
+#     Dockerfile change is a no-op for them — behavior is unchanged
+#     for existing compose deployments.
+ENTRYPOINT ["docker/entrypoints/rails.sh"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
