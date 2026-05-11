@@ -379,7 +379,8 @@
             "QR_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho, depois clique em Emparelhar abaixo para gerar um QR code para escanear.",
             "PHONE_CODE_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar com número de telefone, clique em Emparelhar abaixo e digite no WhatsApp o código de 8 caracteres.",
             "ENTER_CODE_IN_WHATSAPP": "Digite este código no WhatsApp",
-            "PAIR_LOCK_COUNTDOWN": "Aguarde {time} antes de tentar novamente."
+            "PAIR_LOCK_COUNTDOWN": "Aguarde {time} antes de tentar novamente.",
+            "ALREADY_PAIRED": "Esta caixa de entrada já está emparelhada com o WhatsApp. Para desemparelhar, use o botão Desemparelhar na página da caixa de entrada."
           }
         },
         "SUBMIT_BUTTON": "Criar canal do WhatsApp",

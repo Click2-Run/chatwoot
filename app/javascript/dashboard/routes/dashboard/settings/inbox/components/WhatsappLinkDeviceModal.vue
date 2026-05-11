@@ -263,8 +263,19 @@ watchEffect(() => {
         <div class="flex flex-col gap-4 items-center">
           <InboxName :inbox="inbox" class="!text-lg" with-phone-number />
 
-          <!-- Non-propriacloud (Baileys / Zapi / Whatsmeow) keeps the
-               existing one-button "Link device" flow that auto-fetches QR. -->
+          <!-- ============================================================
+               PROPRIACLOUD: pair-only modal. The modal's one job here is
+               pairing. Disconnect / Reconnect live on the inbox page
+               (Conectar / Desconectar buttons on the Informações tab),
+               so we NEVER render the legacy "you're connected, click
+               Disconnect" branch for propriacloud — that confused users
+               into thinking they had to disconnect first to see the
+               pair tabs. Branch is purely a function of pair_state:
+                 - not paired → pair tabs (QR / Phone code)
+                 - paired     → short "already paired" confirmation
+               ============================================================ -->
+          <!-- Legacy non-propriacloud flow (Baileys / Zapi / Whatsmeow):
+               single "Link device" button → auto-fetched QR. Untouched. -->
           <template v-if="!isPropriacloud">
             <template v-if="!connection || connection === 'close' || error">
               <p v-if="error" class="text-red-500 text-center">
@@ -308,14 +319,44 @@ watchEffect(() => {
               </p>
               <Spinner />
             </template>
+
+            <template v-else-if="connection === 'open'">
+              <p v-if="isSetup" class="text-center">
+                {{
+                  $t(
+                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.CONNECTED'
+                  )
+                }}
+              </p>
+              <div class="flex gap-2">
+                <Button ghost :is-loading="loading" @click="disconnect">
+                  {{
+                    $t(
+                      'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.DISCONNECT'
+                    )
+                  }}
+                </Button>
+                <router-link
+                  v-if="isSetup"
+                  :to="{
+                    name: 'inbox_dashboard',
+                    params: { inboxId: inbox.id },
+                  }"
+                >
+                  <Button
+                    solid
+                    teal
+                    :label="$t('INBOX_MGMT.FINISH.BUTTON_TEXT')"
+                  />
+                </router-link>
+              </div>
+            </template>
           </template>
 
-          <!-- Propriacloud: user picks pairing method first, no auto-setup.
-               This branch fires whenever the device ISN'T already paired,
-               regardless of websocket state. The pair tabs (QR / Phone
-               code) must remain reachable when connection_state=connected
-               + pair_state=unpaired — which is the standard mid-flow
-               state (connect succeeded, now we need the user to pair). -->
+          <!-- Propriacloud: pair-only modal. The user always landed here
+               by clicking Emparelhar — so the modal's job is pairing,
+               full stop. Branch ONLY on pair_state. Disconnect lives on
+               the inbox page (Desconectar button), never here. -->
           <template v-else-if="!isAlreadyPaired">
             <p v-if="error" class="text-red-500 text-center">
               {{ error }}
@@ -435,47 +476,27 @@ watchEffect(() => {
             />
           </template>
 
-          <template v-else-if="connection === 'reconnecting'">
-            <p>
+          <!-- Propriacloud + already paired: short confirmation + close.
+               No Disconnect button here — Desconectar lives on the inbox
+               page where the rest of the action row sits. -->
+          <template v-else>
+            <p class="text-center text-sm text-n-slate-11">
               {{
                 $t(
-                  'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.RECONNECTING'
+                  'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.ALREADY_PAIRED'
                 )
               }}
             </p>
-            <Spinner />
-          </template>
-
-          <template v-else-if="connection === 'open'">
-            <p v-if="isSetup" class="text-center">
-              {{
-                $t(
-                  'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.CONNECTED'
-                )
-              }}
-            </p>
-            <div class="flex gap-2">
-              <Button ghost :is-loading="loading" @click="disconnect">
-                {{
-                  $t(
-                    'INBOX_MGMT.ADD.WHATSAPP.EXTERNAL_PROVIDER.LINK_DEVICE_MODAL.DISCONNECT'
-                  )
-                }}
-              </Button>
-              <router-link
-                v-if="isSetup"
-                :to="{
-                  name: 'inbox_dashboard',
-                  params: { inboxId: inbox.id },
-                }"
-              >
-                <Button
-                  solid
-                  teal
-                  :label="$t('INBOX_MGMT.FINISH.BUTTON_TEXT')"
-                />
-              </router-link>
-            </div>
+            <router-link
+              v-if="isSetup"
+              :to="{
+                name: 'inbox_dashboard',
+                params: { inboxId: inbox.id },
+              }"
+            >
+              <Button solid teal :label="$t('INBOX_MGMT.FINISH.BUTTON_TEXT')" />
+            </router-link>
+            <Button v-else size="sm" ghost label="OK" @click="onClose" />
           </template>
         </div>
       </div>
