@@ -94,8 +94,19 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     # rubocop:enable Rails/SkipsModelValidations
   end
 
+  # MERGES the given keys into the existing provider_connection jsonb.
+  # Previously this REPLACED the whole hash — which meant any caller
+  # passing `{ connection: 'close' }` silently wiped `is_paired`,
+  # `pair_state`, `connection_state`, `is_connected`, `qr_data_url`, and
+  # `error`. The dashboard then fell back to the legacy single-axis
+  # `connection` field and lied about pair state (e.g. rendering a
+  # "Emparelhada" chip on an instance that was never paired, simply
+  # because the WS came back up). Pass `nil` for a key to clear it.
   def update_provider_connection!(provider_connection)
-    assign_attributes(provider_connection: provider_connection)
+    merged = (self.provider_connection || {})
+             .deep_dup
+             .merge(provider_connection.deep_stringify_keys)
+    assign_attributes(provider_connection: merged)
     # NOTE: Skip `validate_provider_config?` check
     save!(validate: false)
   end

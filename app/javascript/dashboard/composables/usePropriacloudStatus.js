@@ -122,10 +122,13 @@ function mapLegacyConnection(connection) {
 }
 
 function legacyPairState(pc) {
-  if (pc.is_paired === true) return 'paired';
-  if (pc.is_paired === false) return 'unpaired';
-  if (pc.connection === 'open') return 'paired';
-  return 'unpaired';
+  // Pair is an independent axis from connection. `connection === 'open'`
+  // says ONLY that the websocket is up — NOT that the device is paired.
+  // The earlier `connection === 'open' ⇒ paired` fallback was a lie: it
+  // rendered "Emparelhada" on instances that had never been paired the
+  // moment the legacy `connection` field flipped to 'open', which kept
+  // the UI showing paired chips on completely-unpaired sessions.
+  return pc.is_paired === true ? 'paired' : 'unpaired';
 }
 
 // ---------------------------------------------------------------------------
