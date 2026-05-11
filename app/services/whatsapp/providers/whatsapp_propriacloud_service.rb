@@ -299,6 +299,24 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/instances/connect#{instance_query}",
       headers: api_headers
     )
+
+    # 404 NOT_FOUND means the instance record was wiped on the API side
+    # (manual purge, recreate without same id, etc.) — Chatwoot still
+    # has the channel and credentials, so the right recovery is to
+    # rebuild the instance via setup_channel_provider (create + webhook
+    # + connect, all idempotent on 409). Pass fetch_qr: false so we
+    # don't burn the pair rate-limit budget on a QR the user didn't ask
+    # for — they're explicitly clicking Conectar, not Emparelhar.
+    if response.code == 404 && instance_not_found?(response)
+      Rails.logger.info "Propriacloud: instance not found on API for inbox=#{whatsapp_channel.inbox.id} (instance_id=#{instance_id}); rebuilding via setup_channel_provider"
+      setup_channel_provider_without_error_handling(fetch_qr: false)
+      # setup_channel_provider doesn't write provider_connection; pull
+      # the freshly-rebuilt instance's status from the API to flip the
+      # legacy `connection` field (and the two-axis fields) to truth.
+      refresh_status_from_api!
+      return true
+    end
+
     raise ProviderUnavailableError, "Failed to connect instance: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
 
     # The OpenAPI contract guarantees /instances/connect only returns
@@ -309,6 +327,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # flash, no need to wait for the refresh_provider_status round-trip.
     apply_api_status_to_channel!(unwrap(response.parsed_response))
     true
+  end
+
+  def instance_not_found?(response)
+    body = response.parsed_response
+    body = safe_parse_json(body) if body.is_a?(String)
+    code = body.is_a?(Hash) && (body.dig('error', 'code') || body['code'])
+    code == 'NOT_FOUND' || response.body.to_s.match?(/instance not found/i)
   end
 
   # Merge a fresh API status block (the `data` field from
