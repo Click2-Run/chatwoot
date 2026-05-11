@@ -170,6 +170,9 @@ let lockTickerId = null;
 // flight, until we observe `is_paired=true`. Then auto-close.
 let pairPollId = null;
 const startPairPoll = () => {
+  // Propriacloud-only — non-propriacloud channels don't expose a
+  // /refresh_provider_status endpoint and would just 422 every tick.
+  if (!isPropriacloud.value) return;
   if (pairPollId) return;
   pairPollId = setInterval(() => {
     store.dispatch('inboxes/refreshProviderStatus', props.inbox.id);
@@ -221,10 +224,10 @@ onUnmounted(() => {
 });
 
 // Start polling for pair success the moment the user kicks off a
-// pair attempt (either QR or Phone-code tab). Stop polling +
-// auto-close when we see is_paired flip true.
+// pair attempt (either QR or Phone-code tab). Propriacloud only —
+// other providers use the legacy `connection`-driven flow below.
 watch(userInitiatedPairing, val => {
-  if (val && props.show) startPairPoll();
+  if (val && props.show && isPropriacloud.value) startPairPoll();
 });
 
 // Auto-close the modal once the device is actually paired. Triggers
@@ -232,12 +235,15 @@ watch(userInitiatedPairing, val => {
 // the only thing that actually means "pairing succeeded" upstream.
 // The previous `connection === 'open'` watcher never fired because
 // connection was already 'open' before the user pressed Emparelhar
-// (the WS was up from the Conectar action).
+// (the WS was up from the Conectar action). Propriacloud-only — non-
+// propriacloud providers don't populate `is_paired` and continue to
+// rely on the connection-axis watcher below.
 watch(isAlreadyPaired, val => {
   if (
     props.show &&
     userInitiatedPairing.value &&
     val === true &&
+    isPropriacloud.value &&
     typeof props.onClose === 'function'
   ) {
     stopPairPoll();
@@ -246,6 +252,26 @@ watch(isAlreadyPaired, val => {
     }, 1500);
   }
 });
+
+// Non-propriacloud auto-close: connection flipping to 'open' is the
+// pair-success signal for the legacy Baileys / Zapi / Whatsmeow
+// flows. Kept verbatim from the pre-propriacloud behaviour.
+watch(
+  () => connection.value,
+  val => {
+    if (
+      props.show &&
+      !isPropriacloud.value &&
+      userInitiatedPairing.value &&
+      val === 'open' &&
+      typeof props.onClose === 'function'
+    ) {
+      setTimeout(() => {
+        if (props.show) props.onClose();
+      }, 1500);
+    }
+  }
+);
 
 // No auto-setup or auto-disconnect on mount/unmount — let the user
 // pick the auth method and trigger explicitly. Only Propriacloud uses
