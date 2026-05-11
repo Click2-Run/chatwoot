@@ -22,6 +22,14 @@ const providerConnection = computed(() => props.inbox.provider_connection);
 const connection = computed(() => providerConnection.value?.connection);
 const qrDataUrl = computed(() => providerConnection.value?.qr_data_url);
 const error = computed(() => providerConnection.value?.error);
+// Pair state is independent of websocket state. The modal's job is
+// PAIRING, so it must branch on pair_state — not on `connection` (which
+// only describes the websocket). Previously the modal hid the pair tabs
+// whenever `connection === 'open'` even on unpaired instances, leaving
+// the user staring at a header and an InboxName with nothing to click.
+const isAlreadyPaired = computed(
+  () => providerConnection.value?.is_paired === true
+);
 
 const loading = ref(false);
 // Pairing mode: 'qr' (default) or 'phone' (8-char code into WhatsApp's
@@ -302,10 +310,13 @@ watchEffect(() => {
             </template>
           </template>
 
-          <!-- Propriacloud: user picks pairing method first, no auto-setup. -->
-          <template
-            v-else-if="connection !== 'open' && connection !== 'reconnecting'"
-          >
+          <!-- Propriacloud: user picks pairing method first, no auto-setup.
+               This branch fires whenever the device ISN'T already paired,
+               regardless of websocket state. The pair tabs (QR / Phone
+               code) must remain reachable when connection_state=connected
+               + pair_state=unpaired — which is the standard mid-flow
+               state (connect succeeded, now we need the user to pair). -->
+          <template v-else-if="!isAlreadyPaired">
             <p v-if="error" class="text-red-500 text-center">
               {{ error }}
             </p>
