@@ -15,6 +15,7 @@ import {
 import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import { resolvePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -78,6 +79,11 @@ const openDelete = inbox => {
   showDeletePopup.value = true;
   selectedInbox.value = inbox;
 };
+
+// Resolved propriacloud status per inbox (cached by inbox id so we
+// don't re-resolve on every re-render). `null` for non-propriacloud
+// inboxes — the template gates rendering on `.isPropriacloud`.
+const propriacloudFor = inbox => resolvePropriacloudStatus(inbox, t);
 </script>
 
 <template>
@@ -150,7 +156,36 @@ const openDelete = inbox => {
               />
             </div>
           </div>
-          <div class="flex gap-3 justify-end">
+          <div class="flex gap-3 justify-end items-center">
+            <!-- Propriacloud-only: live connection + pair chips, same
+                 component as the Informações tab. Renders just before
+                 the row actions so admins can scan the inbox list and
+                 see at a glance which numbers are connected/paired
+                 vs. need attention. -->
+            <template v-if="propriacloudFor(inbox).isPropriacloud">
+              <div class="flex items-center gap-1 flex-wrap">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudFor(inbox).connection.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudFor(inbox).connection.dotClass"
+                  />
+                  {{ propriacloudFor(inbox).connection.label }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudFor(inbox).pair.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudFor(inbox).pair.dotClass"
+                  />
+                  {{ propriacloudFor(inbox).pair.label }}
+                </span>
+              </div>
+            </template>
             <router-link
               :to="{
                 name: 'settings_inbox_show',
