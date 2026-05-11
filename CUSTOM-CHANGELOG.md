@@ -46,6 +46,15 @@ rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`
 
 ## 2026-05
 
+### 2026-05-11 (Própria Cloud avatar sync — `681ec10db`)
+
+- **feat(whatsapp-propriacloud): sync connected device profile picture as inbox avatar**
+  - Backend: `Whatsapp::Providers::WhatsappPropriacloudService#fetch_own_profile_picture_url` reuses `/contacts/profile-picture` against the channel's own JID. New `POST /api/v1/accounts/:id/inboxes/:id/sync_avatar_from_provider` (admin-only) kicks `Avatar::AvatarFromUrlJob` to download and attach. Pundit method added.
+  - Frontend: new "Usar foto do WhatsApp" / "Use WhatsApp picture" button next to the avatar uploader on the Informações tab (propriacloud only).
+  - Auto-sync: ConnectionUpdate handler enqueues the same job on first `pairing.success` / `connection.connected` event when no avatar is attached yet — so a freshly-paired inbox picks up the brand picture automatically. Manual uploads are NEVER overwritten.
+  - i18n (en + pt_BR): SYNC_AVATAR, SYNC_AVATAR_QUEUED, SYNC_AVATAR_NONE.
+  - Spec: `fetch_own_profile_picture_url` happy path, blank phone short-circuit, no-url response.
+
 ### 2026-05-10 (Própria Cloud action wiring — `c2857673f`)
 
 - **feat(whatsapp-propriacloud): faithful `Conectar` / `Emparelhar` / `Desconectar` / `Desemparelhar` wiring**
