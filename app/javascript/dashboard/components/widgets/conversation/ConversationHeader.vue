@@ -13,6 +13,7 @@ import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
 import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { useInbox } from 'dashboard/composables/useInbox';
+import { usePropriacloudLiveStream } from 'dashboard/composables/usePropriacloudLiveStream';
 import { useI18n } from 'vue-i18n';
 
 const props = defineProps({
@@ -85,6 +86,18 @@ const snoozedDisplayText = computed(() => {
 const inbox = computed(() => {
   const { inbox_id: inboxId } = props.chat;
   return store.getters['inboxes/getInbox'](inboxId);
+});
+
+// Live updates for the propriacloud chip rendered on this header.
+// The composable opens an SSE connection to /audit_stream on the
+// inbox (with polling as the always-on fallback) and dispatches
+// refreshProviderStatus whenever upstream state changes. No-op when
+// the conversation's inbox is not propriacloud — the composable
+// gates internally on `inbox.provider === 'propriacloud'`.
+usePropriacloudLiveStream(inbox, {
+  store,
+  accountId: accountId.value,
+  pollIntervalMs: 15000,
 });
 
 const hasMultipleInboxes = computed(

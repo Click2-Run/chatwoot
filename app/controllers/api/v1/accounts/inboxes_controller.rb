@@ -1,11 +1,16 @@
 class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController # rubocop:disable Metrics/ClassLength
   include Api::V1::InboxesHelper
+  # ActionController::Live enables `response.stream.write` for the
+  # `audit_stream` action (SSE proxy to whatsapp-api's
+  # /instances/audit/stream). Non-streaming actions on this controller
+  # are unaffected.
+  include ActionController::Live
   before_action :fetch_inbox, except: [:index, :create]
   before_action :fetch_agent_bot, only: [:set_agent_bot]
   before_action :validate_limit, only: [:create]
   # we are already handling the authorization in fetch inbox
   # rubocop:disable Rails/LexicallyScopedActionFilter -- health is defined in WhatsappHealthManagement concern
-  before_action :check_authorization, except: [:show, :health, :setup_channel_provider, :refresh_provider_status]
+  before_action :check_authorization, except: [:show, :health, :setup_channel_provider, :refresh_provider_status, :audit_stream]
   before_action :validate_whatsapp_cloud_channel, only: [:health]
   # rubocop:enable Rails/LexicallyScopedActionFilter
   include Api::V1::Accounts::Concerns::WhatsappHealthManagement
@@ -312,6 +317,63 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
   # Used by the dashboard on inbox open to clear stale "connecting"
   # state left over from abandoned pairing attempts. Rate-limited via
   # Redis so a chatty UI cannot flood the upstream API.
+  # GET /api/v1/accounts/:id/inboxes/:id/audit_stream
+  # SSE proxy to whatsapp-api `/instances/audit/stream`. Streams
+  # `text/event-stream` chunks straight from the upstream to the
+  # browser, so a Vue EventSource on the same origin gets sub-second
+  # state updates (pair_state, connection_state, etc.) without
+  # leaking the X-API-Key to the client and without exposing the
+  # whatsapp-api host directly to cross-origin browser traffic.
+  #
+  # Each open SSE connection holds a Puma thread for the duration
+  # of the subscription. Browsers automatically close the connection
+  # on tab close / navigation, which raises
+  # ActionController::Live::ClientDisconnected and frees the thread.
+  # Auth: Pundit show? (anyone who can view the inbox can subscribe).
+  #
+  # Disabled-upstream behaviour: if AUDIT_SSE_ENABLED=false on the
+  # whatsapp-api side the upstream returns 503; we pass that through
+  # to the browser so the EventSource client knows to fall back to
+  # polling.
+  def audit_stream
+    authorize @inbox, :show?
+
+    channel = @inbox.channel
+    unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'propriacloud'
+      render json: { error: 'Audit stream is only available for Própria Cloud channels' }, status: :unprocessable_entity and return
+    end
+
+    provider_url = Whatsapp::Providers::WhatsappPropriacloudService.default_url
+    api_key = Whatsapp::Providers::WhatsappPropriacloudService.default_api_key
+    instance_id = channel.provider_config['instance_id']
+
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    # Tell nginx / proxies to not buffer the response — required for
+    # SSE chunks to reach the browser as they arrive.
+    response.headers['X-Accel-Buffering'] = 'no'
+
+    uri = URI.parse("#{provider_url}/instances/audit/stream?instance_id=#{CGI.escape(instance_id.to_s)}")
+    Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == 'https', read_timeout: nil) do |http|
+      req = Net::HTTP::Get.new(uri)
+      req['X-API-Key'] = api_key
+      req['Accept'] = 'text/event-stream'
+
+      http.request(req) do |upstream|
+        upstream.read_body do |chunk|
+          response.stream.write(chunk)
+        end
+      end
+    end
+  rescue ActionController::Live::ClientDisconnected, IOError
+    # Browser closed the tab / navigated away. Normal teardown.
+  rescue StandardError => e
+    Rails.logger.warn "audit_stream proxy error: #{e.class}: #{e.message[0..240]}"
+  ensure
+    response.stream.close
+  end
+
   def refresh_provider_status
     # Read-only state reconciliation — anyone who can show? the inbox
     # may trigger it. Rate-limited via Redis below to 1/30s/channel.

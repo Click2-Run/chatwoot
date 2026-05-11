@@ -127,6 +127,12 @@ export default {
       // keeps the propriacloud chips fresh while the inbox page is
       // open. Cleared in `beforeUnmount`.
       propriacloudPollId: null,
+      // EventSource handle for the SSE proxy to whatsapp-api's
+      // /instances/audit/stream. Sub-second pair/connection state
+      // updates when AUDIT_SSE_ENABLED=true on the API container.
+      // Falls back transparently to the poll above when SSE is
+      // unavailable.
+      propriacloudEventSource: null,
       // True while the "Sincronizar imagem do canal" button is in flight.
       isSyncingPropriacloudAvatar: false,
     };
@@ -572,11 +578,54 @@ export default {
           this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
         }
       }, 10000);
+      // Layer SSE on top of the poll. When AUDIT_SSE_ENABLED=true on
+      // the whatsapp-api container, every state change emits an event
+      // upstream and the /audit_stream proxy forwards it here — we
+      // use the event as a wakeup for the same existing refresh path
+      // but with sub-second latency instead of the 10s tick. SSE
+      // disabled / errors → close + let the poll keep the UI warm.
+      this.openPropriacloudEventSource();
     },
     stopPropriacloudLivePoll() {
       if (this.propriacloudPollId) {
         clearInterval(this.propriacloudPollId);
         this.propriacloudPollId = null;
+      }
+      this.closePropriacloudEventSource();
+    },
+    openPropriacloudEventSource() {
+      if (this.propriacloudEventSource) return;
+      if (typeof window === 'undefined' || !window.EventSource) return;
+      if (!this.inbox?.id || !this.accountId) return;
+      const url = `/api/v1/accounts/${this.accountId}/inboxes/${this.inbox.id}/audit_stream`;
+      try {
+        this.propriacloudEventSource = new EventSource(url, {
+          withCredentials: true,
+        });
+      } catch (e) {
+        return;
+      }
+      const refresh = () =>
+        this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
+      this.propriacloudEventSource.addEventListener('audit', refresh);
+      this.propriacloudEventSource.addEventListener('connection', refresh);
+      this.propriacloudEventSource.addEventListener('message', refresh);
+      this.propriacloudEventSource.addEventListener('error', () => {
+        // Upstream SSE disabled or transient drop — close and let the
+        // poll keep refreshing. EventSource auto-retries on 5xx
+        // natively; on 4xx (e.g. AUDIT_SSE_ENABLED=false → 404)
+        // retrying is pointless, so we just stay on polling.
+        this.closePropriacloudEventSource();
+      });
+    },
+    closePropriacloudEventSource() {
+      if (this.propriacloudEventSource) {
+        try {
+          this.propriacloudEventSource.close();
+        } catch (e) {
+          // already closed
+        }
+        this.propriacloudEventSource = null;
       }
     },
     async copyWebhookSecret(value) {

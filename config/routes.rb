@@ -285,6 +285,7 @@ Rails.application.routes.draw do
             post :pair_qrcode, on: :member
             post :pair_phone_code, on: :member
             post :refresh_provider_status, on: :member
+            get :audit_stream, on: :member
             post :resync_history, on: :member
             post :request_chat_history, on: :member
             post :sync_avatar_from_provider, on: :member

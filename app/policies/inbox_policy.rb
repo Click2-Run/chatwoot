@@ -99,6 +99,13 @@ class InboxPolicy < ApplicationPolicy
     show?
   end
 
+  def audit_stream?
+    # SSE subscription is read-only; anyone allowed to view the inbox
+    # can subscribe so agents see live pair/connection state changes
+    # while working in the conversation view.
+    show?
+  end
+
   def resync_history?
     @account_user.administrator?
   end

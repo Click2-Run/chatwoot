@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import { picoSearch } from '@scmmishra/pico-search';
@@ -16,6 +16,8 @@ import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import { resolvePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
+import { usePropriacloudLiveStream } from 'dashboard/composables/usePropriacloudLiveStream';
+import { ref as vueRef, watch } from 'vue';
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -85,25 +87,46 @@ const openDelete = inbox => {
 // inboxes — the template gates rendering on `.isPropriacloud`.
 const propriacloudFor = inbox => resolvePropriacloudStatus(inbox, t);
 
-// Live poll: refresh propriacloud channel statuses every 15s while the
-// inboxes list is open. Backend rate limit (60s hard / 5s soft per
-// channel) prevents spam — most ticks short-circuit. Without this the
-// list row chips were stuck at whatever provider_connection the inbox
-// fetch returned on first page load, missing pair/disconnect events
-// that happened upstream after the list mounted.
-let propriacloudPollId = null;
-onMounted(() => {
-  propriacloudPollId = setInterval(() => {
-    (inboxesList.value || [])
-      .filter(i => i?.provider === 'propriacloud')
-      .forEach(i => store.dispatch('inboxes/refreshProviderStatus', i.id));
-  }, 15000);
-});
+// Live updates for propriacloud inboxes in the list. One
+// `usePropriacloudLiveStream` per propriacloud inbox — opens an SSE
+// connection to /audit_stream + polls as fallback. Backend
+// rate-limits refreshes (60s hard / 5s soft per channel) so spam is
+// impossible even with many open inboxes. The composable tears down
+// automatically on unmount.
+const accountId = computed(() => getters.getCurrentAccountId.value);
+const liveStreams = vueRef(new Map()); // inboxId → { stop }
+
+const ensureLiveStreams = () => {
+  const seen = new Set();
+  (inboxesList.value || [])
+    .filter(i => i?.provider === 'propriacloud')
+    .forEach(inbox => {
+      seen.add(inbox.id);
+      if (liveStreams.value.has(inbox.id)) return;
+      const inboxRef = computed(
+        () => (inboxes.value || []).find(i => i?.id === inbox.id) || null
+      );
+      const handle = usePropriacloudLiveStream(inboxRef, {
+        store,
+        accountId: accountId.value,
+        pollIntervalMs: 15000,
+      });
+      liveStreams.value.set(inbox.id, handle);
+    });
+  // Tear down streams for inboxes no longer in the list (deleted /
+  // converted to another provider).
+  [...liveStreams.value.keys()].forEach(id => {
+    if (!seen.has(id)) {
+      liveStreams.value.get(id).stop();
+      liveStreams.value.delete(id);
+    }
+  });
+};
+
+watch(inboxesList, ensureLiveStreams, { immediate: true });
 onBeforeUnmount(() => {
-  if (propriacloudPollId) {
-    clearInterval(propriacloudPollId);
-    propriacloudPollId = null;
-  }
+  liveStreams.value.forEach(h => h.stop());
+  liveStreams.value.clear();
 });
 </script>
 
