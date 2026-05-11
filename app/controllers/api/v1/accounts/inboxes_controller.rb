@@ -166,6 +166,29 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     }, status: :unprocessable_entity
   end
 
+  # POST /api/v1/accounts/:id/inboxes/:id/pair_qrcode
+  # Direct call to whatsapp-api `POST /instances/pair/qrcode`. Returns
+  # the rendered data URL so the modal can drop it straight into <img>.
+  # Per spec the API auto-connects if not already connected, so no
+  # preceding /instances/connect call is needed. 404 self-heals via
+  # setup_channel_provider (idempotent on 409) and retries.
+  def pair_qrcode
+    channel = @inbox.channel
+    unless channel.provider_service.respond_to?(:pair_qrcode)
+      render json: { error: 'Channel does not support QR pairing' }, status: :unprocessable_entity and return
+    end
+    qr_data_url = channel.provider_service.pair_qrcode
+    render json: { qr_data_url: qr_data_url }
+  rescue Whatsapp::Providers::WhatsappPropriacloudService::PairRateLimitedError => e
+    render json: {
+      error: e.message, code: e.code,
+      cooldown_seconds: e.cooldown_seconds, locked_until: e.locked_until
+    }.compact, status: :unprocessable_entity
+  rescue StandardError => e
+    Rails.logger.warn "pair_qrcode failed: #{e.class}: #{e.message[0..240]}"
+    render json: { error: "Pair (QR) failed: #{e.message[0..240]}", code: 'PAIR_QR_FAILED' }, status: :unprocessable_entity
+  end
+
   def pair_phone_code
     channel = @inbox.channel
     phone = params[:phone].presence || channel.phone_number

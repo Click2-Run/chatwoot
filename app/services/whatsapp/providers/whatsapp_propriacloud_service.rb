@@ -176,7 +176,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       instance_id: instance_id,
       name: whatsapp_channel.inbox.name,
       phone: normalized_phone_number,
-      custom_id: whatsapp_channel.inbox.account_id.to_s
+      custom_id: whatsapp_channel.inbox.account_id.to_s,
+      # waba: false declares this instance is a Web (whatsmeow) pair-mode
+      # session, not a Meta WhatsApp Business API instance. The API
+      # defaults to false but we set it explicitly so the contract is
+      # readable on the wire and future API-side default changes don't
+      # silently flip our instances into WABA mode.
+      waba: false
     }.compact.to_json
 
     # whatsapp-api occasionally returns 500 on /instances/create when an
@@ -219,6 +225,45 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     true
   end
 
+  # Emparelhar (QR tab) — direct call to `GET /instances/pair/qrcode`.
+  # The API auto-connects if not already connected (per spec), so this
+  # is the one-and-only call needed for a QR pair attempt. If the
+  # instance was wiped on the API side (404), rebuild it via
+  # setup_channel_provider and retry.
+  #
+  # Returns the data URL (`data:image/png;base64,…`) that the modal
+  # renders directly. Also writes it to provider_connection so the
+  # webhook tail can clear it on pairing.success without us having to
+  # manage two sources of truth.
+  def pair_qrcode
+    response = HTTParty.get(
+      "#{provider_url}/instances/pair/qrcode#{instance_query}",
+      headers: api_headers
+    )
+
+    if response.code == 404 && instance_not_found?(response)
+      Rails.logger.info "Propriacloud pair_qrcode: instance not found (instance_id=#{instance_id}); rebuilding via setup_channel_provider then retrying"
+      setup_channel_provider_without_error_handling(fetch_qr: false)
+      response = HTTParty.post(
+        "#{provider_url}/instances/pair/qrcode#{instance_query}",
+        headers: api_headers
+      )
+    end
+
+    raise ProviderUnavailableError, "Failed to fetch QR code: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
+
+    body = unwrap(response.parsed_response)
+    qr = body['img'] || body['qr_code']
+    raise ProviderUnavailableError, 'Pair QR response did not include an image' if qr.blank?
+
+    qr_data_url = qr.start_with?('data:image/') ? qr : "data:image/png;base64,#{qr}"
+    whatsapp_channel.update_provider_connection!(
+      qr_data_url: qr_data_url,
+      error: nil
+    )
+    qr_data_url
+  end
+
   # Pull the current pairing QR from whatsapp-api and stuff it into the
   # channel's provider_connection so the inbox UI displays it. No-op if the
   # API doesn't return a QR (instance is paired or in an error state).
@@ -249,24 +294,23 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     Rails.logger.warn "Propriacloud: could not fetch QR (#{e.class}: #{e.message[0..120]})"
   end
 
-  # Full teardown — disconnect AND delete the instance. Used by the
-  # Channel::Whatsapp before_destroy hook when the inbox itself is being
-  # removed from Chatwoot. NEVER call from a UI button — it permanently
-  # removes the instance record on the api side.
+  # Full teardown — used by the Channel::Whatsapp before_destroy hook
+  # when the inbox is being removed from Chatwoot. NEVER call from a UI
+  # button — it permanently removes the instance record on the api side.
+  #
+  # Per OpenAPI: `POST /instances/delete` for Web instances handles
+  # everything internally — logs out from WhatsApp (if paired),
+  # disconnects the websocket (if connected), removes from runtime,
+  # then soft-deletes the record. So a separate /disconnect call is
+  # redundant. 404 means "already gone" — also success for our purpose.
   def disconnect_channel_provider
-    disconnect_response = HTTParty.post(
-      "#{provider_url}/instances/disconnect#{instance_query}",
-      headers: api_headers
-    )
-
-    Rails.logger.warn "Failed to disconnect whatsapp-api instance (may already be disconnected)" unless process_response(disconnect_response)
-
     delete_response = HTTParty.post(
       "#{provider_url}/instances/delete#{instance_query}",
       headers: api_headers
     )
 
-    raise ProviderUnavailableError, 'Failed to delete whatsapp-api instance' unless process_response(delete_response)
+    return true if delete_response.code == 404 # already gone, treat as success
+    raise ProviderUnavailableError, "Failed to delete whatsapp-api instance: HTTP #{delete_response.code} — #{delete_response.body.to_s[0..200]}" unless process_response(delete_response)
 
     true
   end
@@ -817,6 +861,19 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       headers: api_headers,
       body: { phone: digits }.to_json
     )
+
+    # 404 NOT_FOUND → instance was wiped on the API. Rebuild via
+    # setup (idempotent) and retry. Same pattern as connect_only /
+    # pair_qrcode so all four pair-path entry points self-heal.
+    if response.code == 404 && instance_not_found?(response)
+      Rails.logger.info "Propriacloud request_phone_pairing_code: instance not found (instance_id=#{instance_id}); rebuilding via setup_channel_provider then retrying"
+      setup_channel_provider_without_error_handling(fetch_qr: false)
+      response = HTTParty.post(
+        "#{provider_url}/instances/pair/phonecode#{instance_query}",
+        headers: api_headers,
+        body: { phone: digits }.to_json
+      )
+    end
 
     if process_response(response)
       body = unwrap(response.parsed_response)

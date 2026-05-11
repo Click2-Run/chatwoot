@@ -90,21 +90,21 @@ const setup = () => {
     .dispatch('inboxes/setupChannelProvider', props.inbox.id)
     .catch(handleError);
 };
-const startQrPairing = () => {
+// QR pair = POST /instances/pair/qrcode (single call, auto-connects on
+// the API side per spec). Replaces the older `setup_channel_provider`
+// chain which did create+webhook+connect+QR every time the button
+// was clicked. The new path also self-heals on 404 (instance deleted
+// API-side) by rebuilding via setup before retrying.
+const startQrPairing = async () => {
   pairingMode.value = 'qr';
   qrInitiated.value = true;
-  setup();
-};
-const ensureConnectingForPhoneCode = async () => {
-  if (!connection.value || connection.value === 'close') {
-    // Pass fetch_qr=false so the backend doesn't pull a QR as part of
-    // the implicit setup — the QR pull counts as a pair attempt and
-    // would burn the WhatsApp rate-limit budget that the phone-code
-    // request needs.
-    await store.dispatch('inboxes/setupChannelProvider', {
-      inboxId: props.inbox.id,
-      fetch_qr: false,
-    });
+  loading.value = true;
+  try {
+    await store.dispatch('inboxes/pairQrcode', props.inbox.id);
+  } catch (e) {
+    handleError(e);
+  } finally {
+    loading.value = false;
   }
 };
 const disconnect = () => {
@@ -114,13 +114,14 @@ const disconnect = () => {
     .catch(handleError);
 };
 
+// Phone pair = POST /instances/pair/phonecode (auto-connects, also
+// self-heals on 404 backend-side). No pre-flight setup needed.
 const requestPhoneCode = async () => {
   phoneInitiated.value = true;
   phoneCodeError.value = '';
   phoneCode.value = '';
   phoneCodeLoading.value = true;
   try {
-    await ensureConnectingForPhoneCode();
     const result = await store.dispatch('inboxes/pairPhoneCode', {
       inboxId: props.inbox.id,
       phone: props.inbox.phone_number,

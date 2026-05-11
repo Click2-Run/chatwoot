@@ -73,6 +73,10 @@ class Inboxes extends CacheEnabledApiClient {
     return axios.post(`${this.url}/${inboxId}/disconnect_channel_provider`);
   }
 
+  pairQrcode(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/pair_qrcode`);
+  }
+
   pairPhoneCode(inboxId, phone) {
     return axios.post(`${this.url}/${inboxId}/pair_phone_code`, { phone });
   }

@@ -432,6 +432,21 @@ export const actions = {
       throwErrorMessage(error);
     }
   },
+  pairQrcode: async (_, inboxId) => {
+    try {
+      const response = await InboxesAPI.pairQrcode(inboxId);
+      return response.data;
+    } catch (error) {
+      const data = error?.response?.data || {};
+      const friendly =
+        data.error || 'Could not generate a QR code. Please try again.';
+      const wrapped = new Error(friendly);
+      wrapped.code = data.code;
+      wrapped.cooldownSeconds = data.cooldown_seconds;
+      wrapped.lockedUntil = data.locked_until;
+      throw wrapped;
+    }
+  },
   pairPhoneCode: async (_, { inboxId, phone }) => {
     try {
       const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
