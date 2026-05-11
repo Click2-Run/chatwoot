@@ -121,8 +121,15 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     channel.provider_service.connect_only
     head :ok
   rescue StandardError => e
+    # Surface the actual upstream cause — masking it as a generic
+    # "please try again" left the user (and the agent debugging it)
+    # with no information about whether the API was unreachable, the
+    # instance was missing, the credentials were rejected, etc.
     Rails.logger.warn "connect_only failed: #{e.class}: #{e.message[0..240]}"
-    render json: { error: 'Could not connect the WhatsApp instance. Please try again.', code: 'CONNECT_FAILED' }, status: :unprocessable_entity
+    render json: {
+      error: "Connect failed: #{e.message[0..240]}",
+      code: 'CONNECT_FAILED'
+    }, status: :unprocessable_entity
   end
 
   # POST /instances/disconnect — graceful disconnect that KEEPS the pair.
@@ -136,7 +143,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     head :ok
   rescue StandardError => e
     Rails.logger.warn "disconnect_only failed: #{e.class}: #{e.message[0..240]}"
-    render json: { error: 'Could not disconnect the WhatsApp instance. Please try again.', code: 'DISCONNECT_FAILED' }, status: :unprocessable_entity
+    render json: {
+      error: "Disconnect failed: #{e.message[0..240]}",
+      code: 'DISCONNECT_FAILED'
+    }, status: :unprocessable_entity
   end
 
   # POST /instances/unpair — remove the device link but KEEP the instance.
@@ -150,7 +160,10 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     head :ok
   rescue StandardError => e
     Rails.logger.warn "unpair_only failed: #{e.class}: #{e.message[0..240]}"
-    render json: { error: 'Could not unpair the WhatsApp device. Please try again.', code: 'UNPAIR_FAILED' }, status: :unprocessable_entity
+    render json: {
+      error: "Unpair failed: #{e.message[0..240]}",
+      code: 'UNPAIR_FAILED'
+    }, status: :unprocessable_entity
   end
 
   def pair_phone_code

@@ -299,16 +299,41 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/instances/connect#{instance_query}",
       headers: api_headers
     )
-    raise ProviderUnavailableError, "Failed to connect instance: #{response.code} #{response.body[0..200]}" unless process_response(response)
+    raise ProviderUnavailableError, "Failed to connect instance: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
 
-    # Mirror the optimistic provider_connection update from
-    # setup_channel_provider so the UI can switch out of `disconnected`
-    # immediately without waiting for the connection.* webhook tail.
-    whatsapp_channel.update_provider_connection!(
-      connection: 'connecting',
-      error: nil
-    )
+    # The OpenAPI contract guarantees /instances/connect only returns
+    # 200 once the runtime reaches `connection_state=connected`, and
+    # the response body carries the same two-axis state /instances/status
+    # would return. Merge that straight into provider_connection so the
+    # UI flips to "Conectada" immediately — no transient "Conectando"
+    # flash, no need to wait for the refresh_provider_status round-trip.
+    apply_api_status_to_channel!(unwrap(response.parsed_response))
     true
+  end
+
+  # Merge a fresh API status block (the `data` field from
+  # /instances/connect, /instances/status, or any other endpoint that
+  # returns the two-axis state) into the channel's provider_connection
+  # WITHOUT wiping the other fields. Single source of truth for the
+  # "API → provider_connection" mapping.
+  def apply_api_status_to_channel!(payload)
+    return if payload.blank?
+
+    status = payload['status'].is_a?(Hash) ? payload['status'] : payload
+    connection_state = status['connection_state']
+    pair_state = status['pair_state']
+    return if connection_state.blank? && pair_state.blank?
+
+    merged = (whatsapp_channel.provider_connection || {}).deep_dup
+    merged['connection_state'] = connection_state if connection_state
+    merged['pair_state'] = pair_state if pair_state
+    merged['is_paired'] = status['is_paired'] if status.key?('is_paired')
+    merged['is_connected'] = status['is_connected'] if status.key?('is_connected')
+    merged['connection'] = map_api_status_to_chatwoot(connection_state) if connection_state
+    merged['qr_data_url'] = nil if connection_state == 'connected'
+    merged['error'] = nil if connection_state == 'connected'
+
+    whatsapp_channel.update_provider_connection!(merged)
   end
 
   # POST /instances/unpair — remove the device link with WhatsApp but
@@ -650,25 +675,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     status = (payload['data'] && payload['data']['status']) || payload['status']
     return if status.blank?
 
-    chat_state = map_api_status_to_chatwoot(
-      status['connection_state'],
-      status['pair_state']
-    )
-
-    new_conn = whatsapp_channel.provider_connection.deep_dup || {}
-    if chat_state != 'connecting'
-      new_conn['qr_data_url'] = nil
-      new_conn['error'] = nil if chat_state == 'open'
-    end
-    new_conn['connection'] = chat_state
-    # Surface the raw two-axis state from the API so the dashboard can
-    # render the full propriacloud.git status taxonomy (paired+disconnected
-    # → just needs reconnect, unpaired+connected → needs Emparelhar, etc.)
-    new_conn['connection_state'] = status['connection_state']
-    new_conn['pair_state'] = status['pair_state']
-    new_conn['is_paired'] = status['is_paired']
-    new_conn['is_connected'] = status['is_connected']
-    whatsapp_channel.update_provider_connection!(new_conn)
+    apply_api_status_to_channel!(status)
 
     # Sync paired_at with API truth for the auto-recovery gate.
     config = whatsapp_channel.provider_config || {}
@@ -680,18 +687,30 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       whatsapp_channel.update!(provider_config: config)
     end
 
-    { connection: chat_state, pair_state: status['pair_state'], connection_state: status['connection_state'] }
+    {
+      connection: whatsapp_channel.provider_connection['connection'],
+      pair_state: status['pair_state'],
+      connection_state: status['connection_state']
+    }
   rescue StandardError => e
     Rails.logger.warn "Propriacloud: refresh_status_from_api! failed (#{e.class}: #{e.message[0..120]})"
     nil
   end
 
-  def map_api_status_to_chatwoot(connection_state, pair_state)
-    return 'open' if connection_state == 'connected' && pair_state == 'paired'
-    return 'connecting' if connection_state == 'connected' && pair_state == 'pairing'
-    return 'connecting' if connection_state == 'connecting'
-
-    'close'
+  # Connection axis ONLY. Pair state is independent — it lives in its own
+  # `pair_state` column and surfaces on its own chip. Per the OpenAPI
+  # /instances/status contract, `connection_state=connected` means the
+  # websocket is up; that's true regardless of whether the device is
+  # paired yet. Previous version conflated the two axes and reported
+  # "close" for a perfectly-good connected+unpaired session, so the
+  # dashboard kept showing "Desconectada" right after a successful
+  # /instances/connect.
+  def map_api_status_to_chatwoot(connection_state, _pair_state = nil)
+    case connection_state
+    when 'connected' then 'open'
+    when 'connecting' then 'connecting'
+    else 'close'
+    end
   end
 
   # Fetch the OWN connected device's profile picture URL — i.e. the
