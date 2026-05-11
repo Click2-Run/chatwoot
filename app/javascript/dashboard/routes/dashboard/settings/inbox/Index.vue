@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import { picoSearch } from '@scmmishra/pico-search';
@@ -84,6 +84,27 @@ const openDelete = inbox => {
 // don't re-resolve on every re-render). `null` for non-propriacloud
 // inboxes — the template gates rendering on `.isPropriacloud`.
 const propriacloudFor = inbox => resolvePropriacloudStatus(inbox, t);
+
+// Live poll: refresh propriacloud channel statuses every 15s while the
+// inboxes list is open. Backend rate limit (60s hard / 5s soft per
+// channel) prevents spam — most ticks short-circuit. Without this the
+// list row chips were stuck at whatever provider_connection the inbox
+// fetch returned on first page load, missing pair/disconnect events
+// that happened upstream after the list mounted.
+let propriacloudPollId = null;
+onMounted(() => {
+  propriacloudPollId = setInterval(() => {
+    (inboxesList.value || [])
+      .filter(i => i?.provider === 'propriacloud')
+      .forEach(i => store.dispatch('inboxes/refreshProviderStatus', i.id));
+  }, 15000);
+});
+onBeforeUnmount(() => {
+  if (propriacloudPollId) {
+    clearInterval(propriacloudPollId);
+    propriacloudPollId = null;
+  }
+});
 </script>
 
 <template>

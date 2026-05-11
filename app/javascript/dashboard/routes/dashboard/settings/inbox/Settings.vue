@@ -123,6 +123,10 @@ export default {
       // no-underscore-dangle rejects the leading underscore. Not used
       // in the template so reactivity is irrelevant.
       propriacloudRefreshTimer: null,
+      // setInterval id for the live poll started in `mounted()` that
+      // keeps the propriacloud chips fresh while the inbox page is
+      // open. Cleared in `beforeUnmount`.
+      propriacloudPollId: null,
       // True while the "Sincronizar imagem do canal" button is in flight.
       isSyncingPropriacloudAvatar: false,
     };
@@ -424,11 +428,13 @@ export default {
   mounted() {
     this.fetchSharedData();
     this.refreshPropriacloudStatusIfApplicable();
+    this.startPropriacloudLivePoll();
   },
   beforeUnmount() {
     if (this.propriacloudRefreshTimer) {
       clearTimeout(this.propriacloudRefreshTimer);
     }
+    this.stopPropriacloudLivePoll();
   },
   methods: {
     // Reconcile the cached provider_connection on the inbox with the
@@ -547,6 +553,31 @@ export default {
       this.propriacloudRefreshTimer = setTimeout(() => {
         this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
       }, 3000);
+    },
+    // Live poll for propriacloud inboxes so the Informações tab chips
+    // stay reactive without an action-cable channel for
+    // provider_connection. Backend `/refresh_provider_status` is
+    // rate-limited (soft 5s, hard 60s per channel), so polling every
+    // 10s is safe — most ticks short-circuit on the soft window and
+    // return the cached state, but the moment a pair / disconnect /
+    // logout happens upstream the next tick after the window picks it
+    // up. The user no longer has to keep the page open mid-pair to
+    // see fresh state — opening Settings on a stale tab also catches
+    // up within 10s.
+    startPropriacloudLivePoll() {
+      if (!this.inbox || this.inbox.provider !== 'propriacloud') return;
+      if (this.propriacloudPollId) return;
+      this.propriacloudPollId = setInterval(() => {
+        if (this.inbox?.provider === 'propriacloud') {
+          this.$store.dispatch('inboxes/refreshProviderStatus', this.inbox.id);
+        }
+      }, 10000);
+    },
+    stopPropriacloudLivePoll() {
+      if (this.propriacloudPollId) {
+        clearInterval(this.propriacloudPollId);
+        this.propriacloudPollId = null;
+      }
     },
     async copyWebhookSecret(value) {
       await copyTextToClipboard(value);
