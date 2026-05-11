@@ -34,7 +34,14 @@ class Whatsapp::Propriacloud::HistoryBackfillService
   def perform
     Rails.logger.tagged('propriacloud') do
       Rails.logger.info "backfill: start inbox=#{@inbox.id} cutoff=#{@cutoff_at&.iso8601 || 'none'}"
-      backfill_labels
+      # NOTE: WhatsApp labels (/labels) are intentionally NOT imported.
+      # Chatwoot's `labels` table is an app-level construct scoped to
+      # the Account; WhatsApp labels are a parallel, unrelated taxonomy
+      # that lives in the WhatsApp Business app. Auto-creating Chatwoot
+      # labels from WhatsApp label names polluted the account's label
+      # space with rows the operator never asked for. Leaving the
+      # `list_labels` provider helper in place for debugging, but the
+      # backfill no longer calls it.
       backfill_push_names
       backfill_contacts
       backfill_conversations_and_messages
@@ -44,15 +51,6 @@ class Whatsapp::Propriacloud::HistoryBackfillService
   end
 
   private
-
-  def backfill_labels
-    each_page(:list_labels) do |label|
-      title = (label[:name] || label['name']).to_s.strip
-      next if title.blank?
-
-      @account.labels.find_or_create_by!(title: title)
-    end
-  end
 
   # /sync/push-names is a lighter, denormalized view of contact display
   # names captured from the protobuf push_name field. Walking it first

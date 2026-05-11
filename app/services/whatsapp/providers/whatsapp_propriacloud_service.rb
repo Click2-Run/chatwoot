@@ -119,9 +119,6 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     appstate.mark_chat_as_read
     appstate.archive
     appstate.delete_chat
-    appstate.label_association_chat
-    appstate.label_association_message
-    appstate.label_edit
     history.sync_started
     history.sync_completed
     history.sync_conversation

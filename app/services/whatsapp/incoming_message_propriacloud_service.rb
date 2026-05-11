@@ -147,13 +147,12 @@ class Whatsapp::IncomingMessagePropriacloudService < Whatsapp::IncomingMessageBa
     'user.push_name_changed' => :process_user_changed,
     'user.business_name_changed' => :process_user_changed,
     'user.picture_changed' => :process_user_changed,
-    # AppState (read/archive/delete/labels)
+    # AppState (read/archive/delete). Labels are intentionally NOT
+    # mapped — Chatwoot labels and WhatsApp labels are unrelated
+    # taxonomies and bridging them was wrong.
     'appstate.mark_chat_as_read' => :process_appstate,
     'appstate.archive' => :process_appstate,
     'appstate.delete_chat' => :process_appstate,
-    'appstate.label_edit' => :process_appstate,
-    'appstate.label_association_chat' => :process_appstate,
-    'appstate.label_association_message' => :process_appstate,
     # History sync lifecycle
     'history.sync_started' => :process_history_sync,
     'history.sync_completed' => :process_history_sync,

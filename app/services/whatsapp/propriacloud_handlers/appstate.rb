@@ -18,18 +18,23 @@ module Whatsapp::PropriacloudHandlers::Appstate
 
   private
 
-  def process_appstate # rubocop:disable Metrics/CyclomaticComplexity
+  # Note on labels: WhatsApp labels are a separate taxonomy from
+  # Chatwoot's account-level `labels`. We intentionally do NOT handle
+  # `appstate.label_edit` / `label_association_chat` /
+  # `label_association_message` here, and the propriacloud webhook
+  # subscription no longer requests them. If you want to map WhatsApp
+  # labels to a custom_attribute or anything else later, add an
+  # explicit handler — the implicit "create a Chatwoot label with the
+  # same name" bridge was wrong.
+  def process_appstate
     data = processed_params[:data] || {}
     event = (processed_params[:event_type] || processed_params['event_type'] ||
              processed_params[:event] || processed_params['event']).to_s
 
     case event
-    when 'appstate.mark_chat_as_read'        then appstate_mark_read(data)
-    when 'appstate.archive'                  then appstate_archive(data)
-    when 'appstate.delete_chat'              then appstate_delete_chat(data)
-    when 'appstate.label_edit'               then appstate_label_edit(data)
-    when 'appstate.label_association_chat'   then appstate_label_chat(data)
-    when 'appstate.label_association_message' then appstate_label_message(data)
+    when 'appstate.mark_chat_as_read' then appstate_mark_read(data)
+    when 'appstate.archive'           then appstate_archive(data)
+    when 'appstate.delete_chat'       then appstate_delete_chat(data)
     end
   end
 
@@ -94,48 +99,4 @@ module Whatsapp::PropriacloudHandlers::Appstate
     conv&.toggle_status('resolved')
   end
 
-  # Labels are account-scoped in Chatwoot. Map the WhatsApp label id to
-  # a Chatwoot Label by name (whatsapp-api supplies a stable label name).
-  def appstate_label_edit(data)
-    name = (data[:name] || data['name']).to_s.strip
-    return if name.blank?
-
-    inbox.account.labels.find_or_create_by!(title: name)
-  end
-
-  def appstate_label_chat(data)
-    conv = conversation_for(data[:chat_jid] || data['chat_jid'])
-    label = lookup_label(data)
-    return unless conv && label
-
-    if data.fetch(:associated, data['associated'])
-      conv.add_labels([label.title])
-    else
-      labels = conv.label_list - [label.title]
-      conv.update_labels(labels)
-    end
-  end
-
-  def appstate_label_message(data)
-    # Chatwoot Messages don't have a labels association today — treat as
-    # informational. Recorded as additional_attributes for forward
-    # compatibility so we don't lose the signal.
-    source_id = data.dig(:key, :id) || data['key']&.dig('id')
-    label = lookup_label(data)
-    return if source_id.blank? || label.nil?
-
-    msg = inbox.messages.find_by(source_id: source_id)
-    return unless msg
-
-    attrs = (msg.additional_attributes || {}).dup
-    attrs['propriacloud_labels'] = ((attrs['propriacloud_labels'] || []) | [label.title])
-    msg.update!(additional_attributes: attrs)
-  end
-
-  def lookup_label(data)
-    name = (data[:label_name] || data['label_name']).to_s.strip
-    return inbox.account.labels.find_by(title: name) if name.present?
-
-    nil
-  end
 end
