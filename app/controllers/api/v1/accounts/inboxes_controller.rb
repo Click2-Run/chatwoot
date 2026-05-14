@@ -47,7 +47,11 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
         )
       )
       @inbox.save!
+      eagerly_provision_upstream!(channel)
     end
+  rescue Whatsapp::Providers::WhatsappPropriacloudService::ProviderUnavailableError => e
+    Rails.logger.warn "[propriacloud] eager provisioning failed; rolling back inbox creation: #{e.class}: #{e.message[0..240]}"
+    render json: friendly_setup_error(e), status: :unprocessable_entity
   end
 
   def update
@@ -490,16 +494,26 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
 
   def friendly_setup_error(exception)
     raw = exception.message.to_s
-    user_message = if raw.match?(/Failed to create whatsapp-api instance/i)
-                     'Could not start the WhatsApp instance. Please try again in a moment.'
-                   elsif raw.match?(/Failed to register webhook/i)
-                     'WhatsApp instance is up but webhook registration failed. Please try again.'
-                   elsif raw.match?(/Failed to connect/i)
-                     'Could not connect to the WhatsApp instance. Please try again in a moment.'
-                   else
-                     'Could not start pairing. Please try again in a moment.'
-                   end
-    { error: user_message, code: 'SETUP_FAILED' }
+    # 401 / 502 are operator-actionable config errors (API-key mismatch, IAM
+    # unreachable) — surface a specific code so the dashboard can render copy
+    # that points the admin at the actual fix instead of a generic "try again".
+    user_message, code = case raw
+                         when /HTTP 401\b/, /UNAUTHORIZED/
+                           ['The WhatsApp provider rejected the API key. Verify the PROPRIACLOUD_API_KEY (or per-channel api_key) matches the value the provider expects.',
+                            'PROVIDER_UNAUTHORIZED']
+                         when /HTTP 502\b/, /IAM_UNAVAILABLE/, /IAM_CREDENTIALS_INVALID/
+                           ['The WhatsApp provider could not reach its authentication service. Check the IAM_URL / IAM_APP_ID / IAM_APP_SECRET configuration on the whatsapp-api side.',
+                            'PROVIDER_AUTH_BACKEND_UNAVAILABLE']
+                         when /Failed to create whatsapp-api instance/i
+                           ['Could not start the WhatsApp instance. Please try again in a moment.', 'SETUP_FAILED']
+                         when /Failed to register webhook/i
+                           ['WhatsApp instance is up but webhook registration failed. Please try again.', 'SETUP_FAILED']
+                         when /Failed to connect/i
+                           ['Could not connect to the WhatsApp instance. Please try again in a moment.', 'SETUP_FAILED']
+                         else
+                           ['Could not start pairing. Please try again in a moment.', 'SETUP_FAILED']
+                         end
+    { error: user_message, code: code }
   end
 
   def pair_locked_response(channel)
@@ -530,6 +544,25 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     return unless allowed_channel_types.include?(permitted_params[:channel][:type])
 
     account_channels_method.create!(permitted_params(channel_type_from_params::EDITABLE_ATTRS)[:channel].except(:type))
+  end
+
+  # Eager upstream provisioning for propriacloud inboxes. Runs INSIDE the
+  # create transaction so an upstream auth / connect failure rolls back the
+  # Chatwoot inbox + channel — the user never lands on a half-formed inbox
+  # that has no matching whatsapp-api instance and no way to recover except
+  # delete-and-recreate. Other channel types (whatsapp_cloud, baileys, etc.)
+  # keep their existing lazy-provisioning behavior so this is a no-op for
+  # them. `fetch_qr: false` keeps the pair-attempt rate-limit budget clean —
+  # the user's explicit "Emparelhar" click is the one that should burn it.
+  def eagerly_provision_upstream!(channel)
+    return unless channel.is_a?(Channel::Whatsapp) && channel.provider == 'propriacloud'
+
+    # The channel row was persisted before the inbox was built, so its
+    # `has_one :inbox` association is still nil in memory. Reload so
+    # setup_channel_provider can read `whatsapp_channel.inbox.name` and
+    # `account_id` off the freshly attached inbox.
+    channel.reload
+    channel.provider_service.setup_channel_provider_without_error_handling(fetch_qr: false)
   end
 
   def allowed_channel_types

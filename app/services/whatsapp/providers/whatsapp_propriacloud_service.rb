@@ -196,7 +196,8 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
     unless [200, 201, 409].include?(create_response.code)
       Rails.logger.error create_response.body
-      raise ProviderUnavailableError, 'Failed to create whatsapp-api instance'
+      raise ProviderUnavailableError,
+            "Failed to create whatsapp-api instance: HTTP #{create_response.code} — #{create_response.body.to_s[0..240]}"
     end
 
     register_webhook!
@@ -207,7 +208,8 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     )
 
     unless process_response(connect_response)
-      raise ProviderUnavailableError, 'Failed to connect whatsapp-api instance'
+      raise ProviderUnavailableError,
+            "Failed to connect whatsapp-api instance: HTTP #{connect_response.code} — #{connect_response.body.to_s[0..240]}"
     end
 
     # whatsapp-api emits pairing.qrcode webhook events only on actual state
