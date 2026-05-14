@@ -115,6 +115,9 @@ BUILD_AMD64_LOCAL="false"
 
 # Status tracking via temp files (background processes can't modify parent vars)
 STATUS_DIR=""
+# Per-arch build log directory (populated in main(), used by build_local /
+# build_on_node).
+BUILD_LOG_DIR=""
 
 # Build timing
 BUILD_START_TIME=""
@@ -420,22 +423,23 @@ detect_local_arch() {
 build_local() {
     local arch="$1"
     local image_tag="${IMAGE_NAME}:${IMAGE_TAG}-${arch}"
+    local logfile="$BUILD_LOG_DIR/build-${arch}-local.log"
 
-    log "INFO" "Building $arch image locally (native, no emulation)..."
+    log "INFO" "Building $arch image locally (native, no emulation) — full log: $logfile"
 
-    if docker build \
+    if BUILDKIT_PROGRESS=plain DOCKER_BUILDKIT=1 docker build \
         --build-arg RAILS_ENV=production \
         --build-arg BUNDLE_WITHOUT=development:test \
         --build-arg RAILS_SERVE_STATIC_FILES=true \
         --build-arg TARGETARCH="$arch" \
         $NO_CACHE \
         -t "$image_tag" \
-        -f "$DOCKERFILE" "$PROJECT_ROOT"; then
+        -f "$DOCKERFILE" "$PROJECT_ROOT" 2>&1 | tee "$logfile"; then
         write_status "BUILD_${arch^^}" "success"
         log "INFO" "Built $image_tag locally"
     else
         write_status "BUILD_${arch^^}" "failed"
-        log "ERROR" "Failed to build $image_tag locally"
+        log "ERROR" "Failed to build $image_tag locally — see $logfile for the full trace"
         return 1
     fi
 }
@@ -548,19 +552,22 @@ build_on_node() {
     #
     # TARGETARCH: must match the native architecture of the build node so that
     # GOARCH is set correctly and CGO uses the right compiler flags.
-    if ssh -o BatchMode=yes "$node" "cd $REMOTE_BUILD_DIR && docker build \
+    local logfile="$BUILD_LOG_DIR/build-${arch}-${node}.log"
+    log "INFO" "Building $arch on $node — full log: $logfile"
+
+    if ssh -o BatchMode=yes "$node" "cd $REMOTE_BUILD_DIR && BUILDKIT_PROGRESS=plain DOCKER_BUILDKIT=1 docker build \
         --build-arg RAILS_ENV=production \
         --build-arg BUNDLE_WITHOUT=development:test \
         --build-arg RAILS_SERVE_STATIC_FILES=true \
         --build-arg TARGETARCH='$arch' \
         $NO_CACHE \
         -t '$image_tag' \
-        -f '$DOCKERFILE_REL' ."; then
+        -f '$DOCKERFILE_REL' . 2>&1" | tee "$logfile"; then
         write_status "BUILD_${arch^^}" "success"
         log "INFO" "Built $image_tag on $node"
     else
         write_status "BUILD_${arch^^}" "failed"
-        log "ERROR" "Failed to build $image_tag on $node"
+        log "ERROR" "Failed to build $image_tag on $node — see $logfile for the full trace"
         return 1
     fi
 }
@@ -1081,6 +1088,13 @@ main() {
 
     # Create temp dir for status files (background jobs can't modify parent vars)
     STATUS_DIR=$(mktemp -d)
+
+    # Per-arch build logs go under .llm/temporary/<timestamp>-build/ so a failed
+    # build leaves a forensic trail the user can grep (and so parallel arches
+    # don't interleave in the terminal). The dir survives the run; status temp
+    # files are cleaned up via trap below.
+    BUILD_LOG_DIR="$PROJECT_ROOT/.llm/temporary/$(date -u +%Y%m%d%H%M%S)-build-${IMAGE_TAG}"
+    mkdir -p "$BUILD_LOG_DIR"
 
     # Git metadata for build args
     GIT_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")

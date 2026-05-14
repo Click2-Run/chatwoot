@@ -27,6 +27,11 @@ node_modules
 master.key
 *.rdb
 
+# Per-build artifact written by build/build-pre.sh (carries HEAD SHA into the
+# Docker context so remote builds — whose tar excludes .git — can still stamp
+# /app/.git_sha at image build time).
+.git_sha
+
 # Ignore env files
 .env
 .env.*

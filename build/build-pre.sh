@@ -57,6 +57,18 @@ if [[ ! -f "$DF" ]]; then
 fi
 echo -e "${GREEN}[build-pre]${NC}   dockerfile:  $DF"
 
+# 2b. Pre-populate .git_sha so the source tar carries it.
+#     build/build.sh excludes .git from the tar to keep the SSH transfer
+#     small (.git can be 200+ MB on this fork), but the Dockerfile's
+#     `git rev-parse HEAD > /app/.git_sha` step then fails because the
+#     remote build context has no git history. Writing the SHA here means
+#     the Dockerfile's RUN step is a no-op on remote builds (and still
+#     idempotent on local builds where .git is present).
+if git rev-parse --git-dir &>/dev/null; then
+    git rev-parse HEAD > "$PROJECT_ROOT/.git_sha"
+    echo -e "${GREEN}[build-pre]${NC}   git_sha:     $(cat "$PROJECT_ROOT/.git_sha") (written to .git_sha for tar)"
+fi
+
 # 3. Gemfile.lock sanity — soft check.
 #    `bundle check` returns non-zero if Gemfile.lock would not satisfy
 #    a fresh install. The Docker pre-builder stage runs `bundle install`

@@ -88,14 +88,22 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
   && rm -rf spec node_modules tmp/cache; \
   fi
 
-# Generate .git_sha file with current commit hash
-RUN git rev-parse HEAD > /app/.git_sha
+# Generate .git_sha file with current commit hash.
+# Skip if the build coordinator already provided a pre-populated .git_sha
+# (build/build-pre.sh writes one before the source tar so remote builds —
+# whose context excludes .git for transfer size — still get a stamped SHA).
+RUN if [ ! -s /app/.git_sha ]; then \
+      git rev-parse HEAD > /app/.git_sha 2>/dev/null || echo "unknown" > /app/.git_sha; \
+    fi
 
-# Remove unnecessary files
+# Remove unnecessary files.
+# Use `rm -f` for .gitignore — build/build.sh's tar excludes it from the
+# remote build context for transfer-size reasons, and a non-existent target
+# would otherwise fail the RUN step and tank the whole image build.
 RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
   && find /gems/ruby/3.4.0/gems/ \( -name "*.c" -o -name "*.o" \) -delete \
   && rm -rf .git \
-  && rm .gitignore
+  && rm -f .gitignore
 
 # final build stage
 FROM ruby:3.4.4-alpine3.21
