@@ -92,6 +92,13 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   end
 
   def account_signup_allowed?
+    # Bootstrap escape hatch: the very first OIDC user from a trusted provider
+    # (Própria Cloud / Logto) is always allowed to sign up, even when the
+    # operator has ENABLE_ACCOUNT_SIGNUP=false. SSO-only installs typically
+    # disable open signup, but still need a way for the first SuperAdmin to
+    # land via OIDC without first creating an email/password user.
+    return true if trusted_oauth_provider? && !User.exists?
+
     GlobalConfigService.account_signup_enabled?
   end
 
@@ -116,13 +123,27 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
     # For other providers, extract domain without TLD
     account_name = trusted_oauth_provider? ? 'Organization' : extract_domain_without_tld(auth_hash['info']['email'])
 
+    # Bootstrap: if this is the very first user on the entire Chatwoot
+    # instance, promote them to SuperAdmin. This is the SSO equivalent of
+    # the installation/onboarding wizard's super_admin:true path — without
+    # it, an SSO-only deployment would have no way to reach a SuperAdmin
+    # account except by running rails console against the cluster.
+    promote_to_super_admin = !User.exists?
+
     @resource, @account = AccountBuilder.new(
       account_name: account_name,
       user_full_name: extract_full_name_from_auth_hash,
       email: auth_hash['info']['email'],
       locale: I18n.locale,
-      confirmed: auth_hash['info']['email_verified']
+      confirmed: auth_hash['info']['email_verified'],
+      super_admin: promote_to_super_admin
     ).perform
+
+    # Clear the installation-onboarding Redis flag so the "Howdy, Welcome
+    # to Chatwoot" wizard never appears for subsequent visits — the OIDC
+    # bootstrap has produced an equivalent first SuperAdmin + account.
+    ::Redis::Alfred.delete(::Redis::Alfred::CHATWOOT_INSTALLATION_ONBOARDING) if promote_to_super_admin
+
     Avatar::AvatarFromUrlJob.perform_later(@resource, auth_hash['info']['image'])
   end
 
