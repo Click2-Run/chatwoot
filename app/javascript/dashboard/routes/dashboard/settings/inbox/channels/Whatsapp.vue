@@ -115,8 +115,11 @@ const PROVIDER_CATALOG = computed(() => [
 
 // Keys shown in the picker. 360Dialog is intentionally hidden in create mode
 // (URL-reachable only) but offered in convert mode where it is a valid target.
+// PROVIDER_TYPES.WHATSAPP ("Cloud do WhatsApp" / "Conectar via API") is
+// deliberately omitted from both pickers: this build routes Official API
+// access exclusively through Própria Cloud, so the embedded-signup /
+// manual-Cloud paths must not be reachable from the UI.
 const CREATE_PICKER_KEYS = [
-  PROVIDER_TYPES.WHATSAPP,
   PROVIDER_TYPES.TWILIO,
   PROVIDER_TYPES.BAILEYS,
   PROVIDER_TYPES.WHATSMEOW,
@@ -124,7 +127,6 @@ const CREATE_PICKER_KEYS = [
   PROVIDER_TYPES.ZAPI,
 ];
 const CONVERT_PICKER_KEYS = [
-  PROVIDER_TYPES.WHATSAPP,
   PROVIDER_TYPES.BAILEYS,
   PROVIDER_TYPES.WHATSMEOW,
   PROVIDER_TYPES.PROPRIACLOUD,
@@ -175,10 +177,12 @@ const currentProviderLabel = computed(() => {
 
 const isValidSelectedProvider = computed(() => {
   if (!selectedProvider.value) return false;
-  // In create mode, allow the embedded-signup manual fallback link and the
-  // legacy-URL path to 360Dialog even though neither is in the picker.
+  // In create mode, allow the legacy-URL path to 360Dialog even though it is
+  // not in the picker. The Meta-Cloud paths (PROVIDER_TYPES.WHATSAPP and
+  // PROVIDER_TYPES.WHATSAPP_MANUAL) are intentionally NOT whitelisted here:
+  // this build forbids URL-hacking onto the embedded-signup / manual Cloud
+  // forms, since Official API is served only through Própria Cloud.
   if (!isConvertMode.value) {
-    if (selectedProvider.value === PROVIDER_TYPES.WHATSAPP_MANUAL) return true;
     if (selectedProvider.value === PROVIDER_TYPES.THREE_SIXTY_DIALOG)
       return true;
   }
