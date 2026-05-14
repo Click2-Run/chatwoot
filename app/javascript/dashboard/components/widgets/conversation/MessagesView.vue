@@ -347,6 +347,27 @@ export default {
     inboxProviderConnection() {
       return this.currentInbox.provider_connection?.connection;
     },
+    // Propriacloud is two-axis: websocket (connection_state) + device link
+    // (pair_state). Either being non-green means the agent can't talk —
+    // surface the banner. Baileys / Zapi only expose one axis, so the
+    // legacy `connection !== 'open'` check stays the source of truth.
+    showWhatsappProviderOfflineBanner() {
+      if (this.isAWhatsAppPropriacloudChannel) {
+        const pc = this.currentInbox.provider_connection || {};
+        return this.inboxProviderConnection !== 'open' || pc.is_paired !== true;
+      }
+      if (this.isAWhatsAppBaileysChannel || this.isAWhatsAppZapiChannel) {
+        return this.inboxProviderConnection !== 'open';
+      }
+      return false;
+    },
+    showWhatsappLinkDeviceModalGate() {
+      return (
+        this.isAWhatsAppBaileysChannel ||
+        this.isAWhatsAppZapiChannel ||
+        this.isAWhatsAppPropriacloudChannel
+      );
+    },
   },
 
   watch: {
@@ -789,7 +810,7 @@ export default {
     class="flex flex-col justify-between flex-grow h-full min-w-0 m-0"
   >
     <div ref="topBannerRef">
-      <template v-if="isAWhatsAppBaileysChannel || isAWhatsAppZapiChannel">
+      <template v-if="showWhatsappLinkDeviceModalGate">
         <WhatsappLinkDeviceModal
           v-if="showLinkDeviceModal"
           :show="showLinkDeviceModal"
@@ -797,7 +818,7 @@ export default {
           :inbox="currentInbox"
         />
         <Banner
-          v-if="inboxProviderConnection !== 'open'"
+          v-if="showWhatsappProviderOfflineBanner"
           color-scheme="alert"
           class="mt-2 mx-2 rounded-lg overflow-hidden"
           :banner-message="
