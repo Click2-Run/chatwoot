@@ -440,6 +440,16 @@
             "TITLE": "Própria Cloud API",
             "DESCRIPTION": "Própria Cloud is a production-ready Go-based WhatsApp integration, full-featured, offering superior performance and stability compared to Baileys, Evolution API/Go/Cloud, Z-API and other Node.js based alternatives."
           },
+          "PHONE_NUMBER": {
+            "LABEL": "Phone number",
+            "PLACEHOLDER": "e.g. 5511999998888 (with or without the leading \"+\")",
+            "ERROR": "Enter the phone number digits including country code (e.g. 5511999998888). The \"+\" prefix is optional."
+          },
+          "INSTANCE_ID": {
+            "LABEL": "Instance ID (optional)",
+            "PLACEHOLDER": "Adopt an existing whatsapp-api instance, e.g. 0119",
+            "HELP": "Leave blank to generate a fresh UUID and create a new instance."
+          },
           "PROVIDER_URL": {
             "LABEL": "Provider URL",
             "PLACEHOLDER": "If provider is not running locally, please provide the URL",

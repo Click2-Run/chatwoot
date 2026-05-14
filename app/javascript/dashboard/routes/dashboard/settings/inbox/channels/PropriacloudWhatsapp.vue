@@ -6,8 +6,25 @@ import { useI18n } from 'vue-i18n';
 import { useVuelidate } from '@vuelidate/core';
 import { useAlert } from 'dashboard/composables';
 import { required, requiredIf } from '@vuelidate/validators';
-import { isPhoneE164OrEmpty } from 'shared/helpers/Validators';
 import { isValidURL } from '../../../../../helper/URLHelper';
+
+// Lenient phone-number handling for Própria Cloud. We accept the number with
+// or without the leading "+" (and tolerate spaces / dashes / parens), then
+// normalize to E.164 before sending it to the backend. The user should not
+// have to remember the "+" prefix — WhatsApp expects E.164 internally and we
+// can prepend it ourselves.
+const normalizePhoneNumber = value => {
+  if (!value) return '';
+  const digits = String(value).replace(/\D+/g, '').replace(/^0+/, '');
+  if (!digits) return '';
+  return `+${digits}`;
+};
+
+const isAcceptablePhoneNumber = value => {
+  if (!value) return false;
+  const normalized = normalizePhoneNumber(value);
+  return /^\+[1-9]\d{1,14}$/.test(normalized);
+};
 
 import NextButton from 'dashboard/components-next/button/Button.vue';
 import Switch from 'dashboard/components-next/switch/Switch.vue';
@@ -28,7 +45,7 @@ const uiFlags = computed(() => store.getters['inboxes/getUIFlags']);
 
 const rules = computed(() => ({
   inboxName: { required },
-  phoneNumber: { required, isPhoneE164OrEmpty },
+  phoneNumber: { required, isAcceptablePhoneNumber },
   providerUrl: {
     isValidURL: value => !value || isValidURL(value),
     requiredIf: requiredIf(apiKey),
@@ -70,7 +87,7 @@ const createChannel = async () => {
       name: inboxName.value,
       channel: {
         type: 'whatsapp',
-        phone_number: phoneNumber.value,
+        phone_number: normalizePhoneNumber(phoneNumber.value),
         provider: 'propriacloud',
         provider_config: providerConfig,
       },
@@ -143,15 +160,17 @@ const setShowAdvancedOptions = () => {
 
     <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
       <label :class="{ error: v$.phoneNumber.$error }">
-        {{ $t('INBOX_MGMT.ADD.WHATSAPP.PHONE_NUMBER.LABEL') }}
+        {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER.LABEL') }}
         <input
           v-model="phoneNumber"
           type="text"
-          :placeholder="$t('INBOX_MGMT.ADD.WHATSAPP.PHONE_NUMBER.PLACEHOLDER')"
+          :placeholder="
+            $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER.PLACEHOLDER')
+          "
           @blur="v$.phoneNumber.$touch"
         />
         <span v-if="v$.phoneNumber.$error" class="message">
-          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PHONE_NUMBER.ERROR') }}
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER.ERROR') }}
         </span>
       </label>
     </div>
@@ -204,14 +223,16 @@ const setShowAdvancedOptions = () => {
 
       <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
         <label>
-          Instance ID (optional)
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INSTANCE_ID.LABEL') }}
           <input
             v-model="instanceId"
             type="text"
-            placeholder="Adopt an existing whatsapp-api instance, e.g. 0119"
+            :placeholder="
+              $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INSTANCE_ID.PLACEHOLDER')
+            "
           />
           <span class="message">
-            Leave blank to generate a fresh UUID and create a new instance.
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INSTANCE_ID.HELP') }}
           </span>
         </label>
       </div>
