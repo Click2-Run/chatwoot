@@ -21,7 +21,7 @@
       "DISCONNECT_CONFIRM_MESSAGE": "The instance will stop sending and receiving messages until you reconnect. The WhatsApp pairing stays intact — just click Connect to bring it back.",
       "UNPAIR_CONFIRM_TITLE": "Unpair the device?",
       "UNPAIR_CONFIRM_MESSAGE": "The WhatsApp device link will be removed. You'll need to pair again via QR code or phone code to use this inbox.",
-      "META_INSTANCE": "{provider} · Instance: {instanceId}",
+      "META_INSTANCE": "{provider} - {name}",
       "SYNC_AVATAR": "Use WhatsApp picture",
       "SYNC_AVATAR_QUEUED": "Fetching the WhatsApp profile picture. The channel image will refresh in a moment.",
       "SYNC_AVATAR_NONE": "The connected WhatsApp account has no profile picture set."

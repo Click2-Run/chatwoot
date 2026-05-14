@@ -1010,7 +1010,7 @@ export default {
                 {{
                   $t('INBOX_MGMT.PROPRIACLOUD_STATUS.META_INSTANCE', {
                     provider: whatsAppAPIProviderName,
-                    instanceId: inbox.provider_config?.instance_id || '—',
+                    name: inbox.name || '—',
                   })
                 }}
               </span>
