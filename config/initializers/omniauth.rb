@@ -8,22 +8,17 @@ Rails.application.config.middleware.use OmniAuth::Builder do
   }
 
   # Própria Cloud OpenID Connect provider
-  # Cascade: PROPRIACLOUD_OPENID_* (current) -> CLICK2RUN_OPENID_* (legacy)
-  #          -> LOGTO_* (upstream Logto naming)
+  # Cascade: PROPRIACLOUD_OPENID_* (current) -> LOGTO_* (upstream Logto naming)
   pc_issuer = ENV['PROPRIACLOUD_OPENID_ISSUER'].presence ||
-              ENV['CLICK2RUN_OPENID_ISSUER'].presence ||
               ENV['LOGTO_ISSUER'].presence ||
               ENV['LOGTO_ENDPOINT']
   pc_app_id = ENV['PROPRIACLOUD_OPENID_APP_ID'].presence ||
-              ENV['CLICK2RUN_OPENID_APP_ID'].presence ||
               ENV['LOGTO_APP_ID'].presence ||
               ENV['LOGTO_CLIENT_ID']
   pc_app_secret = ENV['PROPRIACLOUD_OPENID_APP_SECRET'].presence ||
-                  ENV['CLICK2RUN_OPENID_APP_SECRET'].presence ||
                   ENV['LOGTO_APP_SECRET'].presence ||
                   ENV['LOGTO_CLIENT_SECRET']
   pc_scopes = (ENV['PROPRIACLOUD_OPENID_SCOPES'].presence ||
-               ENV['CLICK2RUN_OPENID_SCOPES'].presence ||
                ENV['LOGTO_SCOPES'].presence ||
                'openid profile email').split
 

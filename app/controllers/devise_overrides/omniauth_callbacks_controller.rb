@@ -60,7 +60,7 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
 
   def sign_up_user
     return redirect_to login_page_url(error: 'no-account-found') unless account_signup_allowed?
-    # Skip domain validation for trusted OAuth providers (Própria Cloud, legacy Click2Run, etc.)
+    # Skip domain validation for trusted OAuth providers (Própria Cloud).
     unless trusted_oauth_provider?
       return redirect_to login_page_url(error: 'business-account-only') unless validate_signup_email_is_business_domain?
     end
@@ -180,20 +180,13 @@ class DeviseOverrides::OmniauthCallbacksController < DeviseTokenAuth::OmniauthCa
   end
 
   def trusted_oauth_provider?
-    # List of OAuth providers that are trusted and should skip domain validation.
-    # Própria Cloud (Logto) is the canonical SSO; `click2run` retained as a
-    # legacy alias for any installs that still register that omniauth strategy.
-    trusted_providers = %w[propriacloud click2run]
-    trusted_providers.include?(auth_hash['provider'])
+    auth_hash['provider'] == 'propriacloud'
   end
 
   def should_sync_oauth_profile?
-    # Check if profile sync is enabled for Própria Cloud OpenID Connect
-    # Default to true if not set (always sync)
     return false unless trusted_oauth_provider?
 
-    sync_enabled = ENV['PROPRIACLOUD_OPENID_ALWAYS_SYNC'].presence ||
-                   ENV.fetch('CLICK2RUN_OPENID_ALWAYS_SYNC', 'true')
+    sync_enabled = ENV.fetch('PROPRIACLOUD_OPENID_ALWAYS_SYNC', 'true')
     sync_enabled.to_s.downcase != 'false'
   end
 

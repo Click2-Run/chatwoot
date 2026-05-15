@@ -54,11 +54,9 @@ class Installation::OnboardingController < ApplicationController
 
   def propriacloud_oidc_configured?
     issuer = ENV['PROPRIACLOUD_OPENID_ISSUER'].presence ||
-             ENV['CLICK2RUN_OPENID_ISSUER'].presence ||
              ENV['LOGTO_ISSUER'].presence ||
              ENV['LOGTO_ENDPOINT'].presence
     app_id = ENV['PROPRIACLOUD_OPENID_APP_ID'].presence ||
-             ENV['CLICK2RUN_OPENID_APP_ID'].presence ||
              ENV['LOGTO_APP_ID'].presence ||
              ENV['LOGTO_CLIENT_ID'].presence
     issuer.present? && app_id.present?
