@@ -1080,7 +1080,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       }.to_json
     )
 
-    if process_response(response) || response.code == 409
+    # 409 CONFLICT = "webhook already exists for this instance scope target".
+    # `setup_channel_provider` registers the webhook once at inbox creation;
+    # every subsequent `reconcile!` (driven by the dashboard's
+    # `refresh_provider_status` poll) re-POSTs the same body and gets 409
+    # back. That is the EXPECTED idempotent path. Match it BEFORE
+    # `process_response`, which would otherwise emit a misleading
+    # `whatsapp-api error: 409` ERROR line on every poll tick.
+    if response.code == 409 || process_response(response)
       # ALWAYS run the dedupe sweep — even on a successful POST. The
       # webhook record is keyed on (scope, instance_id, url), so a URL
       # change (e.g. swapping a cross-stack container name for
