@@ -186,6 +186,16 @@ class Api::V1::Accounts::InboxesController < Api::V1::Accounts::BaseController #
     unless channel.provider_service.respond_to?(:pair_qrcode)
       render json: { error: 'Channel does not support QR pairing' }, status: :unprocessable_entity and return
     end
+
+    # Short-circuit if we already know the WhatsApp side is locked out:
+    # don't spam another /instances/pair/qrcode call that would just
+    # contribute to WhatsApp's escalation timer on this number. The
+    # phone-code path has the same guard at #pair_phone_code below.
+    locked_until = channel.provider_config['pair_locked_until']
+    if locked_until.present? && Time.parse(locked_until).future?
+      render json: pair_locked_response(channel), status: :unprocessable_entity and return
+    end
+
     qr_data_url = channel.provider_service.pair_qrcode
     render json: { qr_data_url: qr_data_url }
   rescue Whatsapp::Providers::WhatsappPropriacloudService::PairRateLimitedError => e

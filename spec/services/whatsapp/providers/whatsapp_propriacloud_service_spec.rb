@@ -219,6 +219,64 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
 
       expect(service.request_phone_pairing_code('5511')['expires_in']).to eq(30)
     end
+
+    it 'raises PairRateLimitedError and stamps pair_locked_until on 429 PAIR_RATE_LIMITED' do
+      stub_request(:post, "#{provider_url}/instances/pair/phonecode?instance_id=inst-123")
+        .to_return(
+          status: 429,
+          body: {
+            error: {
+              code: 'PAIR_RATE_LIMITED',
+              message: 'rate-overlimit',
+              details: { recommended_cooldown_seconds: 300 }
+            }
+          }.to_json
+        )
+
+      expect { service.request_phone_pairing_code('5511999') }
+        .to raise_error(described_class::PairRateLimitedError) do |err|
+          expect(err.code).to eq('PAIR_RATE_LIMITED')
+          expect(err.cooldown_seconds).to eq(300)
+          expect(err.locked_until).to be_present
+        end
+
+      config = whatsapp_channel.reload.provider_config
+      expect(config['pair_lock_code']).to eq('PAIR_RATE_LIMITED')
+      expect(Time.parse(config['pair_locked_until'])).to be_within(5.seconds).of(Time.current + 300)
+    end
+  end
+
+  describe '#pair_qrcode (QR rate-limit parity)' do
+    it 'raises PairRateLimitedError and stamps pair_locked_until on 429 PAIR_RATE_LIMITED' do
+      stub_request(:get, "#{provider_url}/instances/pair/qrcode?instance_id=inst-123")
+        .to_return(
+          status: 429,
+          body: {
+            error: {
+              code: 'PAIR_RATE_LIMITED',
+              message: 'rate-overlimit',
+              details: { recommended_cooldown_seconds: 300 }
+            }
+          }.to_json
+        )
+
+      expect { service.pair_qrcode }
+        .to raise_error(described_class::PairRateLimitedError) do |err|
+          expect(err.code).to eq('PAIR_RATE_LIMITED')
+          expect(err.cooldown_seconds).to eq(300)
+        end
+
+      expect(whatsapp_channel.reload.provider_config['pair_locked_until']).to be_present
+    end
+
+    it 'raises ProviderUnavailableError on non-429 failures (no lock stamp)' do
+      stub_request(:get, "#{provider_url}/instances/pair/qrcode?instance_id=inst-123")
+        .to_return(status: 503, body: { error: { code: 'PROVIDER_DOWN' } }.to_json)
+
+      expect { service.pair_qrcode }
+        .to raise_error(described_class::ProviderUnavailableError, /Failed to fetch QR code.*503/)
+      expect(whatsapp_channel.reload.provider_config['pair_locked_until']).to be_nil
+    end
   end
 
   describe '#fetch_own_profile_picture_url (Imagem do Canal sync)' do

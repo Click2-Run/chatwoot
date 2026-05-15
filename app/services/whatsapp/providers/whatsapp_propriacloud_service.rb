@@ -249,7 +249,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       )
     end
 
-    raise ProviderUnavailableError, "Failed to fetch QR code: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
+    raise_pair_error_for!(response, 'Failed to fetch QR code') unless process_response(response)
 
     body = unwrap(response.parsed_response)
     qr = body['img'] || body['qr_code']
@@ -894,6 +894,18 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       }
     end
 
+    raise_pair_error_for!(response, 'Failed to request pairing code')
+  end
+
+  # Shared error-shape for both pair entry points (pair_qrcode +
+  # request_phone_pairing_code). Translates a non-2xx provider response
+  # into either a PairRateLimitedError (stamping `pair_locked_until` so
+  # the controller short-circuit and the dashboard countdown both work)
+  # or a generic ProviderUnavailableError. Keeps both pair paths
+  # honoring WhatsApp's per-number cooldown identically — without this,
+  # QR clicks would slip past the lock and compound WhatsApp's
+  # escalation timer.
+  def raise_pair_error_for!(response, summary)
     parsed_error = extract_pair_error(response)
     if parsed_error[:rate_limited]
       until_at = Time.current + parsed_error[:cooldown_seconds].to_i
@@ -906,7 +918,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       )
     end
 
-    raise ProviderUnavailableError, parsed_error[:user_message] || "Failed to request pairing code: #{response.code}"
+    raise ProviderUnavailableError, parsed_error[:user_message].presence || "#{summary}: HTTP #{response.code} — #{response.body.to_s[0..240]}"
   end
 
   # Parse the structured error body whatsapp-api returns on 4xx/5xx
