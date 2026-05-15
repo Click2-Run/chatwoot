@@ -933,13 +933,16 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     rate_limited = code == 'PAIR_RATE_LIMITED' ||
                    response.code.to_i == 429 ||
                    err['message'].to_s.match?(/rate-?overlimit/i)
+    # Only emit a user-facing message for KNOWN error codes — the
+    # unknown branch returns nil so callers fall through to their own
+    # debug-friendly format (summary + HTTP code + body excerpt). This
+    # keeps pair_qrcode and request_phone_pairing_code from showing a
+    # phone-code-flavored generic message for unrelated 5xx failures.
     user_message = if rate_limited
                      'WhatsApp temporarily blocked new pair attempts on this number. ' \
                        'Please wait the cooldown out before trying again.'
                    elsif code == 'PAIR_DEVICE_LIMIT'
                      'WhatsApp limit of linked devices reached. Open the app, remove an old linked device, and retry.'
-                   else
-                     'Could not request a pairing code. Please try again in a moment.'
                    end
     { rate_limited: rate_limited, code: code.presence || 'PAIR_FAILED',
       user_message: user_message, cooldown_seconds: cooldown }
