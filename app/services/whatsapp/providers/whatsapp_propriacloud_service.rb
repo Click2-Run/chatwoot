@@ -35,8 +35,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # Resolution order (highest priority first):
   #   1. per-channel `provider_config['provider_url' / 'api_key']` overrides
   #   2. InstallationConfig (DB) — Super Admin → Própria Cloud form
-  #   3. Legacy env-var aliases (WHATSAPP_API_*, PROPRIACLOUD_PROVIDER_DEFAULT_*,
-  #      CLICK2RUN_PROVIDER_DEFAULT_*)
+  #   3. Legacy env-var aliases (WHATSAPP_API_*, PROPRIACLOUD_PROVIDER_DEFAULT_*)
   #
   # When the canonical DB row is blank but an alias env var is set, the
   # alias value is migrated into the canonical InstallationConfig row on
@@ -46,14 +45,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   def self.default_url
     resolve_with_env_aliases(
       'PROPRIACLOUD_API_URL',
-      %w[WHATSAPP_API_URL PROPRIACLOUD_PROVIDER_DEFAULT_URL CLICK2RUN_PROVIDER_DEFAULT_URL]
+      %w[WHATSAPP_API_URL PROPRIACLOUD_PROVIDER_DEFAULT_URL]
     )
   end
 
   def self.default_api_key
     resolve_with_env_aliases(
       'PROPRIACLOUD_API_KEY',
-      %w[WHATSAPP_API_KEY PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY CLICK2RUN_PROVIDER_DEFAULT_API_KEY]
+      %w[WHATSAPP_API_KEY PROPRIACLOUD_PROVIDER_DEFAULT_API_KEY]
     )
   end
 
@@ -64,14 +63,15 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     ) || 'http://localhost:3000'
   end
 
-  # Resolve `canonical_key` from DB first; if blank, walk env aliases and
-  # migrate the first hit into the canonical InstallationConfig row so
-  # subsequent reads (and the Super Admin form) reflect the same value.
+  # Resolve `canonical_key` from DB first; if blank, walk env (canonical
+  # name first, then any legacy aliases) and migrate the first hit into the
+  # canonical InstallationConfig row so subsequent reads (and the Super
+  # Admin form) reflect the same value.
   def self.resolve_with_env_aliases(canonical_key, env_aliases)
     db_value = GlobalConfigService.load(canonical_key, nil)
     return db_value if db_value.present?
 
-    env_value = env_aliases.lazy.map { |k| ENV[k] }.find { |v| v.present? }
+    env_value = ([canonical_key] + env_aliases).lazy.map { |k| ENV[k] }.find { |v| v.present? }
     return nil if env_value.blank?
 
     # first_or_create! is race-safe; subsequent callers race onto the same row.

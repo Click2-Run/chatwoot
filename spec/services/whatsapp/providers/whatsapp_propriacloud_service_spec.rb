@@ -17,6 +17,29 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
   end
   let(:service) { described_class.new(whatsapp_channel: whatsapp_channel) }
 
+  describe '.default_url / .default_api_key (env resolution)' do
+    it 'reads the canonical PROPRIACLOUD_API_URL env var when no DB row exists' do
+      InstallationConfig.where(name: 'PROPRIACLOUD_API_URL').delete_all
+      with_modified_env PROPRIACLOUD_API_URL: 'https://canonical.example.com/api/v1' do
+        expect(described_class.default_url).to eq('https://canonical.example.com/api/v1')
+      end
+    end
+
+    it 'reads the canonical PROPRIACLOUD_API_KEY env var when no DB row exists' do
+      InstallationConfig.where(name: 'PROPRIACLOUD_API_KEY').delete_all
+      with_modified_env PROPRIACLOUD_API_KEY: 'canonical-key' do
+        expect(described_class.default_api_key).to eq('canonical-key')
+      end
+    end
+
+    it 'still honors the legacy WHATSAPP_API_URL alias when only that is set' do
+      InstallationConfig.where(name: 'PROPRIACLOUD_API_URL').delete_all
+      with_modified_env WHATSAPP_API_URL: 'https://legacy.example.com/api/v1' do
+        expect(described_class.default_url).to eq('https://legacy.example.com/api/v1')
+      end
+    end
+  end
+
   describe '#download_media (PEND-01 / PEND-02)' do
     let(:image_message) do
       {
