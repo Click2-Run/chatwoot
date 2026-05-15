@@ -134,18 +134,53 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
   end
 
   describe '#register_webhook! (PEND-09)' do
-    it 'does NOT send the undocumented `enabled` field' do
+    let(:list_stub) do
+      stub_request(:get, /#{Regexp.escape(provider_url)}\/webhooks\?scope=instance/)
+        .to_return(status: 200, body: { data: { webhooks: [] } }.to_json)
+    end
+
+    it 'sends only the fields documented by CreateWebhookRequest (no `enabled`, no `active`)' do
       stub = stub_request(:post, "#{provider_url}/webhooks")
              .with do |req|
                body = JSON.parse(req.body)
-               !body.key?('enabled') && body['active'] == true && body['scope'] == 'instance'
+               !body.key?('enabled') && !body.key?('active') && body['scope'] == 'instance'
              end
              .to_return(status: 201, body: { id: 'wh_inst_1' }.to_json)
-      stub_request(:get, /#{Regexp.escape(provider_url)}\/webhooks\?scope=instance/).to_return(status: 200, body: { data: { webhooks: [] } }.to_json)
+      list_stub
 
       service.send(:register_webhook!)
 
       expect(stub).to have_been_requested
+    end
+
+    it 'treats 409 CONFLICT as idempotent success and still reconciles' do
+      stub_request(:post, "#{provider_url}/webhooks")
+        .to_return(status: 409, body: {
+          success: false,
+          error: { code: 'CONFLICT', message: 'webhook already exists for this instance scope target' }
+        }.to_json)
+      list_stub
+
+      expect { service.send(:register_webhook!) }.not_to raise_error
+      expect(list_stub).to have_been_requested
+    end
+
+    it 'does NOT emit a `whatsapp-api error: 409` ERROR log on the idempotent 409 path' do
+      stub_request(:post, "#{provider_url}/webhooks")
+        .to_return(status: 409, body: { error: { code: 'CONFLICT' } }.to_json)
+      list_stub
+
+      allow(Rails.logger).to receive(:error)
+      service.send(:register_webhook!)
+      expect(Rails.logger).not_to have_received(:error).with(/whatsapp-api error: 409/)
+    end
+
+    it 'raises ProviderUnavailableError when the POST genuinely fails (e.g. 500)' do
+      stub_request(:post, "#{provider_url}/webhooks")
+        .to_return(status: 500, body: { error: { code: 'INTERNAL' } }.to_json)
+
+      expect { service.send(:register_webhook!) }
+        .to raise_error(described_class::ProviderUnavailableError, /Failed to register webhook/)
     end
   end
 
