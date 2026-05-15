@@ -37,6 +37,15 @@ Rails.application.configure do
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
   config.force_ssl = ActiveModel::Type::Boolean.new.cast(ENV.fetch('FORCE_SSL', false))
 
+  # Exclude provider webhook routes from force_ssl 301 redirect — internal
+  # K8s callers (whatsapp-api etc.) hit Chatwoot over plain HTTP via the
+  # Service DNS, and a 301 to https would convert their POST to a GET.
+  config.ssl_options = {
+    redirect: {
+      exclude: ->(request) { request.path.start_with?('/webhooks/') }
+    }
+  }
+
   # customize using the environment variables
   config.log_level = ENV.fetch('LOG_LEVEL', 'info').to_sym
 
