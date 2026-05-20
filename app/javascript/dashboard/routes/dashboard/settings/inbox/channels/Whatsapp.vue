@@ -10,6 +10,7 @@ import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import BaileysWhatsapp from './BaileysWhatsapp.vue';
 import WhatsmeowWhatsapp from './WhatsmeowWhatsapp.vue';
 import PropriacloudWhatsapp from './PropriacloudWhatsapp.vue';
+import PropriacloudWhatsappEmbeddedSignup from './PropriacloudWhatsappEmbeddedSignup.vue';
 import ZapiWhatsapp from './ZapiWhatsapp.vue';
 import PromoBanner from 'dashboard/components-next/banner/PromoBanner.vue';
 import { usePolicy } from 'dashboard/composables/usePolicy';
@@ -67,6 +68,23 @@ const hasEmbeddedSignupConfig = computed(() => {
     whatsappConfigurationId !== 'none'
   );
 });
+
+// Show the Propria.Cloud Embedded Signup panel when the deployment has been
+// configured for it (env-driven flag on the chatwootConfig object). The
+// option lives ALONGSIDE the existing manual propriacloud setup — both stay
+// reachable so users can choose between supplying credentials manually OR
+// running the Meta popup through propria.cloud's tech-provider.
+const hasPropriacloudEmbeddedSignupConfig = computed(() => {
+  const { propriacloudEmbeddedSignupEnabled } = window.chatwootConfig ?? {};
+  return (
+    propriacloudEmbeddedSignupEnabled === true ||
+    propriacloudEmbeddedSignupEnabled === 'true'
+  );
+});
+const propriacloudShowEmbeddedSignup = ref(false);
+const togglePropriacloudEmbeddedSignup = () => {
+  propriacloudShowEmbeddedSignup.value = !propriacloudShowEmbeddedSignup.value;
+};
 
 const selectedProvider = computed(() => route.query.provider);
 
@@ -395,9 +413,33 @@ const shouldShowZApiPromo = computed(() => false);
         <WhatsmeowWhatsapp
           v-else-if="selectedProvider === PROVIDER_TYPES.WHATSMEOW"
         />
-        <PropriacloudWhatsapp
-          v-else-if="selectedProvider === PROVIDER_TYPES.PROPRIACLOUD"
-        />
+        <!-- Propria.Cloud — embedded signup gate -->
+        <template v-else-if="selectedProvider === PROVIDER_TYPES.PROPRIACLOUD">
+          <div v-if="hasPropriacloudEmbeddedSignupConfig">
+            <PropriacloudWhatsappEmbeddedSignup
+              v-if="propriacloudShowEmbeddedSignup"
+            />
+            <PropriacloudWhatsapp v-else />
+            <div class="pt-4 mt-4 border-t border-n-weak text-sm">
+              <a
+                href="#"
+                class="underline text-n-brand"
+                @click.prevent="togglePropriacloudEmbeddedSignup"
+              >
+                {{
+                  propriacloudShowEmbeddedSignup
+                    ? $t(
+                        'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.EMBEDDED_SIGNUP.TOGGLE_TO_MANUAL'
+                      )
+                    : $t(
+                        'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.EMBEDDED_SIGNUP.TOGGLE_TO_EMBEDDED'
+                      )
+                }}
+              </a>
+            </div>
+          </div>
+          <PropriacloudWhatsapp v-else />
+        </template>
       </div>
     </div>
   </div>

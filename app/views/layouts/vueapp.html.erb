@@ -52,6 +52,7 @@
         whatsappAppId: '<%= @global_config['WHATSAPP_APP_ID'] %>',
         whatsappConfigurationId: '<%= @global_config['WHATSAPP_CONFIGURATION_ID'] %>',
         whatsappApiVersion: '<%= @global_config['WHATSAPP_API_VERSION'] %>',
+        propriacloudEmbeddedSignupEnabled: '<%= ENV.fetch('PROPRIACLOUD_EMBEDDED_SIGNUP_ENABLED', 'false') == 'true' %>',
         signupEnabled: '<%= @global_config['ENABLE_ACCOUNT_SIGNUP'] %>',
         authDisableDefault: '<%= ENV.fetch('AUTH_DISABLE_DEFAULT', 'false') %>',
         isEnterprise: '<%= @global_config['IS_ENTERPRISE'] %>',

@@ -759,6 +759,111 @@ propriacloud provider; documented here for completeness.
 
 ---
 
+## 15.b Embedded Signup via Propria.Cloud (WABA-true onboarding)
+
+For tenants who want to onboard a Meta WhatsApp Business Account (WABA)
+*without* leaving Chatwoot — and without manually copy-pasting Cloud API
+tokens — we expose a one-click flow that mints a public Embedded Signup
+URL hosted on `minha.propria.cloud`. The admin forwards that URL to the
+customer; the customer completes the Meta popup; the existing
+whatsapp-api → Chatwoot event flow signals "paired".
+
+### Why it exists
+
+Meta's Embedded Signup popup is locked to the tech provider's domain.
+Chatwoot is NOT a tech provider — `propria.cloud` is. So instead of
+embedding the FB.login() SDK in Chatwoot, we delegate the popup to
+`minha.propria.cloud` and let Chatwoot's existing instance-state
+monitoring (`provider_connection` updated on `instance.*` / `pairing.*`
+events) detect completion. **No webhook callback to Chatwoot is
+involved** — same path QR pairing already uses.
+
+### Files
+
+| Layer | File |
+|------|------|
+| Vue UI | `app/javascript/dashboard/routes/dashboard/settings/inbox/channels/PropriacloudWhatsappEmbeddedSignup.vue` |
+| Vue picker | `app/javascript/dashboard/routes/dashboard/settings/inbox/channels/Whatsapp.vue` (gates on `chatwootConfig.propriacloudEmbeddedSignupEnabled`) |
+| API client | `app/javascript/dashboard/api/channel/propriacloudChannel.js` |
+| Rails controller (start) | `app/controllers/api/v1/accounts/propriacloud/authorizations_controller.rb` |
+| Rails service | `app/services/whatsapp/propriacloud_embedded_signup_service.rb` |
+| Pending session model | `app/models/propriacloud_embedded_signup_session.rb` |
+| Migration | `db/migrate/20260520160726_create_propriacloud_embedded_signup_sessions.rb` |
+
+### Flow
+
+```
+Admin clicks "Conectar via Embedded Signup (Propria.Cloud)"
+  → enters: tenant_key, inbox name, phone number, mark_as_read
+  → POST /api/v1/accounts/{id}/propriacloud/authorization
+      Rails service:
+        1. Build Channel::Whatsapp + Inbox in a transaction with
+           provider_config carrying connection_type='waba' and
+           source='propriacloud_embedded_signup'.
+        2. Run channel.provider_service.setup_channel_provider_without_error_handling(fetch_qr: false)
+           — the SAME path QR pairing uses; calls whatsapp-api
+           POST /instances/create with `waba: true` (flag flipped by
+           connection_type='waba'; see whatsapp_propriacloud_service.rb:184).
+        3. POST https://minha.propria.cloud/api/external/whatsapp/v1/signup-sessions
+             X-API-Key: <tenant_key>
+             body: { instance_id, ttl_minutes, caller_metadata, prefill? }
+           minha validates by calling whatsapp-api `/instances/status` with
+           the supplied tenant.key (proves auth + instance↔tenant binding),
+           then mints code + URL.
+        4. Persist signup_url + signup_session_id + signup_expires_at on
+           channel.provider_connection so the Vue panel renders it.
+      Rails: return { session_id, signup_url, instance_id, inbox_id } to UI.
+  → UI displays the URL with copy/open-tab + countdown (3-state panel
+    ported from minha's SignupLinkPanel UX so the experience is identical
+    whether the admin uses Propria.Cloud directly or Chatwoot).
+  → Customer opens the URL → minha hosts the Meta Embedded Signup popup
+    (existing /whatsapp/signup/{code} page, unchanged) → completes signup
+    → minha POSTs the auth code to whatsapp-api's existing 11-step
+    pipeline at /api/v1/meta/{appId}/waba/signup.
+  → whatsapp-api fires its existing instance.updated event after the
+    pipeline completes. Chatwoot's existing propriacloud webhook flow
+    (Whatsapp::IncomingMessagePropriacloudService) updates provider_connection
+    just like it does for any pairing transition. The inbox UI flips to
+    "paired" automatically — no embedded-signup-specific code path on the
+    receive side.
+```
+
+### Env vars
+
+| Var | Required | Purpose |
+|-----|----------|---------|
+| `PROPRIACLOUD_EMBEDDED_SIGNUP_ENABLED` | yes (`true` to enable UI) | Show the embedded-signup picker entry |
+| `PROPRIACLOUD_MINHA_BASE_URL` | optional | Defaults to `https://minha.propria.cloud` |
+| `PROPRIACLOUD_API_URL` | yes (existing) | Used as `provider_url` on the channel and by the service to find the whatsapp-api host the channel will hit |
+| `PROPRIACLOUD_API_KEY` | yes (existing, per tenant) | Same key the UI form collects; written into `provider_config['api_key']` on the channel just like the manual flow |
+
+### Authorization model
+
+- The tenant's `tenant_key` (64-hex bearer) is collected once in the UI
+  and sent to Rails. Same secret the tenant already uses against
+  whatsapp-api for everything else (`PROPRIACLOUD_API_KEY`).
+- Rails uses it as `X-API-Key` for **both** the whatsapp-api
+  `/instances/create` call (via `setup_channel_provider`) and the minha
+  `/api/external/whatsapp/v1/signup-sessions` call. The same key, the
+  same auth model.
+- minha re-validates by calling whatsapp-api `/instances/status` with
+  that key — if whatsapp-api accepts the call AND finds the instance,
+  the caller is authorized for that exact instance. No separate auth
+  layer.
+- No per-session secret, no HMAC handshake, no webhook back to Chatwoot.
+
+### Coexistence with manual setup
+
+Both flows live behind the **Propria.Cloud** picker entry. With
+`PROPRIACLOUD_EMBEDDED_SIGNUP_ENABLED=true`, the user sees the embedded
+flow first with a "Usar configuração manual" link to switch back to the
+existing manual-fields form. The two flows produce identical
+`Channel::Whatsapp` records — embedded sets `provider_config['source']`
+to `propriacloud_embedded_signup` (informational marker; same
+`connection_type='waba'` on both).
+
+---
+
 ## 16. How to keep this document up to date
 
 This file is **authoritative** for any audit, refactor, or fork-merge

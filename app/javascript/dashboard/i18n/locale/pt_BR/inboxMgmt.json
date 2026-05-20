@@ -478,6 +478,34 @@
           "SUBMIT_BUTTON": "Criar Canal Própria Cloud",
           "API": {
             "ERROR_MESSAGE": "Não foi possível salvar o canal Própria Cloud"
+          },
+          "EMBEDDED_SIGNUP": {
+            "TOGGLE_TO_MANUAL": "Usar configuração manual (API key e URL)",
+            "TOGGLE_TO_EMBEDDED": "Conectar via Embedded Signup (Propria.Cloud)",
+            "INTRO": "Conecte uma conta WhatsApp Business via Meta (Cloud API) usando o fluxo Embedded Signup hospedado pela Propria.Cloud. Cole sua chave do tenant (64 caracteres hexadecimais) e o nome desejado para a caixa de entrada. Geraremos um link temporário para enviar ao cliente.",
+            "TENANT_KEY_LABEL": "Chave do Tenant (Propria.Cloud)",
+            "TENANT_KEY_PLACEHOLDER": "Chave hexadecimal de 64 caracteres",
+            "TENANT_KEY_ERROR": "A chave deve ter 64 caracteres hexadecimais.",
+            "INBOX_NAME_LABEL": "Nome da Caixa de Entrada",
+            "INBOX_NAME_PLACEHOLDER": "WhatsApp - Atendimento",
+            "PHONE_LABEL": "Número de Telefone (E.164)",
+            "PHONE_PLACEHOLDER": "+5511999887766",
+            "MARK_AS_READ_LABEL": "Marcar mensagens como lidas no WhatsApp ao abrir no Chatwoot",
+            "CTA_GENERATE": "Gerar link de autorização para o cliente",
+            "PANEL_TITLE": "Link gerado — encaminhe ao cliente",
+            "PANEL_HELP": "Compartilhe via WhatsApp, e-mail ou SMS. O cliente fará login com a própria conta do Facebook e autorizará o WhatsApp pela Meta.",
+            "ONCE_WARNING": "Este link só será exibido aqui agora — guarde antes de fechar. Pode ser usado uma única vez.",
+            "EXPIRES_IN": "Expira em",
+            "CANCEL_AND_REGENERATE": "Cancelar / Gerar outro",
+            "SESSION_LABEL": "Session",
+            "EXPIRED_TITLE": "O link expirou",
+            "EXPIRED_HELP": "Volte ao formulário e gere um novo link.",
+            "BACK_BUTTON": "Voltar",
+            "COPY": "Copiar",
+            "COPIED": "Copiado",
+            "OPEN": "Abrir",
+            "GENERIC_ERROR": "Falha ao gerar o link.",
+            "ERROR_PREFIX": "Erro"
           }
         },
         "API": {

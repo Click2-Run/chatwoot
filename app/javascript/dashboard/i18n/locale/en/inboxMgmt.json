@@ -478,6 +478,34 @@
           "SUBMIT_BUTTON": "Create Própria Cloud Channel",
           "API": {
             "ERROR_MESSAGE": "We were not able to save the Própria Cloud channel"
+          },
+          "EMBEDDED_SIGNUP": {
+            "TOGGLE_TO_MANUAL": "Use manual configuration (API key and URL)",
+            "TOGGLE_TO_EMBEDDED": "Connect via Embedded Signup (Própria Cloud)",
+            "INTRO": "Connect a WhatsApp Business account via Meta (Cloud API) using the Embedded Signup flow hosted by Própria Cloud. Paste your tenant key (64-hex) and the inbox name you want. A temporary link will be minted for you to send to the customer.",
+            "TENANT_KEY_LABEL": "Tenant Key (Própria Cloud)",
+            "TENANT_KEY_PLACEHOLDER": "64-char hex key",
+            "TENANT_KEY_ERROR": "The key must be 64 hex characters.",
+            "INBOX_NAME_LABEL": "Inbox Name",
+            "INBOX_NAME_PLACEHOLDER": "WhatsApp - Support",
+            "PHONE_LABEL": "Phone Number (E.164)",
+            "PHONE_PLACEHOLDER": "+5511999887766",
+            "MARK_AS_READ_LABEL": "Mark messages as read on WhatsApp when opened in Chatwoot",
+            "CTA_GENERATE": "Generate authorization link for the customer",
+            "PANEL_TITLE": "Link generated — forward to the customer",
+            "PANEL_HELP": "Share via WhatsApp, email, or SMS. The customer signs in with their own Facebook account and authorizes WhatsApp via Meta.",
+            "ONCE_WARNING": "This link is only shown here now — save it before closing. Single-use.",
+            "EXPIRES_IN": "Expires in",
+            "CANCEL_AND_REGENERATE": "Cancel / Generate another",
+            "SESSION_LABEL": "Session",
+            "EXPIRED_TITLE": "The link has expired",
+            "EXPIRED_HELP": "Return to the form and generate a new link.",
+            "BACK_BUTTON": "Back",
+            "COPY": "Copy",
+            "COPIED": "Copied",
+            "OPEN": "Open",
+            "GENERIC_ERROR": "Failed to generate the link.",
+            "ERROR_PREFIX": "Error"
           }
         },
         "API": {
