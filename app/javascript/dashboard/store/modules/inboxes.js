@@ -415,11 +415,27 @@ export const actions = {
     const response = await InboxesAPI.getAvailableCSATTemplates(inboxId);
     return response.data;
   },
-  setupChannelProvider: async (_, inboxId) => {
+  // Optional second arg can be either a plain inboxId (legacy callers)
+  // or { inboxId, fetch_qr } so the propriacloud phone-code flow can
+  // ensure the instance is connecting WITHOUT triggering a QR pull —
+  // pulling a QR counts as a pair attempt and burns the WhatsApp
+  // rate-limit budget that the phone-code request needs.
+  setupChannelProvider: async (_, payload) => {
+    const inboxId = typeof payload === 'object' ? payload.inboxId : payload;
+    const params =
+      typeof payload === 'object' && 'fetch_qr' in payload
+        ? { fetch_qr: payload.fetch_qr }
+        : {};
     try {
-      await InboxesAPI.setupChannelProvider(inboxId);
+      await InboxesAPI.setupChannelProvider(inboxId, params);
     } catch (error) {
-      throwErrorMessage(error);
+      // Backend now returns 422 with a friendly { error, code } payload.
+      // Surface that string as a plain Error so the modal can render
+      // it cleanly instead of leaking raw axios shape (status code, etc.).
+      const data = error?.response?.data || {};
+      const friendly =
+        data.error || 'Could not start pairing. Please try again in a moment.';
+      throw new Error(friendly);
     }
   },
   disconnectChannelProvider: async (_, inboxId) => {
@@ -427,6 +443,130 @@ export const actions = {
       await InboxesAPI.disconnectChannelProvider(inboxId);
     } catch (error) {
       throwErrorMessage(error);
+    }
+  },
+  pairQrcode: async ({ dispatch }, inboxId) => {
+    try {
+      const response = await InboxesAPI.pairQrcode(inboxId);
+      return response.data;
+    } catch (error) {
+      const data = error?.response?.data || {};
+      const friendly =
+        data.error || 'Could not generate a QR code. Please try again.';
+      // "client already logged in" / "already paired" from the API
+      // means our local Vuex inbox snapshot is stale (the device IS
+      // paired but the UI thinks it isn't, so Emparelhar was clickable).
+      // Force a status refresh so the chip flips to "Emparelhada" and
+      // the button row reflects truth on the very next render.
+      if (/already logged in|already paired|already.*pair/i.test(friendly)) {
+        dispatch('refreshProviderStatus', inboxId);
+      }
+      const wrapped = new Error(friendly);
+      wrapped.code = data.code;
+      wrapped.cooldownSeconds = data.cooldown_seconds;
+      wrapped.lockedUntil = data.locked_until;
+      throw wrapped;
+    }
+  },
+  pairPhoneCode: async ({ dispatch }, { inboxId, phone }) => {
+    try {
+      const response = await InboxesAPI.pairPhoneCode(inboxId, phone);
+      return response.data;
+    } catch (error) {
+      // Backend maps known errors to a friendly
+      // { error, code, cooldown_seconds, locked_until } payload.
+      // Re-throw a plain Error whose .message is the user-safe text and
+      // attach the structured fields on the error object so the modal
+      // can render a countdown without leaking the raw axios shape.
+      const data = error?.response?.data || {};
+      const friendly =
+        data.error ||
+        'Could not request a pairing code. Please try again in a moment.';
+      // Same defense as pairQrcode: "already logged in" means the
+      // device IS paired and our cache is wrong — force a refresh.
+      if (/already logged in|already paired|already.*pair/i.test(friendly)) {
+        dispatch('refreshProviderStatus', inboxId);
+      }
+      const wrapped = new Error(friendly);
+      wrapped.code = data.code;
+      wrapped.cooldownSeconds = data.cooldown_seconds;
+      wrapped.lockedUntil = data.locked_until;
+      throw wrapped;
+    }
+  },
+  // Lightweight Conectar — just brings the websocket up against an
+  // existing instance. Distinct from setupChannelProvider (which would
+  // also re-create the instance + re-register the webhook). Faithful
+  // port of propriacloud.git/apps/minha::connectInstance.
+  connectOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.connectOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not connect the WhatsApp instance. Please try again.';
+      throw new Error(friendly);
+    }
+  },
+  // Graceful disconnect — keeps pair, just brings the websocket down.
+  // Reverse with connectOnly.
+  disconnectOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.disconnectOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not disconnect the WhatsApp instance. Please try again.';
+      throw new Error(friendly);
+    }
+  },
+  // Unpair the device link but keep the instance. User must pair again
+  // afterwards via QR or phone code.
+  unpairOnly: async (_, inboxId) => {
+    try {
+      await InboxesAPI.unpairOnly(inboxId);
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not unpair the WhatsApp device. Please try again.';
+      throw new Error(friendly);
+    }
+  },
+  // Pull the connected WhatsApp device's profile picture from the
+  // propriacloud API and attach it to the inbox as the channel image
+  // (Imagem do Canal). Async on the backend — returns immediately;
+  // the avatar appears once Sidekiq finishes the download. The caller
+  // is expected to refetch the inbox a few seconds later to see the
+  // updated avatar_url.
+  syncAvatarFromProvider: async (_, inboxId) => {
+    try {
+      const response = await InboxesAPI.syncAvatarFromProvider(inboxId);
+      return response.data;
+    } catch (error) {
+      const friendly =
+        error?.response?.data?.error ||
+        'Could not sync the inbox avatar from WhatsApp. Please try again.';
+      throw new Error(friendly);
+    }
+  },
+  refreshProviderStatus: async (context, inboxId) => {
+    try {
+      const response = await InboxesAPI.refreshProviderStatus(inboxId);
+      const { provider_connection: providerConnection } = response.data || {};
+      if (!providerConnection) return null;
+      const cached = context.state.records.find(i => i.id === inboxId);
+      if (cached) {
+        context.commit(types.default.SET_INBOXES_ITEM, {
+          ...cached,
+          provider_connection: providerConnection,
+        });
+      }
+      return response.data;
+    } catch (error) {
+      // Refresh is best-effort — never block the UI on a backend hiccup.
+      // eslint-disable-next-line no-console
+      console.warn('refreshProviderStatus failed', error);
+      return null;
     }
   },
 };

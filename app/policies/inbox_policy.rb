@@ -74,6 +74,50 @@ class InboxPolicy < ApplicationPolicy
     @account_user.administrator?
   end
 
+  def pair_qrcode?
+    @account_user.administrator?
+  end
+
+  def pair_phone_code?
+    @account_user.administrator?
+  end
+
+  def connect_only?
+    @account_user.administrator?
+  end
+
+  def disconnect_only?
+    @account_user.administrator?
+  end
+
+  def unpair_only?
+    @account_user.administrator?
+  end
+
+  def refresh_provider_status?
+    # Read-only refresh; available to anyone allowed to view the inbox.
+    show?
+  end
+
+  def audit_stream?
+    # SSE subscription is read-only; anyone allowed to view the inbox
+    # can subscribe so agents see live pair/connection state changes
+    # while working in the conversation view.
+    show?
+  end
+
+  def resync_history?
+    @account_user.administrator?
+  end
+
+  def request_chat_history?
+    @account_user.administrator?
+  end
+
+  def sync_avatar_from_provider?
+    @account_user.administrator?
+  end
+
   def convert_provider?
     @account_user.administrator?
   end

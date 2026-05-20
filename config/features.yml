@@ -17,10 +17,10 @@
   display_name: Facebook Channel
   enabled: true
   help_url: https://chwt.app/hc/fb
-- name: channel_twitter
-  display_name: Twitter Channel
+- name: channel_whatsapp_propriacloud
+  display_name: Própria Cloud WhatsApp Provider
   enabled: true
-  deprecated: true
+  help_url: https://propria.cloud/docs/whatsapp
 - name: ip_lookup
   display_name: IP Lookup
   enabled: false
@@ -151,11 +151,11 @@
   chatwoot_internal: true
 - name: contact_chatwoot_support_team
   display_name: Contact Chatwoot Support Team
-  enabled: true
+  enabled: false
   chatwoot_internal: true
 - name: shopify_integration
   display_name: Shopify Integration
-  enabled: false
+  enabled: true
   chatwoot_internal: true
 - name: search_with_gin
   display_name: Search messages with GIN
@@ -184,7 +184,7 @@
   deprecated: true
 - name: whatsapp_campaign
   display_name: WhatsApp Campaign
-  enabled: false
+  enabled: true
 - name: crm_v2
   display_name: CRM V2
   enabled: false
@@ -224,6 +224,33 @@
   display_name: Companies
   enabled: false
   premium: true
+- name: channel_bandwidth_sms
+  display_name: Bandwidth SMS Provider
+  enabled: false
+  help_url: https://chwt.app/hc/bandwidth
+- name: channel_twilio_sms
+  display_name: Twilio SMS Provider
+  enabled: false
+  help_url: https://chwt.app/hc/twilio-sms
+- name: channel_zapi
+  display_name: Z-API Channel
+  enabled: false
+- name: channel_whatsapp_baileys
+  display_name: Baileys WhatsApp Provider
+  enabled: false
+  help_url: https://chwt.app/hc/baileys
+- name: channel_whatsapp_whatsmeow
+  display_name: Whatsmeow WhatsApp Provider
+  enabled: false
+  help_url: https://chwt.app/hc/whatsmeow
+- name: channel_whatsapp_click2run
+  display_name: Click2Run WhatsApp Provider (legacy — superseded by channel_whatsapp_propriacloud)
+  enabled: false
+  deprecated: true
+- name: channel_twilio_whatsapp
+  display_name: Twilio WhatsApp Provider
+  enabled: false
+  help_url: https://chwt.app/hc/twilio-whatsapp
 - name: channel_tiktok
   display_name: TikTok Channel
   enabled: true

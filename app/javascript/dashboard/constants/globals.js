@@ -44,7 +44,12 @@ export default {
     'https://testimonials.cdn.chatwoot.com/testimonial-content.json',
   WHATSAPP_EMBEDDED_SIGNUP_DOCS_URL:
     'https://developers.facebook.com/docs/whatsapp/embedded-signup/custom-flows/onboarding-business-app-users#limitations',
-  FAZER_AI_GUIDES_URL: 'https://app.fazer.ai/#/guides',
+  PROPRIACLOUD_GUIDES_URL: 'https://app.multicanal.propria.cloud/#/guides',
+  // Back-compat alias — old code paths reference FAZER_AI_GUIDES_URL.
+  // Removing requires updating two consumers (ComposeNewGroupForm,
+  // MessagesView). Both still resolve through the alias so any
+  // third-party plugin or staged branch keeps working.
+  FAZER_AI_GUIDES_URL: 'https://app.multicanal.propria.cloud/#/guides',
   SMALL_SCREEN_BREAKPOINT: 768,
   LARGE_SCREEN_BREAKPOINT: 1024,
   AVAILABILITY_STATUS_KEYS: ['online', 'busy', 'offline'],

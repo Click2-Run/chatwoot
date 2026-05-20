@@ -79,6 +79,9 @@ gem 'dotenv-rails', '>= 3.0.0'
 gem 'foreman'
 gem 'puma'
 gem 'vite_rails'
+# Pin vite_ruby to 3.7.x — matches the vite-plugin-ruby 5.1.x npm we keep pinned
+# (5.2.x is ESM-only and cannot be loaded by our CommonJS vite.config.ts).
+gem 'vite_ruby', '~> 3.7.0'
 # metrics on heroku
 gem 'barnes'
 
@@ -185,6 +188,8 @@ gem 'audited', '~> 5.4', '>= 5.4.1'
 gem 'omniauth', '>= 2.1.2'
 gem 'omniauth-saml'
 gem 'omniauth-google-oauth2', '>= 1.1.3'
+# Use jjbohn fork which supports OmniAuth 2.x
+gem 'omniauth_openid_connect', '~> 0.8.0'
 gem 'omniauth-rails_csrf_protection', '~> 1.0', '>= 1.0.2'
 
 ## Gems for reponse bot

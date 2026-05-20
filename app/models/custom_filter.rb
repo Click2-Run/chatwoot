@@ -6,7 +6,7 @@
 #  filter_type :integer          default("conversation"), not null
 #  name        :string           not null
 #  query       :jsonb            not null
-#  visibility  :integer          default(0), not null
+#  visibility  :integer          default("personal"), not null
 #  created_at  :datetime         not null
 #  updated_at  :datetime         not null
 #  account_id  :bigint           not null
@@ -14,8 +14,9 @@
 #
 # Indexes
 #
-#  index_custom_filters_on_account_id  (account_id)
-#  index_custom_filters_on_user_id     (user_id)
+#  index_custom_filters_on_account_id                    (account_id)
+#  index_custom_filters_on_account_type_visibility_user  (account_id,filter_type,visibility,user_id)
+#  index_custom_filters_on_user_id                       (user_id)
 #
 class CustomFilter < ApplicationRecord
   belongs_to :user

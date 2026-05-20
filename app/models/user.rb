@@ -19,7 +19,7 @@
 #  message_signature      :text
 #  name                   :string           not null
 #  otp_backup_codes       :text
-#  otp_required_for_login :boolean          default(FALSE), not null
+#  otp_required_for_login :boolean          default(FALSE)
 #  otp_secret             :string
 #  provider               :string           default("email"), not null
 #  pubsub_token           :string
@@ -90,7 +90,7 @@ class User < ApplicationRecord
   accepts_nested_attributes_for :account_users
 
   has_many :assigned_conversations, foreign_key: 'assignee_id', class_name: 'Conversation', dependent: :nullify, inverse_of: :assignee
-  alias_attribute :conversations, :assigned_conversations
+  alias_method :conversations, :assigned_conversations
   has_many :csat_survey_responses, foreign_key: 'assigned_agent_id', dependent: :nullify, inverse_of: :assigned_agent
   has_many :reviewed_csat_survey_responses, foreign_key: 'review_notes_updated_by_id', class_name: 'CsatSurveyResponse',
                                             dependent: :nullify, inverse_of: :review_notes_updated_by
@@ -124,6 +124,7 @@ class User < ApplicationRecord
   # rubocop:enable Rails/HasManyOrHasOneDependent
 
   before_validation :set_password_and_uid, on: :create
+  before_create :set_default_ui_locale
   after_destroy :remove_macros
 
   scope :order_by_full_name, -> { order('lower(name) ASC') }
@@ -139,6 +140,16 @@ class User < ApplicationRecord
 
   def set_password_and_uid
     self.uid = email
+  end
+
+  # Force pt_BR as the user's UI locale on creation so the dashboard renders
+  # in Portuguese regardless of browser Accept-Language. Users can still
+  # change it later from Profile Settings.
+  def set_default_ui_locale
+    self.ui_settings ||= {}
+    return if ui_settings['locale'].present?
+
+    ui_settings['locale'] = ENV.fetch('DEFAULT_USER_LOCALE', 'pt_BR')
   end
 
   def assigned_inboxes

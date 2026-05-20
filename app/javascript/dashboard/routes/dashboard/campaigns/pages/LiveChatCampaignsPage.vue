@@ -32,6 +32,14 @@ const hasNoLiveChatCampaigns = computed(
   () => liveChatCampaigns.value?.length === 0 && !isFetchingCampaigns.value
 );
 
+// Check if any Website (Live Chat) inbox exists
+const inboxes = useMapGetter('inboxes/getInboxes');
+const hasWebsiteInbox = computed(() => {
+  return inboxes.value.some(
+    inbox => inbox.channel_type === 'Channel::WebWidget'
+  );
+});
+
 const handleEdit = campaign => {
   selectedCampaign.value = campaign;
   editLiveChatCampaignDialogRef.value.dialogRef.open();
@@ -46,6 +54,7 @@ const handleDelete = campaign => {
   <CampaignLayout
     :header-title="t('CAMPAIGN.LIVE_CHAT.HEADER_TITLE')"
     :button-label="t('CAMPAIGN.LIVE_CHAT.NEW_CAMPAIGN')"
+    :is-button-disabled="!hasWebsiteInbox"
     @click="toggleLiveChatCampaignDialog()"
     @close="toggleLiveChatCampaignDialog(false)"
   >

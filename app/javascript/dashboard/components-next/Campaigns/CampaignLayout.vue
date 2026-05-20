@@ -11,6 +11,10 @@ defineProps({
     type: String,
     default: '',
   },
+  isButtonDisabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['click', 'close']);
@@ -40,6 +44,7 @@ const handleButtonClick = () => {
               :label="buttonLabel"
               icon="i-lucide-plus"
               size="sm"
+              :disabled="isButtonDisabled"
               class="group-hover/campaign-button:brightness-110"
               @click="handleButtonClick"
             />

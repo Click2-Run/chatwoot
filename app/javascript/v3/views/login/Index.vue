@@ -8,11 +8,13 @@ import { useVuelidate } from '@vuelidate/core';
 import { SESSION_STORAGE_KEYS } from 'dashboard/constants/sessionStorage';
 import SessionStorage from 'shared/helpers/sessionStorage';
 import { useBranding } from 'shared/composables/useBranding';
+import { parseBoolean } from '@chatwoot/utils';
 
 // components
 import SimpleDivider from '../../components/Divider/SimpleDivider.vue';
 import FormInput from '../../components/Form/Input.vue';
 import GoogleOAuthButton from '../../components/GoogleOauth/Button.vue';
+import PropriacloudOpenidButton from '../../components/PropriacloudOpenid/Button.vue';
 import Spinner from 'shared/components/Spinner.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
@@ -32,6 +34,7 @@ export default {
   components: {
     FormInput,
     GoogleOAuthButton,
+    PropriacloudOpenidButton,
     Spinner,
     NextButton,
     SimpleDivider,
@@ -94,11 +97,21 @@ export default {
         Boolean(window.chatwootConfig.googleOAuthClientId)
       );
     },
+    showPropriacloudOpenid() {
+      return Boolean(window.chatwootConfig.propriacloudOpenidAppId);
+    },
     showSignupLink() {
-      return window.chatwootConfig.signupEnabled === 'true';
+      return (
+        parseBoolean(window.chatwootConfig.signupEnabled) &&
+        !this.isDefaultAuthDisabled
+      );
     },
     showSamlLogin() {
       return this.allowedLoginMethods.includes('saml');
+    },
+    isDefaultAuthDisabled() {
+      // Check if default Chatwoot authentication is disabled (using external IdP)
+      return parseBoolean(window.chatwootConfig.authDisableDefault);
     },
   },
   created() {
@@ -116,6 +129,20 @@ export default {
         const { query } = this.$route;
         this.$router.replace({ query: { ...query, error: undefined } });
       });
+    }
+  },
+  mounted() {
+    // Auto-redirect to Própria Cloud OpenID login if enabled
+    const shouldAutoRedirect = parseBoolean(
+      window.chatwootConfig.propriacloudOpenidLoginRedirect
+    );
+    if (
+      shouldAutoRedirect &&
+      this.showPropriacloudOpenid &&
+      !this.ssoAuthToken
+    ) {
+      // Redirect to Própria Cloud OAuth flow
+      window.location.href = '/auth/propriacloud';
     }
   },
   methods: {
@@ -276,6 +303,7 @@ export default {
       <div v-if="!email">
         <div class="flex flex-col gap-4">
           <GoogleOAuthButton v-if="showGoogleOAuth" />
+          <PropriacloudOpenidButton v-if="showPropriacloudOpenid" />
           <div v-if="showSamlLogin" class="text-center">
             <router-link
               to="/app/login/sso"
@@ -291,12 +319,19 @@ export default {
             </router-link>
           </div>
           <SimpleDivider
-            v-if="showGoogleOAuth || showSamlLogin"
+            v-if="
+              !isDefaultAuthDisabled &&
+              (showGoogleOAuth || showPropriacloudOpenid || showSamlLogin)
+            "
             :label="$t('COMMON.OR')"
             class="uppercase"
           />
         </div>
-        <form class="space-y-5" @submit.prevent="submitFormLogin">
+        <form
+          v-if="!isDefaultAuthDisabled"
+          class="space-y-5"
+          @submit.prevent="submitFormLogin"
+        >
           <FormInput
             v-model="credentials.email"
             name="email_address"
@@ -354,12 +389,12 @@ export default {
     >
       powered by
       <a
-        href="https://fazer.ai"
+        href="https://multicanal.propria.cloud"
         target="_blank"
         rel="noopener noreferrer"
         class="text-n-slate-11 hover:text-n-brand"
       >
-        fazer.ai
+        Própria Cloud
       </a>
     </p>
     <!-- eslint-enable vue/no-bare-strings-in-template @intlify/vue-i18n/no-raw-text -->

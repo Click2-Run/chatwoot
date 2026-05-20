@@ -19,16 +19,25 @@ class Webhooks::WhatsappController < ActionController::API
     perform_sync if params[:awaitResponse].present?
     return if performed?
 
-    Webhooks::WhatsappEventsJob.perform_later(params.to_unsafe_hash)
+    Webhooks::WhatsappEventsJob.perform_later(job_params)
     head :ok
   end
 
   def perform_sync
-    Webhooks::WhatsappEventsJob.perform_now(params.to_unsafe_hash)
+    Webhooks::WhatsappEventsJob.perform_now(job_params)
   rescue Whatsapp::IncomingMessageBaileysService::InvalidWebhookVerifyToken
     head :unauthorized
   rescue Whatsapp::IncomingMessageBaileysService::MessageNotFoundError
     head :not_found
+  end
+
+  # Includes the request signature header and raw body so that providers
+  # using HMAC-SHA256 (e.g. Própria Cloud whatsapp-api) can verify in the job.
+  def job_params
+    params.to_unsafe_hash.merge(
+      _webhook_signature: request.headers['X-Webhook-Signature'],
+      _webhook_raw_body: request.raw_post
+    ).compact
   end
 
   def valid_token?(token)

@@ -8,7 +8,7 @@ module Middleware # rubocop:disable Style/ClassAndModuleChildren
 
     def call(env)
       status, headers, response = @app.call(env)
-      headers['X-Platform'] = 'fazer.ai'
+      headers['X-Platform'] = 'propriacloud'
       [status, headers, response]
     end
   end

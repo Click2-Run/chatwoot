@@ -3,6 +3,7 @@ class DeviseOverrides::PasswordsController < Devise::PasswordsController
 
   skip_before_action :require_no_authentication, raise: false
   skip_before_action :authenticate_user!, raise: false
+  before_action :check_default_auth_disabled, only: [:create, :update]
 
   def create
     @user = User.from_email(params[:email])
@@ -38,6 +39,16 @@ class DeviseOverrides::PasswordsController < Devise::PasswordsController
     render json: {
       message: message
     }, status: status
+  end
+
+  def check_default_auth_disabled
+    # Block password reset functionality if AUTH_DISABLE_DEFAULT=true
+    is_disabled = ENV.fetch('AUTH_DISABLE_DEFAULT', 'false').to_s.downcase == 'true'
+    return unless is_disabled
+
+    render json: {
+      error: 'Password reset is disabled. Please contact your administrator or use SSO/OAuth to sign in.'
+    }, status: :forbidden
   end
 end
 

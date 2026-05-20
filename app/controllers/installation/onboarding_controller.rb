@@ -1,5 +1,6 @@
 class Installation::OnboardingController < ApplicationController
   before_action :ensure_installation_onboarding
+  before_action :redirect_to_sso_if_configured, only: [:index]
 
   def index; end
 
@@ -39,5 +40,25 @@ class Installation::OnboardingController < ApplicationController
 
   def ensure_installation_onboarding
     redirect_to '/' unless ::Redis::Alfred.get(::Redis::Alfred::CHATWOOT_INSTALLATION_ONBOARDING)
+  end
+
+  # When a trusted OIDC provider (Própria Cloud / Logto) is configured, route
+  # the first-boot operator straight into the SSO flow instead of the legacy
+  # email/password wizard. The OmniAuth callback handles SuperAdmin promotion
+  # and clears the onboarding flag, producing an equivalent bootstrap result.
+  def redirect_to_sso_if_configured
+    return unless propriacloud_oidc_configured?
+
+    redirect_to '/auth/propriacloud', allow_other_host: false
+  end
+
+  def propriacloud_oidc_configured?
+    issuer = ENV['PROPRIACLOUD_OPENID_ISSUER'].presence ||
+             ENV['LOGTO_ISSUER'].presence ||
+             ENV['LOGTO_ENDPOINT'].presence
+    app_id = ENV['PROPRIACLOUD_OPENID_APP_ID'].presence ||
+             ENV['LOGTO_APP_ID'].presence ||
+             ENV['LOGTO_CLIENT_ID'].presence
+    issuer.present? && app_id.present?
   end
 end

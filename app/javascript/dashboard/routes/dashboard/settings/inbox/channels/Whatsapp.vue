@@ -8,7 +8,12 @@ import CloudWhatsapp from './CloudWhatsapp.vue';
 import WhatsappEmbeddedSignup from './WhatsappEmbeddedSignup.vue';
 import ChannelSelector from 'dashboard/components/ChannelSelector.vue';
 import BaileysWhatsapp from './BaileysWhatsapp.vue';
+import WhatsmeowWhatsapp from './WhatsmeowWhatsapp.vue';
+import PropriacloudWhatsapp from './PropriacloudWhatsapp.vue';
 import ZapiWhatsapp from './ZapiWhatsapp.vue';
+import PromoBanner from 'dashboard/components-next/banner/PromoBanner.vue';
+import { usePolicy } from 'dashboard/composables/usePolicy';
+import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 
 const props = defineProps({
   mode: {
@@ -27,6 +32,7 @@ const isConvertMode = computed(() => props.mode === 'convert');
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { isFeatureFlagEnabled } = usePolicy();
 
 // Latched by the child once it triggers the post-success router.replace.
 // Suppresses rendering during the navigation tail so the parent doesn't
@@ -46,6 +52,8 @@ const PROVIDER_TYPES = {
   WHATSAPP_MANUAL: 'whatsapp_manual',
   THREE_SIXTY_DIALOG: '360dialog',
   BAILEYS: 'baileys',
+  WHATSMEOW: 'whatsmeow',
+  PROPRIACLOUD: 'propriacloud',
   ZAPI: 'zapi',
 };
 
@@ -94,6 +102,18 @@ const PROVIDER_CATALOG = computed(() => [
     icon: 'i-woot-baileys',
   },
   {
+    key: PROVIDER_TYPES.WHATSMEOW,
+    title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.WHATSMEOW'),
+    description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.WHATSMEOW_DESC'),
+    icon: 'i-woot-whatsapp',
+  },
+  {
+    key: PROVIDER_TYPES.PROPRIACLOUD,
+    title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.PROPRIACLOUD'),
+    description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.PROPRIACLOUD_DESC'),
+    icon: 'i-lucide-qr-code',
+  },
+  {
     key: PROVIDER_TYPES.ZAPI,
     title: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.ZAPI'),
     description: t('INBOX_MGMT.ADD.WHATSAPP.PROVIDERS.ZAPI_DESC'),
@@ -109,26 +129,56 @@ const PROVIDER_CATALOG = computed(() => [
 
 // Keys shown in the picker. 360Dialog is intentionally hidden in create mode
 // (URL-reachable only) but offered in convert mode where it is a valid target.
+// PROVIDER_TYPES.WHATSAPP ("Cloud do WhatsApp" / "Conectar via API") is
+// deliberately omitted from both pickers: this build routes Official API
+// access exclusively through Própria Cloud, so the embedded-signup /
+// manual-Cloud paths must not be reachable from the UI.
 const CREATE_PICKER_KEYS = [
-  PROVIDER_TYPES.WHATSAPP,
   PROVIDER_TYPES.TWILIO,
   PROVIDER_TYPES.BAILEYS,
+  PROVIDER_TYPES.WHATSMEOW,
+  PROVIDER_TYPES.PROPRIACLOUD,
   PROVIDER_TYPES.ZAPI,
 ];
 const CONVERT_PICKER_KEYS = [
-  PROVIDER_TYPES.WHATSAPP,
   PROVIDER_TYPES.BAILEYS,
+  PROVIDER_TYPES.WHATSMEOW,
+  PROVIDER_TYPES.PROPRIACLOUD,
   PROVIDER_TYPES.ZAPI,
   PROVIDER_TYPES.THREE_SIXTY_DIALOG,
 ];
 
 const availableProviders = computed(() => {
+  // Apply codi feature-flag gating on top of the upstream picker shape
+  // (CONVERT_PICKER_KEYS / CREATE_PICKER_KEYS). The catalog already lists
+  // all providers; the flags decide which extras (Twilio/Baileys/Whatsmeow/
+  // Própria Cloud/Z-API) are exposed to the user.
+  const flagFor = key => {
+    switch (key) {
+      case PROVIDER_TYPES.TWILIO:
+        return FEATURE_FLAGS.CHANNEL_TWILIO_WHATSAPP;
+      case PROVIDER_TYPES.BAILEYS:
+        return FEATURE_FLAGS.CHANNEL_WHATSAPP_BAILEYS;
+      case PROVIDER_TYPES.WHATSMEOW:
+        return FEATURE_FLAGS.CHANNEL_WHATSAPP_WHATSMEOW;
+      case PROVIDER_TYPES.PROPRIACLOUD:
+        return FEATURE_FLAGS.CHANNEL_WHATSAPP_PROPRIACLOUD;
+      case PROVIDER_TYPES.ZAPI:
+        return FEATURE_FLAGS.CHANNEL_ZAPI;
+      default:
+        return null;
+    }
+  };
   const allowed = isConvertMode.value
     ? CONVERT_PICKER_KEYS
     : CREATE_PICKER_KEYS;
   return PROVIDER_CATALOG.value
     .filter(p => allowed.includes(p.key))
-    .filter(p => !isConvertMode.value || p.key !== currentProviderKey.value);
+    .filter(p => !isConvertMode.value || p.key !== currentProviderKey.value)
+    .filter(p => {
+      const flag = flagFor(p.key);
+      return flag === null || isFeatureFlagEnabled(flag);
+    });
 });
 
 const currentProviderLabel = computed(() => {
@@ -141,10 +191,12 @@ const currentProviderLabel = computed(() => {
 
 const isValidSelectedProvider = computed(() => {
   if (!selectedProvider.value) return false;
-  // In create mode, allow the embedded-signup manual fallback link and the
-  // legacy-URL path to 360Dialog even though neither is in the picker.
+  // In create mode, allow the legacy-URL path to 360Dialog even though it is
+  // not in the picker. The Meta-Cloud paths (PROVIDER_TYPES.WHATSAPP and
+  // PROVIDER_TYPES.WHATSAPP_MANUAL) are intentionally NOT whitelisted here:
+  // this build forbids URL-hacking onto the embedded-signup / manual Cloud
+  // forms, since Official API is served only through Própria Cloud.
   if (!isConvertMode.value) {
-    if (selectedProvider.value === PROVIDER_TYPES.WHATSAPP_MANUAL) return true;
     if (selectedProvider.value === PROVIDER_TYPES.THREE_SIXTY_DIALOG)
       return true;
   }
@@ -178,6 +230,12 @@ const shouldShowCloudWhatsapp = provider => {
 const handleManualLinkClick = () => {
   selectProvider(PROVIDER_TYPES.WHATSAPP_MANUAL);
 };
+
+// Promo banners (Própria Cloud / Z-API) are intentionally disabled — Própria
+// Cloud is now the recommended path and shown directly in the picker; no
+// cross-sell needed.
+const shouldShowPropriacloudPromo = computed(() => false);
+const shouldShowZApiPromo = computed(() => false);
 </script>
 
 <template>
@@ -203,7 +261,9 @@ const handleManualLinkClick = () => {
         </p>
       </div>
 
-      <div class="flex gap-6 justify-start">
+      <div
+        class="grid max-w-3xl grid-cols-1 xs:grid-cols-2 gap-6 sm:grid-cols-3"
+      >
         <ChannelSelector
           v-for="provider in availableProviders"
           :key="provider.key"
@@ -211,6 +271,57 @@ const handleManualLinkClick = () => {
           :description="provider.description"
           :icon="provider.icon"
           @click="selectProvider(provider.key)"
+        />
+      </div>
+
+      <div
+        v-if="shouldShowPropriacloudPromo && !isConvertMode"
+        class="mt-6 relative overflow-visible"
+      >
+        <PromoBanner
+          :title="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.TITLE'
+            )
+          "
+          :description="
+            $t(
+              'INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.DESCRIPTION'
+            )
+          "
+          variant="success"
+          logo-src=""
+          logo-alt="Própria Cloud"
+          :cta-text="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.PROPRIACLOUD_PROMO.CTA')
+          "
+          @cta-click="selectProvider(PROVIDER_TYPES.PROPRIACLOUD)"
+        />
+      </div>
+
+      <div
+        v-if="shouldShowZApiPromo && !isConvertMode"
+        class="mt-6 relative overflow-visible"
+      >
+        <img
+          src="~dashboard/assets/images/curved-arrow.svg"
+          alt=""
+          class="absolute -top-12 right-0 w-20 h-20 pointer-events-none z-10 scale-y-[-1] -rotate-45"
+        />
+        <PromoBanner
+          :title="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.ZAPI_PROMO.TITLE')
+          "
+          :description="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.ZAPI_PROMO.DESCRIPTION')
+          "
+          variant="success"
+          logo-src="/assets/images/dashboard/channels/z-api/z-api-dark-green.png"
+          logo-alt="Z-API"
+          :cta-text="
+            $t('INBOX_MGMT.ADD.WHATSAPP.SELECT_PROVIDER.ZAPI_PROMO.CTA')
+          "
+          @cta-click="selectProvider(PROVIDER_TYPES.ZAPI)"
         />
       </div>
     </div>
@@ -280,6 +391,12 @@ const handleManualLinkClick = () => {
           v-else-if="selectedProvider === PROVIDER_TYPES.ZAPI"
           :mode="mode"
           :inbox="inbox"
+        />
+        <WhatsmeowWhatsapp
+          v-else-if="selectedProvider === PROVIDER_TYPES.WHATSMEOW"
+        />
+        <PropriacloudWhatsapp
+          v-else-if="selectedProvider === PROVIDER_TYPES.PROPRIACLOUD"
         />
       </div>
     </div>

@@ -27,8 +27,15 @@ node_modules
 master.key
 *.rdb
 
+# Per-build artifact written by build/build-pre.sh (carries HEAD SHA into the
+# Docker context so remote builds — whose tar excludes .git — can still stamp
+# /app/.git_sha at image build time).
+.git_sha
+
 # Ignore env files
 .env
+.env.*
+!.env.example
 
 public/uploads
 public/packs*
@@ -61,6 +68,7 @@ coverage
 # ignore packages
 node_modules
 package-lock.json
+.pnpm-store
 
 *.dump
 
@@ -93,8 +101,10 @@ yarn-debug.log*
 # TextEditors & AI Agents config files
 .vscode
 .claude/**/*.local.*
+.claude/scheduled_tasks.lock
 .cursor
 .codex/
+.llm/
 CLAUDE.local.md
 
 # Histoire deployment

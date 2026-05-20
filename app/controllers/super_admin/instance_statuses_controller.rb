@@ -8,6 +8,7 @@ class SuperAdmin::InstanceStatusesController < SuperAdmin::ApplicationController
     chatwoot_edition
     instance_meta
     baileys_api_version
+    whatsmeow_api_version
   end
 
   def chatwoot_edition
@@ -62,5 +63,11 @@ class SuperAdmin::InstanceStatusesController < SuperAdmin::ApplicationController
     @metrics['Baileys API version'] = Whatsapp::Providers::WhatsappBaileysService.status[:packageInfo][:version]
   rescue Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError => e
     @metrics['Baileys API version'] = e.message
+  end
+
+  def whatsmeow_api_version
+    @metrics['Whatsmeow API version'] = Whatsapp::Providers::WhatsappWhatsmeowService.status[:version]
+  rescue Whatsapp::Providers::WhatsappWhatsmeowService::ProviderUnavailableError => e
+    @metrics['Whatsmeow API version'] = e.message
   end
 end

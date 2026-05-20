@@ -3,6 +3,7 @@ class DeviseOverrides::SessionsController < DeviseTokenAuth::SessionsController
   # Unpermitted parameter: session
   wrap_parameters format: []
   before_action :process_sso_auth_token, only: [:create]
+  before_action :check_default_auth_disabled, only: [:create]
 
   def new
     redirect_to login_page_url(error: 'access-denied')
@@ -113,6 +114,19 @@ class DeviseOverrides::SessionsController < DeviseTokenAuth::SessionsController
 
   def render_mfa_error(message_key, status = :bad_request)
     render json: { error: I18n.t(message_key) }, status: status
+  end
+
+  def check_default_auth_disabled
+    # Block default email/password authentication if AUTH_DISABLE_DEFAULT=true
+    # Allow SSO/OAuth authentication to pass through
+    return if sso_authentication_request? || mfa_verification_request?
+
+    is_disabled = ENV.fetch('AUTH_DISABLE_DEFAULT', 'false').to_s.downcase == 'true'
+    return unless is_disabled
+
+    render json: {
+      error: 'Default authentication is disabled. Please use SSO/OAuth to sign in.'
+    }, status: :forbidden
   end
 end
 

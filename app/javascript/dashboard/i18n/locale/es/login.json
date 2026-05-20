@@ -17,6 +17,7 @@
     },
     "OAUTH": {
       "GOOGLE_LOGIN": "Iniciar sesión con Google",
+      "PROPRIACLOUD_LOGIN": "Iniciar sesión con Própria Cloud",
       "BUSINESS_ACCOUNTS_ONLY": "Por favor, utiliza el correo electrónico de tu empresa para iniciar sesión",
       "NO_ACCOUNT_FOUND": "No pudimos encontrar una cuenta para tu dirección de correo electrónico."
     },

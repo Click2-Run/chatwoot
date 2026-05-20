@@ -1,4 +1,4 @@
-# NOTE: See https://github.com/fazer-ai/chatwoot/blob/main/CUSTOM_BRANDING.md for more details.
+# NOTE: See CUSTOM-BRANDING.md in this repository for the Própria Cloud branding workflow.
 namespace :branding do
   desc 'Updates branding configurations from environment variables or defaults'
   task update: :environment do

@@ -1,0 +1,22 @@
+# Caddy configuration for local HTTPS development
+# Listens on port 3000 with automatic HTTPS (self-signed certificate)
+# Proxies all requests to the Rails service (rails:3000)
+# WebSocket support is enabled automatically by reverse_proxy
+https://localhost:3000 {
+    tls internal  # Generate self-signed certificate automatically
+
+    # Reverse proxy with full header forwarding and WebSocket support
+    reverse_proxy rails:3000 {
+        # Preserve original client information including port
+        # Use localhost:3000 explicitly since the site address includes the port
+        header_up Host localhost:3000
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-Host localhost:3000
+        header_up X-Forwarded-Port 3000
+
+        # WebSocket support (automatic, but explicit for clarity)
+        # Caddy automatically handles Upgrade headers for WebSocket connections
+    }
+}

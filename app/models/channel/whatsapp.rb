@@ -17,7 +17,7 @@
 # Indexes
 #
 #  index_channel_whatsapp_on_phone_number      (phone_number) UNIQUE
-#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text])) USING gin
+#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text, ('whatsmeow'::character varying)::text, ('propriacloud'::character varying)::text])) USING gin
 #
 # rubocop:enable Layout/LineLength
 
@@ -29,8 +29,8 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   EDITABLE_ATTRS = [:phone_number, :provider, { provider_config: {} }].freeze
 
   # default at the moment is 360dialog lets change later.
-  PROVIDERS = %w[default whatsapp_cloud baileys zapi].freeze
-  REACTION_SUPPORTED_PROVIDERS = %w[whatsapp_cloud baileys zapi].freeze
+  PROVIDERS = %w[default whatsapp_cloud baileys zapi whatsmeow propriacloud].freeze
+  REACTION_SUPPORTED_PROVIDERS = %w[whatsapp_cloud baileys zapi whatsmeow propriacloud].freeze
   before_validation :ensure_webhook_verify_token
 
   validates :provider, inclusion: { in: PROVIDERS }
@@ -39,10 +39,32 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
 
   has_one :inbox, as: :channel, dependent: :destroy
 
+  before_validation :apply_propriacloud_defaults, on: :create
   after_create :sync_templates
   before_destroy :teardown_webhooks
   before_destroy :disconnect_channel_provider, if: -> { provider_service.respond_to?(:disconnect_channel_provider) }
   after_commit :setup_webhooks, on: :create, if: :should_auto_setup_webhooks?
+
+  # Propriacloud inboxes default to `mark_as_read = true` so the WhatsApp
+  # sender sees blue ticks the moment an agent opens the conversation.
+  # We intentionally do NOT seed `presence_subscribe` because no code
+  # path on the Chatwoot side actually subscribes to per-contact
+  # presence today; the toggle was carried over from an older fazer-ai
+  # implementation that exposed contact-typing indicators. Re-introduce
+  # the key only if/when we wire up POST /presence/subscribe.
+  #
+  # `connection_type` discriminates between the two propriacloud modes:
+  # `web` (QR/phone-code pairing, whatsmeow under the hood) and `waba`
+  # (official Meta WhatsApp Business API). Legacy rows predating the
+  # toggle keep behaving as Web — that's the only safe default for any
+  # existing inbox in the wild.
+  def apply_propriacloud_defaults
+    return unless provider == 'propriacloud'
+
+    self.provider_config ||= {}
+    provider_config['mark_as_read'] = true unless provider_config.key?('mark_as_read')
+    provider_config['connection_type'] = 'web' if provider_config['connection_type'].blank?
+  end
 
   def name
     'Whatsapp'
@@ -70,6 +92,10 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
       Whatsapp::Providers::WhatsappBaileysService.new(whatsapp_channel: self)
     when 'zapi'
       Whatsapp::Providers::WhatsappZapiService.new(whatsapp_channel: self)
+    when 'whatsmeow'
+      Whatsapp::Providers::WhatsappWhatsmeowService.new(whatsapp_channel: self)
+    when 'propriacloud'
+      Whatsapp::Providers::WhatsappPropriacloudService.new(whatsapp_channel: self)
     else
       Whatsapp::Providers::Whatsapp360DialogService.new(whatsapp_channel: self)
     end
@@ -85,8 +111,19 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     # rubocop:enable Rails/SkipsModelValidations
   end
 
+  # MERGES the given keys into the existing provider_connection jsonb.
+  # Previously this REPLACED the whole hash — which meant any caller
+  # passing `{ connection: 'close' }` silently wiped `is_paired`,
+  # `pair_state`, `connection_state`, `is_connected`, `qr_data_url`, and
+  # `error`. The dashboard then fell back to the legacy single-axis
+  # `connection` field and lied about pair state (e.g. rendering a
+  # "Emparelhada" chip on an instance that was never paired, simply
+  # because the WS came back up). Pass `nil` for a key to clear it.
   def update_provider_connection!(provider_connection)
-    assign_attributes(provider_connection: provider_connection)
+    merged = (self.provider_connection || {})
+             .deep_dup
+             .merge(provider_connection.deep_stringify_keys)
+    assign_attributes(provider_connection: merged)
     # NOTE: Skip `validate_provider_config?` check
     save!(validate: false)
   end
@@ -96,6 +133,17 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     if Current.account_user&.administrator?
       data[:qr_data_url] = provider_connection['qr_data_url']
       data[:error] = provider_connection['error']
+    end
+    # Propriacloud's frontend renders two independent chips (connection
+    # axis + pair axis) driven by the API's two-axis state. The legacy
+    # single `connection` field can't express paired+disconnected or
+    # connected+unpaired, so we also surface the raw axes when the
+    # provider is propriacloud. Other providers keep the legacy shape.
+    if provider == 'propriacloud'
+      data[:connection_state] = provider_connection['connection_state']
+      data[:pair_state] = provider_connection['pair_state']
+      data[:is_paired] = provider_connection['is_paired']
+      data[:is_connected] = provider_connection['is_connected']
     end
     data
   end
@@ -302,7 +350,11 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   private
 
   def ensure_webhook_verify_token
-    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys])
+    provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow propriacloud])
+    # Only Web-mode propriacloud channels need a generated instance_id —
+    # WABA-mode channels are keyed by the Meta phone_number_id supplied
+    # in provider_config and never originate a whatsmeow instance.
+    provider_config['instance_id'] ||= SecureRandom.uuid if provider == 'propriacloud' && provider_config['connection_type'] != 'waba'
   end
 
   def validate_provider_config

@@ -5,6 +5,7 @@ import { useStore } from 'vuex';
 import { useElementSize } from '@vueuse/core';
 import BackButton from '../BackButton.vue';
 import InboxName from '../InboxName.vue';
+import PropriacloudStatusBadge from './PropriacloudStatusBadge.vue';
 import MoreActions from './MoreActions.vue';
 import Avatar from 'next/avatar/Avatar.vue';
 import SLACardLabel from './components/SLACardLabel.vue';
@@ -12,6 +13,7 @@ import wootConstants from 'dashboard/constants/globals';
 import { conversationListPageURL } from 'dashboard/helper/URLHelper';
 import { snoozedReopenTime } from 'dashboard/helper/snoozeHelpers';
 import { useInbox } from 'dashboard/composables/useInbox';
+import { usePropriacloudLiveStream } from 'dashboard/composables/usePropriacloudLiveStream';
 import { useI18n } from 'vue-i18n';
 import { copyTextToClipboard } from 'shared/helpers/clipboard';
 import { useAlert } from 'dashboard/composables';
@@ -88,6 +90,18 @@ const inbox = computed(() => {
   return store.getters['inboxes/getInbox'](inboxId);
 });
 
+// Live updates for the propriacloud chip rendered on this header.
+// The composable opens an SSE connection to /audit_stream on the
+// inbox (with polling as the always-on fallback) and dispatches
+// refreshProviderStatus whenever upstream state changes. No-op when
+// the conversation's inbox is not propriacloud — the composable
+// gates internally on `inbox.provider === 'propriacloud'`.
+usePropriacloudLiveStream(inbox, {
+  store,
+  accountId: accountId.value,
+  pollIntervalMs: 15000,
+});
+
 const hasMultipleInboxes = computed(
   () => store.getters['inboxes/getInboxes'].length > 1
 );
@@ -155,6 +169,7 @@ const copyConversationId = async () => {
           </button>
           <span v-if="hasMultipleInboxes">•</span>
           <InboxName v-if="hasMultipleInboxes" :inbox="inbox" class="!mx-0" />
+          <PropriacloudStatusBadge :inbox="inbox" />
           <span v-if="isSnoozed">•</span>
           <span v-if="isSnoozed" class="font-medium text-n-amber-10">
             {{ snoozedDisplayText }}

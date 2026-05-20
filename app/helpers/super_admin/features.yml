@@ -144,3 +144,11 @@ shopify:
   enabled: true
   icon: 'icon-shopify'
   config_key: 'shopify'
+
+# ------- Própria Cloud Products ------- #
+propriacloud:
+  name: 'Própria Cloud'
+  description: 'Configuration for Própria Cloud products (WhatsApp API, Ekkoa, …).'
+  enabled: true
+  icon: 'icon-whatsapp-line'
+  config_key: 'propriacloud'

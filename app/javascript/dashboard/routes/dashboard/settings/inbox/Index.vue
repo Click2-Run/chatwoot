@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, onBeforeUnmount } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import { picoSearch } from '@scmmishra/pico-search';
@@ -15,6 +15,9 @@ import {
 import ChannelName from './components/ChannelName.vue';
 import ChannelIcon from 'next/icon/ChannelIcon.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
+import { resolvePropriacloudStatus } from 'dashboard/composables/usePropriacloudStatus';
+import { usePropriacloudLiveStream } from 'dashboard/composables/usePropriacloudLiveStream';
+import { ref as vueRef, watch } from 'vue';
 
 const getters = useStoreGetters();
 const store = useStore();
@@ -78,6 +81,53 @@ const openDelete = inbox => {
   showDeletePopup.value = true;
   selectedInbox.value = inbox;
 };
+
+// Resolved propriacloud status per inbox (cached by inbox id so we
+// don't re-resolve on every re-render). `null` for non-propriacloud
+// inboxes — the template gates rendering on `.isPropriacloud`.
+const propriacloudFor = inbox => resolvePropriacloudStatus(inbox, t);
+
+// Live updates for propriacloud inboxes in the list. One
+// `usePropriacloudLiveStream` per propriacloud inbox — opens an SSE
+// connection to /audit_stream + polls as fallback. Backend
+// rate-limits refreshes (60s hard / 5s soft per channel) so spam is
+// impossible even with many open inboxes. The composable tears down
+// automatically on unmount.
+const accountId = computed(() => getters.getCurrentAccountId.value);
+const liveStreams = vueRef(new Map()); // inboxId → { stop }
+
+const ensureLiveStreams = () => {
+  const seen = new Set();
+  (inboxesList.value || [])
+    .filter(i => i?.provider === 'propriacloud')
+    .forEach(inbox => {
+      seen.add(inbox.id);
+      if (liveStreams.value.has(inbox.id)) return;
+      const inboxRef = computed(
+        () => (inboxes.value || []).find(i => i?.id === inbox.id) || null
+      );
+      const handle = usePropriacloudLiveStream(inboxRef, {
+        store,
+        accountId: accountId.value,
+        pollIntervalMs: 15000,
+      });
+      liveStreams.value.set(inbox.id, handle);
+    });
+  // Tear down streams for inboxes no longer in the list (deleted /
+  // converted to another provider).
+  [...liveStreams.value.keys()].forEach(id => {
+    if (!seen.has(id)) {
+      liveStreams.value.get(id).stop();
+      liveStreams.value.delete(id);
+    }
+  });
+};
+
+watch(inboxesList, ensureLiveStreams, { immediate: true });
+onBeforeUnmount(() => {
+  liveStreams.value.forEach(h => h.stop());
+  liveStreams.value.clear();
+});
 </script>
 
 <template>
@@ -151,7 +201,36 @@ const openDelete = inbox => {
               />
             </div>
           </div>
-          <div class="flex gap-3 justify-end">
+          <div class="flex gap-3 justify-end items-center">
+            <!-- Propriacloud-only: live connection + pair chips, same
+                 component as the Informações tab. Renders just before
+                 the row actions so admins can scan the inbox list and
+                 see at a glance which numbers are connected/paired
+                 vs. need attention. -->
+            <template v-if="propriacloudFor(inbox).isPropriacloud">
+              <div class="flex items-center gap-1 flex-wrap">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudFor(inbox).connection.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudFor(inbox).connection.dotClass"
+                  />
+                  {{ propriacloudFor(inbox).connection.label }}
+                </span>
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 text-xxs font-medium border rounded-full"
+                  :class="propriacloudFor(inbox).pair.chipClass"
+                >
+                  <span
+                    class="w-1.5 h-1.5 rounded-full"
+                    :class="propriacloudFor(inbox).pair.dotClass"
+                  />
+                  {{ propriacloudFor(inbox).pair.label }}
+                </span>
+              </div>
+            </template>
             <router-link
               :to="{
                 name: 'settings_inbox_show',

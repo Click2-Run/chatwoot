@@ -36,7 +36,8 @@ const emit = defineEmits([
   'closeMobileSidebar',
 ]);
 
-const { accountScopedRoute, isOnChatwootCloud } = useAccount();
+const { accountScopedRoute, isCloudFeatureEnabled, isOnChatwootCloud } =
+  useAccount();
 const store = useStore();
 const searchShortcut = useKbd([`$mod`, 'k']);
 const { t } = useI18n();
@@ -329,13 +330,12 @@ const menuItems = computed(() => {
         count: 'internalChat/getUnreadCount',
       },
     },
-    {
-      name: 'Kanban',
-      label: t('SIDEBAR.KANBAN'),
-      icon: 'i-lucide-columns-3',
-      to: accountScopedRoute('kanban_view'),
-      activeOn: ['kanban_view'],
-    },
+    // Kanban is a paywalled fazer-ai feature (no "Chatwoot Pro
+    // Própria Cloud" plan exists in this fork — the paywall page
+    // would only advertise a SaaS upsell we don't sell). Hidden from
+    // the sidebar so new accounts don't see a teaser they can't act
+    // on. Route and paywall component remain intact as dead code so
+    // an upstream merge doesn't churn through a feature removal.
     {
       name: 'Captain',
       icon: 'i-woot-captain',
@@ -508,11 +508,16 @@ const menuItems = computed(() => {
           label: t('SIDEBAR.CSAT'),
           to: accountScopedRoute('csat_reports'),
         },
-        {
-          name: 'Reports SLA',
-          label: t('SIDEBAR.REPORTS_SLA'),
-          to: accountScopedRoute('sla_reports'),
-        },
+        // Only show SLA Reports if the feature is enabled (Enterprise feature)
+        ...(isCloudFeatureEnabled('sla')
+          ? [
+              {
+                name: 'Reports SLA',
+                label: t('SIDEBAR.REPORTS_SLA'),
+                to: accountScopedRoute('sla_reports'),
+              },
+            ]
+          : []),
         {
           name: 'Reports Bot',
           label: t('SIDEBAR.REPORTS_BOT'),
@@ -597,8 +602,25 @@ const menuItems = computed(() => {
         {
           name: 'Settings Account Settings',
           label: t('SIDEBAR.ACCOUNT_SETTINGS'),
-          icon: 'i-lucide-briefcase',
+          // Org-level building icon — Própria Cloud rebrand renames
+          // "Conta" to "Organização" and uses a building glyph that
+          // signals a multi-tenant account rather than a personal one.
+          icon: 'i-lucide-building-2',
           to: accountScopedRoute('general_settings_index'),
+        },
+        {
+          name: 'Settings Inboxes',
+          label: t('SIDEBAR.INBOXES'),
+          icon: 'i-lucide-inbox',
+          activeOn: [
+            'settings_inbox_list',
+            'settings_inbox_show',
+            'settings_inbox_new',
+            'settings_inbox_finish',
+            'settings_inboxes_page_channel',
+            'settings_inboxes_add_agents',
+          ],
+          to: accountScopedRoute('settings_inbox_list'),
         },
         // {
         //   name: 'Settings Captain',
@@ -647,20 +669,6 @@ const menuItems = computed(() => {
               },
             ]
           : []),
-        {
-          name: 'Settings Inboxes',
-          label: t('SIDEBAR.INBOXES'),
-          icon: 'i-lucide-inbox',
-          activeOn: [
-            'settings_inbox_list',
-            'settings_inbox_show',
-            'settings_inbox_new',
-            'settings_inbox_finish',
-            'settings_inboxes_page_channel',
-            'settings_inboxes_add_agents',
-          ],
-          to: accountScopedRoute('settings_inbox_list'),
-        },
         {
           name: 'Settings Labels',
           label: t('SIDEBAR.LABELS'),

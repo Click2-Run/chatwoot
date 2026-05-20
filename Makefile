@@ -2,6 +2,12 @@
 APP_NAME := chatwoot
 RAILS_ENV ?= development
 
+# Docker image settings — single source of truth read by build/build.sh.
+# Override at the command line with: make image IMAGE_TAG=20260514.1
+DOCKER_REGISTRY := click2run
+IMAGE_NAME := multicanal
+IMAGE_TAG := $(shell date -u +%Y%m%d)
+
 # Targets
 setup:
 	gem install bundler
@@ -60,7 +66,31 @@ debug:
 debug_worker:
 	overmind connect worker
 
-docker: 
+docker:
 	docker build -t $(APP_NAME) -f ./docker/Dockerfile .
 
-.PHONY: setup db_create db_migrate db_seed db_reset db console server burn docker run force_run force_run_tunnel debug debug_worker
+# ---------------------------------------------------------------------------
+# Production image — click2run/multicanal:<date>
+# ---------------------------------------------------------------------------
+# Delegates to build/build.sh (native multi-arch via SSH'd cluster nodes).
+# See `./build/build.sh --help` for the full option list.
+
+image:
+	./build/build.sh --tag $(IMAGE_TAG)
+
+image_local:
+	./build/build.sh --local --no-push --tag $(IMAGE_TAG)
+
+image_push:
+	./build/build.sh --push --tag $(IMAGE_TAG)
+
+image_amd64:
+	./build/build.sh --platform amd64 --tag $(IMAGE_TAG)
+
+image_arm64:
+	./build/build.sh --platform arm64 --tag $(IMAGE_TAG)
+
+image_clean:
+	./build/build.sh --no-cache --cleanup --tag $(IMAGE_TAG)
+
+.PHONY: setup db_create db_migrate db_seed db_reset db console server burn docker run force_run force_run_tunnel debug debug_worker image image_local image_push image_amd64 image_arm64 image_clean

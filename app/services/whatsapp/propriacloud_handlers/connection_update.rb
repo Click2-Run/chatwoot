@@ -1,0 +1,164 @@
+# frozen_string_literal: true
+
+# Propriacloud Connection Update Handler
+# Processes connection state changes and QR code updates from Propriacloud
+#
+# Event payload format from Propriacloud:
+# {
+#   event: "connection.update",
+#   instance_id: "1234567890",
+#   timestamp: 1699123456,
+#   data: {
+#     connection: "connecting" | "open" | "close",
+#     qr_code: "base64_png_data" (only when connection == "connecting"),
+#     error: "connection_lost" | "logout" (optional)
+#   }
+# }
+
+module Whatsapp::PropriacloudHandlers::ConnectionUpdate
+  include Whatsapp::PropriacloudHandlers::Helpers
+
+  private
+
+  def process_connection_update
+    data = processed_params[:data] || {}
+    event = (processed_params[:event_type] || processed_params['event_type'] ||
+             processed_params[:event] || processed_params['event']).to_s
+
+    previous_state = inbox.channel.provider_connection&.dig('connection')
+
+    connection_data = {
+      connection: infer_connection_state(event, data),
+      qr_data_url: extract_qr_data_url(data),
+      error: extract_error_message(data, event)
+    }.compact
+
+    inbox.channel.update_provider_connection!(connection_data)
+
+    log_connection_state(event, data)
+    track_pair_state(event)
+    enqueue_history_backfill_if_needed(previous_state, connection_data[:connection])
+    enqueue_avatar_sync_if_needed(event)
+  end
+
+  # First time the inbox lands on a paired+connected state, try to pull
+  # the WhatsApp account's profile picture as the inbox avatar. Only
+  # fires when the inbox has no avatar attached yet — manual uploads
+  # (or earlier syncs) are never overwritten. Idempotent because the
+  # underlying job is a no-op when the URL hashes match.
+  def enqueue_avatar_sync_if_needed(event)
+    return unless %w[pairing.success connection.connected].include?(event)
+    return if inbox.avatar.attached?
+
+    url = inbox.channel.provider_service.fetch_own_profile_picture_url
+    return if url.blank?
+
+    Avatar::AvatarFromUrlJob.perform_later(inbox, url)
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: avatar auto-sync skipped (#{e.class}: #{e.message[0..120]})"
+  end
+
+  # Record whether the upstream instance is currently paired so other
+  # handlers (instance_recovery, future auto-reconnect) can gate
+  # themselves on it. We never auto-reconnect an unpaired instance —
+  # the user must explicitly emparelhar from the UI.
+  def track_pair_state(event)
+    config = inbox.channel.provider_config || {}
+    case event
+    when 'pairing.success', 'connection.connected'
+      return if config['paired_at'].present?
+
+      config['paired_at'] = Time.current.iso8601
+      inbox.channel.update!(provider_config: config)
+    when 'connection.logged_out', 'pairing.error'
+      return if config['paired_at'].blank?
+
+      config.delete('paired_at')
+      inbox.channel.update!(provider_config: config)
+    end
+  end
+
+  # Trigger a one-shot history pull the first time the inbox transitions
+  # into `open`. The job itself is idempotent (skips if already
+  # completed) so even a flap that toggles open→close→open won't re-run.
+  def enqueue_history_backfill_if_needed(previous_state, current_state)
+    return unless current_state == 'open'
+    return if previous_state == 'open'
+    return if inbox.channel.provider_config['history_backfill_completed_at'].present?
+
+    Whatsapp::Propriacloud::HistoryBackfillJob.perform_later(inbox.channel.id)
+  end
+
+  # Map whatsapp-api event_type values to the Chatwoot connection state
+  # vocabulary (open / connecting / close). Falls back to the in-payload
+  # `connection` field for legacy / generic events.
+  def infer_connection_state(event, data)
+    case event
+    when 'connection.connected', 'pairing.success'
+      'open'
+    when 'pairing.qrcode', 'pairing.phonecode'
+      'connecting'
+    when 'connection.disconnected',
+         'connection.logged_out',
+         'connection.stream_replaced',
+         'connection.connect_failure',
+         'connection.client_outdated',
+         'connection.temporary_ban',
+         'connection.stream_error',
+         'pairing.error'
+      'close'
+    else
+      data[:connection] || data['connection'] || inbox.channel.provider_connection['connection']
+    end
+  end
+
+  def extract_qr_data_url(data)
+    # whatsapp-api QR delivery fields:
+    #   - `img`: full base64 PNG (the only field renderable as `data:image/png;base64,…`)
+    #   - `qr_code` / `qrcode`: legacy fazer-ai naming, kept as fallback
+    # `code` is the pairing TEXT (not an image) and is intentionally NOT
+    # accepted here — using it as a base64 image source produced broken
+    # QR images in the dashboard. If only `code` is present the UI
+    # should regenerate the QR client-side.
+    qr = data[:img] || data['img'] ||
+         data[:qr_code] || data['qr_code'] ||
+         data[:qrcode] || data['qrcode']
+    return nil if qr.blank?
+
+    return qr if qr.start_with?('data:image/')
+
+    "data:image/png;base64,#{qr}"
+  end
+
+  # Whitelist of events that legitimately carry an error message — every
+  # other connection.* / pairing.* event is non-error, even if its name
+  # contains useful suffix info we don't want leaking into the UI.
+  ERROR_EVENT_TYPES = %w[
+    connection.disconnected
+    connection.logged_out
+    connection.stream_replaced
+    connection.connect_failure
+    connection.client_outdated
+    connection.temporary_ban
+    connection.stream_error
+    connection.keepalive_timeout
+    pairing.error
+  ].freeze
+
+  def extract_error_message(data, event = nil)
+    error = data[:error] || data['error']
+    error ||= event.split('.', 2).last if event.to_s.in?(ERROR_EVENT_TYPES)
+    return nil if error.blank?
+
+    I18n.t("errors.inboxes.channel.provider_connection.#{error}", default: error.to_s)
+  end
+
+  def log_connection_state(event, data)
+    error = data[:error] || data['error']
+    if error.present?
+      Rails.logger.error "Propriacloud #{event} error: #{error} (inbox=#{inbox.id})"
+    else
+      Rails.logger.info "Propriacloud #{event} (inbox=#{inbox.id} state=#{inbox.channel.provider_connection['connection']})"
+    end
+  end
+end

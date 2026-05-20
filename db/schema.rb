@@ -613,7 +613,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.datetime "message_templates_last_updated", precision: nil
     t.jsonb "provider_connection", default: {}
     t.index ["phone_number"], name: "index_channel_whatsapp_on_phone_number", unique: true
-    t.index ["provider_connection"], name: "index_channel_whatsapp_provider_connection", where: "((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text]))", using: :gin
+    t.index ["provider_connection"], name: "index_channel_whatsapp_provider_connection", where: "((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'whatsmeow'::character varying, 'propriacloud'::character varying])::text[]))", using: :gin
   end
 
   create_table "companies", force: :cascade do |t|
@@ -993,9 +993,9 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.boolean "muted", default: false, null: false
     t.datetime "last_read_at"
     t.boolean "favorited", default: false, null: false
+    t.boolean "hidden", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.boolean "hidden", default: false, null: false
     t.index ["internal_chat_channel_id", "user_id"], name: "idx_ic_channel_members_channel_user", unique: true
     t.index ["user_id", "favorited"], name: "idx_ic_channel_members_user_favorited"
     t.index ["user_id"], name: "index_internal_chat_channel_members_on_user_id"
@@ -1069,11 +1069,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.text "content"
     t.integer "content_type", default: 0, null: false
     t.bigint "parent_id"
+    t.integer "replies_count", default: 0, null: false
     t.jsonb "content_attributes", default: {}
     t.string "echo_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "replies_count", default: 0, null: false
     t.index "f_unaccent(content) gin_trgm_ops", name: "idx_ic_messages_content_unaccent_trgm", using: :gin
     t.index ["account_id", "created_at"], name: "idx_ic_messages_account_created"
     t.index ["account_id"], name: "index_internal_chat_messages_on_account_id"
@@ -1089,8 +1089,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.string "emoji"
     t.string "image_url"
     t.integer "position", default: 0, null: false
-    t.datetime "created_at", null: false
     t.integer "votes_count", default: 0, null: false
+    t.datetime "created_at", null: false
     t.index ["internal_chat_poll_id", "position"], name: "idx_ic_poll_options_poll_pos"
     t.index ["internal_chat_poll_id"], name: "idx_ic_poll_options_poll"
   end
@@ -1529,7 +1529,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_05_15_000000) do
     t.text "message_signature"
     t.string "otp_secret"
     t.integer "consumed_timestep"
-    t.boolean "otp_required_for_login", default: false, null: false
+    t.boolean "otp_required_for_login", default: false
     t.text "otp_backup_codes"
     t.index "f_unaccent((name)::text) gin_trgm_ops", name: "idx_users_name_unaccent_trgm", using: :gin
     t.index ["email"], name: "index_users_on_email"

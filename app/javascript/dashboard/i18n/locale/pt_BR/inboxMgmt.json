@@ -1,5 +1,31 @@
 {
   "INBOX_MGMT": {
+    "PROPRIACLOUD_STATUS": {
+      "READY": "Pronta",
+      "CONNECTED": "Conectada",
+      "CONNECTING": "Conectando",
+      "RECONNECTING": "Reconectando",
+      "PAIRED": "Emparelhada",
+      "PAIRING": "Emparelhando",
+      "UNPAIRED": "Desemparelhada",
+      "CONNECTED_UNPAIRED": "Conectada · sem pareamento",
+      "PAIRED_OFFLINE": "Emparelhada · desconectada",
+      "DISCONNECTED": "Desconectada",
+      "IN_PROGRESS": "Aguardando…",
+      "PAIR": "Emparelhar",
+      "CONNECT": "Conectar",
+      "DISCONNECT": "Desemparelhar",
+      "DISCONNECT_ACTION": "Desconectar",
+      "UNPAIR_ACTION": "Desemparelhar",
+      "DISCONNECT_CONFIRM_TITLE": "Desconectar a instância?",
+      "DISCONNECT_CONFIRM_MESSAGE": "A instância vai parar de receber e enviar mensagens até reconectar. O pareamento com o WhatsApp continua válido — depois é só clicar em Conectar.",
+      "UNPAIR_CONFIRM_TITLE": "Desemparelhar o dispositivo?",
+      "UNPAIR_CONFIRM_MESSAGE": "O vínculo com o WhatsApp será removido. Você precisará emparelhar novamente via QR Code ou Código por telefone para voltar a usar a caixa de entrada.",
+      "META_INSTANCE": "{provider} - {name}",
+      "SYNC_AVATAR": "Usar foto do WhatsApp",
+      "SYNC_AVATAR_QUEUED": "Buscando a foto de perfil do WhatsApp. A imagem do canal vai atualizar em instantes.",
+      "SYNC_AVATAR_NONE": "A conta de WhatsApp conectada não tem foto de perfil definida."
+    },
     "HEADER": "Caixas de Entrada",
     "DESCRIPTION": "Um canal é o modo de comunicação que seu cliente escolhe para interagir com você. Uma caixa de entrada é onde você gerencia interações para um canal específico. Pode incluir comunicações de várias fontes, como e-mail, chat ao vivo e mídia social.",
     "LEARN_MORE": "Saiba mais sobre as caixas de entrada",
@@ -188,6 +214,7 @@
       "SMS": {
         "TITLE": "Canal SMS",
         "DESC": "Comece a oferecer suporte a seus clientes por SMS.",
+        "NO_PROVIDERS_AVAILABLE": "Nenhum provedor de SMS está habilitado para esta conta no momento. Entre em contato com seu administrador.",
         "PROVIDERS": {
           "LABEL": "Provedor de API",
           "TWILIO": "Twilio",
@@ -245,18 +272,32 @@
           "WHATSAPP_EMBEDDED": "WhatsApp Business",
           "TWILIO": "Twilio",
           "WHATSAPP_CLOUD": "Cloud do WhatsApp",
-          "WHATSAPP_CLOUD_DESC": "Configuração rápida via Meta",
+          "WHATSAPP_CLOUD_DESC": "Conectar via API",
           "TWILIO_DESC": "Conectar através de credenciais Twilio",
           "360_DIALOG": "360Dialog",
           "360_DIALOG_DESC": "Conectar através de credenciais 360Dialog",
           "BAILEYS": "Baileys",
           "BAILEYS_DESC": "Conectar via API não-oficial Baileys",
+          "WHATSMEOW": "Whatsmeow",
+          "WHATSMEOW_DESC": "Conectar via API não-oficial Whatsmeow",
+          "PROPRIACLOUD": "Própria Cloud",
+          "PROPRIACLOUD_DESC": "WhatsApp Web",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar via API não-oficial Z-API"
         },
         "SELECT_PROVIDER": {
           "TITLE": "Selecione seu provedor de API",
-          "DESCRIPTION": "Escolha seu provedor do WhatsApp. Você pode se conectar diretamente através da Meta, que não requer nenhuma configuração, ou se conectar pelo Twilio usando as credenciais da sua conta."
+          "DESCRIPTION": "Escolha seu provedor do WhatsApp. Você pode se conectar diretamente através da Meta, que não requer nenhuma configuração, ou se conectar pelo Twilio usando as credenciais da sua conta.",
+          "PROPRIACLOUD_PROMO": {
+            "TITLE": "Procurando uma solução WhatsApp de alto desempenho?",
+            "DESCRIPTION": "Própria Cloud é uma integração WhatsApp baseada em Go pronta para produção, com recursos completos, oferecendo desempenho e estabilidade superiores em comparação com Baileys, Evolution API/Go/Cloud, Z-API e outras alternativas baseadas em Node.js. Perfeito para empresas que exigem conectividade WhatsApp confiável e escalável.",
+            "CTA": "Usar Própria Cloud"
+          },
+          "ZAPI_PROMO": {
+            "TITLE": "Procurando uma solução WhatsApp confiável?",
+            "DESCRIPTION": "Z-API oferece estabilidade superior comparado ao Baileys e é muito mais simples de configurar que Cloud ou Twilio - sem necessidade de configuração complexa. Perfeito para empresas que querem começar rapidamente.",
+            "CTA": "Usar Z-API"
+          }
         },
         "INBOX_NAME": {
           "LABEL": "Nome da Caixa de Entrada",
@@ -332,7 +373,14 @@
             "RECONNECTING": "Conectando...",
             "LINK_DEVICE": "Conectar dispositivo",
             "DISCONNECT": "Desconectar",
-            "CONNECTED": "Seu dispositivo foi conectado com sucesso. Agora você pode começar a enviar e receber mensagens."
+            "CONNECTED": "Seu dispositivo foi conectado com sucesso. Agora você pode começar a enviar e receber mensagens.",
+            "PAIRING_METHOD_QR": "QR code",
+            "PAIRING_METHOD_PHONE": "Código por telefone",
+            "QR_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar um aparelho, depois clique em Emparelhar abaixo para gerar um QR code para escanear.",
+            "PHONE_CODE_INSTRUCTIONS": "Abra o WhatsApp → Configurações → Aparelhos conectados → Conectar com número de telefone, clique em Emparelhar abaixo e digite no WhatsApp o código de 8 caracteres.",
+            "ENTER_CODE_IN_WHATSAPP": "Digite este código no WhatsApp",
+            "PAIR_LOCK_COUNTDOWN": "Aguarde {time} antes de tentar novamente.",
+            "ALREADY_PAIRED": "Esta caixa de entrada já está emparelhada com o WhatsApp. Para desemparelhar, use o botão Desemparelhar na página da caixa de entrada."
           }
         },
         "SUBMIT_BUTTON": "Criar canal do WhatsApp",
@@ -363,6 +411,74 @@
           "SUCCESS_FALLBACK": "A conta do WhatsApp Business foi configurada com sucesso",
           "MANUAL_FALLBACK": "Se o seu número já estiver conectado à Plataforma WhatsApp Business (API) ou se você for um provedor de tecnologia integrando o seu próprio número, use o fluxo de {link}",
           "MANUAL_LINK_TEXT": "fluxo de configuração manual"
+        },
+        "ZAPI_PROMO": {
+          "SETUP_BANNER": {
+            "TITLE": "Ganhe 10% de desconto na sua assinatura Z-API",
+            "DESCRIPTION": "Crie sua conta Z-API usando nosso link de afiliado e receba 10% de desconto. Configuração simples, conexões confiáveis e ótimo suporte.",
+            "CTA": "Criar Conta Z-API"
+          }
+        },
+        "WHATSMEOW": {
+          "PROVIDER_URL": {
+            "LABEL": "URL do Provedor",
+            "PLACEHOLDER": "Se o provedor não estiver rodando localmente, forneça a URL",
+            "ERROR": "Por favor, insira uma URL válida"
+          },
+          "API_KEY": {
+            "LABEL": "Chave da API",
+            "PLACEHOLDER": "Chave da API",
+            "ERROR": "Por favor, insira um valor válido."
+          },
+          "SUBMIT_BUTTON": "Criar Canal Whatsmeow",
+          "API": {
+            "ERROR_MESSAGE": "Não foi possível salvar o canal Whatsmeow"
+          }
+        },
+        "PROPRIACLOUD": {
+          "INFO": {
+            "TITLE": "API Própria Cloud",
+            "DESCRIPTION": "Própria Cloud é uma integração WhatsApp baseada em Go pronta para produção, com recursos completos, oferecendo desempenho e estabilidade superiores em comparação com Baileys, Evolution API/Go/Cloud, Z-API e outras alternativas baseadas em Node.js."
+          },
+          "CONNECTION_TYPE": {
+            "LABEL": "Tipo de conexão",
+            "WEB": "WhatsApp Web (Emparelhamento)",
+            "WABA": "WhatsApp API (Business API)"
+          },
+          "PHONE_NUMBER": {
+            "LABEL": "Número de telefone",
+            "PLACEHOLDER": "Ex.: 5511999998888 (com ou sem o \"+\" no início)",
+            "ERROR": "Informe apenas os dígitos do número, incluindo o DDI (ex.: 5511999998888). O \"+\" é opcional."
+          },
+          "PHONE_NUMBER_ID": {
+            "LABEL": "ID do Número (Phone Number ID)",
+            "PLACEHOLDER": "phone_number_id da Meta (da sua Conta WhatsApp Business)",
+            "ERROR": "ID do Número é obrigatório para canais WhatsApp Business API."
+          },
+          "BUSINESS_ACCOUNT_ID": {
+            "LABEL": "ID da Conta Comercial (Business Account ID)",
+            "PLACEHOLDER": "business_account_id da Meta (ID WABA)",
+            "ERROR": "ID da Conta Comercial é obrigatório para canais WhatsApp Business API."
+          },
+          "INSTANCE_ID": {
+            "LABEL": "ID da instância (opcional)",
+            "PLACEHOLDER": "Adotar uma instância whatsapp-api existente, ex.: 0119",
+            "HELP": "Deixe em branco para gerar um novo UUID e criar uma instância nova."
+          },
+          "PROVIDER_URL": {
+            "LABEL": "URL do Provedor",
+            "PLACEHOLDER": "Se o provedor não estiver rodando localmente, forneça a URL",
+            "ERROR": "Por favor, insira uma URL válida"
+          },
+          "API_KEY": {
+            "LABEL": "Chave da API",
+            "PLACEHOLDER": "Chave da API",
+            "ERROR": "Por favor, insira um valor válido."
+          },
+          "SUBMIT_BUTTON": "Criar Canal Própria Cloud",
+          "API": {
+            "ERROR_MESSAGE": "Não foi possível salvar o canal Própria Cloud"
+          }
         },
         "API": {
           "ERROR_MESSAGE": "Não foi possível salvar o canal do WhatsApp"
@@ -695,9 +811,9 @@
       }
     },
     "TABS": {
-      "SETTINGS": "Configurações",
+      "SETTINGS": "Informações",
       "COLLABORATORS": "Agentes",
-      "CONFIGURATION": "Configuração",
+      "CONFIGURATION": "Avançado",
       "CAMPAIGN": "Campanhas",
       "PRE_CHAT_FORM": "Formulário Chat Pré",
       "BUSINESS_HOURS": "Horário de funcionamento",
@@ -1292,6 +1408,7 @@
       "TWILIO_SMS": "SMS Twilio",
       "WHATSAPP": "WhatsApp",
       "WHATSAPP_BAILEYS": "WhatsApp - Baileys",
+      "WHATSAPP_WHATSMEOW": "WhatsApp - Whatsmeow",
       "WHATSAPP_ZAPI": "WhatsApp - Z-API",
       "SMS": "SMS",
       "EMAIL": "E-mail",

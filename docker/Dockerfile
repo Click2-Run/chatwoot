@@ -11,7 +11,7 @@ ENV PNPM_VERSION=${PNPM_VERSION}
 # For development docker-compose file overrides ARGS
 ARG BUNDLE_WITHOUT="development:test"
 ENV BUNDLE_WITHOUT ${BUNDLE_WITHOUT}
-ENV BUNDLER_VERSION=2.5.16
+ENV BUNDLER_VERSION=2.7.2
 
 ARG RAILS_SERVE_STATIC_FILES=true
 ENV RAILS_SERVE_STATIC_FILES ${RAILS_SERVE_STATIC_FILES}
@@ -62,7 +62,9 @@ COPY Gemfile Gemfile.lock ./
 # https://github.com/googleapis/google-cloud-ruby/issues/13306
 # adding xz as nokogiri was failing to build libxml
 # https://github.com/chatwoot/chatwoot/issues/4045
-RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips
+# adding rust and cargo for commonmarker gem compilation
+# adding yaml-dev for psych gem and clang-dev/llvm-dev for commonmarker bindgen
+RUN apk update && apk add --no-cache build-base musl ruby-full ruby-dev gcc make musl-dev openssl openssl-dev g++ linux-headers xz vips rust cargo yaml-dev clang-dev llvm-dev
 RUN bundle config set --local force_ruby_platform true
 
 # Do not install development or test gems in production
@@ -86,14 +88,22 @@ RUN if [ "$RAILS_ENV" = "production" ]; then \
   && rm -rf spec node_modules tmp/cache; \
   fi
 
-# Generate .git_sha file with current commit hash
-RUN git rev-parse HEAD > /app/.git_sha
+# Generate .git_sha file with current commit hash.
+# Skip if the build coordinator already provided a pre-populated .git_sha
+# (build/build-pre.sh writes one before the source tar so remote builds —
+# whose context excludes .git for transfer size — still get a stamped SHA).
+RUN if [ ! -s /app/.git_sha ]; then \
+      git rev-parse HEAD > /app/.git_sha 2>/dev/null || echo "unknown" > /app/.git_sha; \
+    fi
 
-# Remove unnecessary files
+# Remove unnecessary files.
+# Use `rm -f` for .gitignore — build/build.sh's tar excludes it from the
+# remote build context for transfer-size reasons, and a non-existent target
+# would otherwise fail the RUN step and tank the whole image build.
 RUN rm -rf /gems/ruby/3.4.0/cache/*.gem \
   && find /gems/ruby/3.4.0/gems/ \( -name "*.c" -o -name "*.o" \) -delete \
   && rm -rf .git \
-  && rm .gitignore
+  && rm -f .gitignore
 
 # final build stage
 FROM ruby:3.4.4-alpine3.21
@@ -105,7 +115,7 @@ ENV PNPM_VERSION=${PNPM_VERSION}
 
 ARG BUNDLE_WITHOUT="development:test"
 ENV BUNDLE_WITHOUT ${BUNDLE_WITHOUT}
-ENV BUNDLER_VERSION=2.5.16
+ENV BUNDLER_VERSION=2.7.2
 
 ARG EXECJS_RUNTIME="Disabled"
 ENV EXECJS_RUNTIME ${EXECJS_RUNTIME}
@@ -151,3 +161,28 @@ COPY --from=pre-builder /app/.git_sha /app/.git_sha
 WORKDIR /app
 
 EXPOSE 3000
+
+# Auto-migrate on every container start.
+#
+# `docker/entrypoints/rails.sh` waits for Postgres, runs
+# `bundle exec rake db:chatwoot_prepare`, then `exec "$@"` into CMD.
+# `db:chatwoot_prepare` is migrate-only against existing DBs and is
+# idempotent across replicas (Rails advisory lock serializes them).
+# It NEVER calls `db:create` — the rescue branch only fires on
+# `NoDatabaseError`, which doesn't happen when you deliver a
+# pre-created DB with DDL-capable credentials.
+#
+# Behavior matrix:
+#   - K8s / Nomad / ECS / bare `docker run` → uses these defaults and
+#     auto-migrates before booting the rails server. No initContainer
+#     needed in your Deployment YAML.
+#   - Sidekiq worker pods: K8s Deployment overrides only `args:` (not
+#     `command:`) to `["bundle", "exec", "sidekiq", "-C",
+#     "config/sidekiq.yml"]`. The ENTRYPOINT still fires so the worker
+#     also waits for postgres + sees a migrated schema.
+#   - docker-compose.production.yaml + docker-compose.coolify.yaml
+#     explicitly override BOTH `entrypoint:` and `command:`, so this
+#     Dockerfile change is a no-op for them — behavior is unchanged
+#     for existing compose deployments.
+ENTRYPOINT ["docker/entrypoints/rails.sh"]
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]

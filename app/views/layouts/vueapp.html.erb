@@ -5,7 +5,7 @@
       <%= @global_config['INSTALLATION_NAME'] %>
     </title>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=0"/>
-    <meta name="generator" content="fazer.ai"/>
+    <meta name="generator" content="<%= @global_config['BRAND_NAME'] %>"/>
     <meta name="theme-color" content="<%= @global_config['BRAND_COLOR'] %>">
     <meta name="apple-mobile-web-app-title" content="<%= @global_config['INSTALLATION_NAME'] %>">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -44,12 +44,16 @@
         tiktokAppId: '<%= @global_config['TIKTOK_APP_ID'] %>',
         googleOAuthClientId: '<%= ENV.fetch('GOOGLE_OAUTH_CLIENT_ID', nil) %>',
         googleOAuthCallbackUrl: '<%= ENV.fetch('GOOGLE_OAUTH_CALLBACK_URL', nil) %>',
+        propriacloudOpenidAppId: '<%= ENV['PROPRIACLOUD_OPENID_APP_ID'].presence || ENV['CLICK2RUN_OPENID_APP_ID'].presence || ENV['LOGTO_APP_ID'].presence || ENV['LOGTO_CLIENT_ID'] %>',
+        propriacloudOpenidLabel: '<%= ENV['PROPRIACLOUD_OPENID_LABEL'].presence || ENV['CLICK2RUN_OPENID_LABEL'].presence || ENV['LOGTO_LABEL'] %>',
+        propriacloudOpenidLoginRedirect: '<%= ENV['PROPRIACLOUD_OPENID_LOGIN_REDIRECT'].presence || ENV.fetch('CLICK2RUN_OPENID_LOGIN_REDIRECT', 'false') %>',
         allowedLoginMethods: <%= @global_config['ALLOWED_LOGIN_METHODS'].to_json.html_safe %>,
         fbApiVersion: '<%= @global_config['FACEBOOK_API_VERSION'] %>',
         whatsappAppId: '<%= @global_config['WHATSAPP_APP_ID'] %>',
         whatsappConfigurationId: '<%= @global_config['WHATSAPP_CONFIGURATION_ID'] %>',
         whatsappApiVersion: '<%= @global_config['WHATSAPP_API_VERSION'] %>',
         signupEnabled: '<%= @global_config['ENABLE_ACCOUNT_SIGNUP'] %>',
+        authDisableDefault: '<%= ENV.fetch('AUTH_DISABLE_DEFAULT', 'false') %>',
         isEnterprise: '<%= @global_config['IS_ENTERPRISE'] %>',
         isMfaEnabled: '<%= Chatwoot.mfa_enabled? %>',
         <% if @global_config['IS_ENTERPRISE'] %>

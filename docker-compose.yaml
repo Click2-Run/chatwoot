@@ -1,5 +1,3 @@
-version: '3'
-
 services:
   base: &base
     build:
@@ -12,7 +10,8 @@ services:
         RAILS_SERVE_STATIC_FILES: 'false'
     tty: true
     stdin_open: true
-    image: chatwoot:development
+    #image: chatwoot:development
+    image: click2run/chatwoot:development
     env_file: .env
 
   rails:
@@ -20,38 +19,55 @@ services:
     build:
       context: .
       dockerfile: ./docker/dockerfiles/rails.Dockerfile
-    image: chatwoot-rails:development
+    #image: chatwoot-rails:development
+    image: click2run/chatwoot-rails:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     depends_on:
       - postgres
       - redis
-      - vite
       - mailhog
-      - sidekiq
+    # Publish rails directly on host port 3003 so containers from other
+    # docker-compose stacks (e.g. the whatsapp-api propriacloud
+    # provider) can reach Chatwoot via `host.docker.internal:3003`
+    # without depending on cross-stack container DNS, which doesn't
+    # survive teardown/recreation of either side. Host port 3000 is
+    # owned by Caddy (HTTPS terminator); 3001/3002 already in use on
+    # this dev host, so 3003 is the first free slot.
     ports:
-      - 3000:3000
+      # Bind to all host interfaces so containers from other compose
+      # stacks reach us via the bridge gateway (host.docker.internal).
+      # 127.0.0.1 binding would only accept loopback traffic.
+      - "0.0.0.0:3003:3000"
     env_file: .env
     environment:
       - VITE_DEV_SERVER_HOST=vite
       - NODE_ENV=development
       - RAILS_ENV=development
+    # host.docker.internal lets the rails container reach services bound on
+    # the host (e.g. a local whatsapp-api on host:8080). On Linux Docker the
+    # mapping isn't automatic — declare it explicitly via host-gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "rails", "s", "-p", "3000", "-b", "0.0.0.0"]
 
   sidekiq:
     <<: *base
-    image: chatwoot-rails:development
+    #image: chatwoot-rails:development
+    image: click2run/chatwoot-rails:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     depends_on:
       - postgres
       - redis
@@ -59,6 +75,9 @@ services:
     environment:
       - NODE_ENV=development
       - RAILS_ENV=development
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    entrypoint: docker/entrypoints/rails.sh
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
 
   vite:
@@ -66,16 +85,20 @@ services:
     build:
       context: .
       dockerfile: ./docker/dockerfiles/vite.Dockerfile
-    image: chatwoot-vite:development
+    #image: chatwoot-vite:development
+    image: click2run/chatwoot-vite:development
     volumes:
       - ./:/app:delegated
       - node_modules:/app/node_modules
       - packs:/app/public/packs
       - cache:/app/tmp/cache
       - bundle:/usr/local/bundle
+      - pnpm_store:/root/.local/share/pnpm/store
+      - git_bundler_cache:/gems/ruby/3.4.0/cache/bundler/git
     ports:
       - "3036:3036" # Vite dev server
     environment:
+      - HUSKY=0  # Disable git hooks in Docker environment
       - VITE_DEV_SERVER_HOST=0.0.0.0
       - NODE_ENV=development
       - RAILS_ENV=development
@@ -85,14 +108,14 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     restart: always
-    ports:
-      - '5432:5432'
+    # ports:
+    #   - '5432:5432'
     volumes:
       - postgres:/data/postgres
     environment:
       - POSTGRES_DB=chatwoot
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
 
   redis:
     image: redis:alpine
@@ -101,14 +124,32 @@ services:
     env_file: .env
     volumes:
       - redis:/data/redis
-    ports:
-      - '6379:6379'
+    # ports:
+    #   - '6379:6379'
 
   mailhog:
     image: mailhog/mailhog
     ports:
       - 1025:1025
       - 8025:8025
+
+  # Caddy reverse proxy - Provides HTTPS for local development
+  # Listens on https://localhost:3000 and proxies to Rails container on port 3000
+  # Automatically generates and manages self-signed TLS certificates
+  # See Caddyfile for configuration
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      # - "443:443"
+      # - "80:80"
+      - "3000:3000"  # HTTPS on port 3000
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - rails
 
 volumes:
   postgres:
@@ -117,3 +158,7 @@ volumes:
   node_modules:
   cache:
   bundle:
+  pnpm_store:
+  git_bundler_cache:
+  caddy_data:
+  caddy_config:

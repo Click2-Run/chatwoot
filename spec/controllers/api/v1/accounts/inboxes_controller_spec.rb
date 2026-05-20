@@ -444,6 +444,61 @@ RSpec.describe 'Inboxes API', type: :request do
         json_response = response.parsed_body
         expect(json_response['allow_messages_after_resolved']).to be true
       end
+
+      context 'with a propriacloud whatsapp inbox (eager upstream provisioning)' do
+        let(:provider_url) { 'https://propriacloud.example.com/api/v1' }
+        let(:api_key)      { 'pc-api-key-secret' }
+        let(:create_params) do
+          {
+            name: 'Propriacloud inbox',
+            channel: {
+              type: 'whatsapp',
+              phone_number: '+5511999998888',
+              provider: 'propriacloud',
+              provider_config: {
+                provider_url: provider_url,
+                api_key: api_key
+              }
+            }
+          }
+        end
+
+        it 'rolls back the create when upstream /instances/create returns 401' do
+          stub_request(:post, %r{#{Regexp.escape(provider_url)}/instances/create}).to_return(
+            status: 401,
+            body: { success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid or missing API key' } }.to_json
+          )
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: admin.create_new_auth_token,
+                 params: create_params,
+                 as: :json
+          end.not_to change(Channel::Whatsapp, :count)
+
+          expect(response).to have_http_status(:unprocessable_entity)
+          body = response.parsed_body
+          expect(body['code']).to eq('PROVIDER_UNAUTHORIZED')
+        end
+
+        it 'rolls back the create when upstream auth backend (IAM) is unavailable (502)' do
+          stub_request(:post, %r{#{Regexp.escape(provider_url)}/instances/create}).to_return(
+            status: 502,
+            body: { success: false, error: { code: 'IAM_UNAVAILABLE', message: 'Authentication service is temporarily unavailable' } }.to_json
+          )
+
+          expect do
+            post "/api/v1/accounts/#{account.id}/inboxes",
+                 headers: admin.create_new_auth_token,
+                 params: create_params,
+                 as: :json
+          end.not_to change(Inbox, :count)
+
+          expect(response).to have_http_status(:unprocessable_entity)
+          body = response.parsed_body
+          expect(body['code']).to eq('PROVIDER_AUTH_BACKEND_UNAVAILABLE')
+        end
+      end
     end
   end
 

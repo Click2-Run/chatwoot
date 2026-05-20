@@ -5,6 +5,7 @@ class Api::V1::AccountsController < Api::BaseController
   skip_before_action :authenticate_user!, :set_current_user, :handle_with_exception,
                      only: [:create], raise: false
   before_action :check_signup_enabled, only: [:create]
+  before_action :check_default_auth_disabled, only: [:create]
   before_action :ensure_account_name, only: [:create]
   before_action :validate_captcha, only: [:create]
   before_action :fetch_account, except: [:create]
@@ -124,6 +125,12 @@ class Api::V1::AccountsController < Api::BaseController
 
   def check_signup_enabled
     raise ActionController::RoutingError, 'Not Found' unless GlobalConfigService.account_signup_enabled?
+  end
+
+  def check_default_auth_disabled
+    # Block account signup if default authentication is disabled
+    is_disabled = ENV.fetch('AUTH_DISABLE_DEFAULT', 'false').to_s.downcase == 'true'
+    raise ActionController::RoutingError, 'Not Found' if is_disabled
   end
 
   def api_only_signup?

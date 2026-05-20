@@ -1,0 +1,130 @@
+# frozen_string_literal: true
+
+# Parses git log output (format: COMMIT %H|%aI|%s + numstat) and emits
+# CUSTOM-CHANGELOG.md grouped by month → day → commit, listing every
+# commit attributed to our emails together with the files touched.
+#
+# Run inside the rails container (host-side ruby is not available):
+#   docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \
+#     <input.txt> <output.md>
+#
+# See CUSTOM-CHANGELOG.md header for the full regen recipe.
+
+require 'date'
+
+input  = ARGV[0] || '.llm/temporary/our-history.txt'
+output = ARGV[1] || 'CUSTOM-CHANGELOG.md'
+
+commits = []
+current = nil
+File.foreach(input) do |line|
+  line = line.chomp
+  next if line.empty?
+
+  if line.start_with?('COMMIT ')
+    commits << current if current
+    parts = line.sub('COMMIT ', '').split('|', 3)
+    current = { sha: parts[0], date: DateTime.parse(parts[1]), subject: parts[2], files: [] }
+  else
+    cols = line.split("\t")
+    next unless cols.length == 3
+
+    add, del, path = cols
+    current[:files] << { add: add, del: del, path: path }
+  end
+end
+commits << current if current
+
+# Reverse so newest first (changelog convention)
+commits.sort_by! { |c| c[:date] }.reverse!
+
+File.open(output, 'w') do |f|
+  f.puts <<~HEADER
+    # Própria Cloud / Chatwoot — Custom Changelog
+
+    Curated history of customizations made to this Chatwoot fork on top of
+    the upstream `fazer-ai/chatwoot` tree. Only commits authored by the
+    project owner are listed (filtered by `robson@robson.com.br`,
+    `robson@controle.digital`, `*@propria.cloud`, `*@controle.digital`).
+    Upstream merges and third-party PRs are intentionally excluded — they
+    are visible via `git log` against the remote tracking branches.
+
+    Newest first. Each entry shows the commit subject, the short SHA, and
+    the files touched (additions / deletions). Regenerate from inside the
+    rails container with:
+
+    ```bash
+    git log --all --reverse --pretty=format:'COMMIT %H|%aI|%s' --numstat \\
+      --author='robson@robson.com.br' > .llm/temporary/our-history.txt
+    docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \\
+      .llm/temporary/our-history.txt CUSTOM-CHANGELOG.md
+    ```
+
+    Add new author emails to the `--author` filter as the team grows; the
+    builder script accepts the input/output paths positionally.
+
+  HEADER
+
+  f.puts <<~MILESTONES
+    ## Version milestones
+
+    Each adopted upstream tag becomes its own `codi-vX.Y.Z-fazer-ai.N`
+    branch and gets a `codi-vX.Y.Z-fazer-ai.N.ITER` tag for every
+    Própria-Cloud-side release cut on top of it. The chatwoot core
+    version (`vX.Y.Z`) is the upstream Chatwoot release embedded inside
+    fazer-ai; the `.N` suffix is fazer-ai's own iteration counter.
+
+    Update this table whenever a new fazer-ai upstream tag is adopted
+    or a new `codi-*` release tag is cut. The script preserves the
+    block on regen — edit it directly inside `.codi/scripts/build-changelog.rb`.
+
+    | Date       | Branch                          | Adopted upstream tag        | Chatwoot core | Notes                                                                                       |
+    | :--------- | :------------------------------ | :-------------------------- | :------------ | :------------------------------------------------------------------------------------------ |
+    | 2025-11-03 | `codi-v4.7.0-fazer-ai.6`        | `v4.7.0-fazer-ai.6`         | 4.7.0         | Initial fork — Click2Run / OpenID Connect / WhatsApp baseline.                              |
+    | 2026-05-07 | `codi-v4.9.0-fazer-ai.13`       | `v4.9.0-fazer-ai.13`        | 4.9.0         | Tagged `codi-v4.9.0-fazer-ai.13.1` after intermediate upgrade. Safety tag: `codi-pre-upgrade-2026-05-07`. |
+    | 2026-05-08 | `codi-v4.13.0-fazer-ai.66`      | `v4.13.0-fazer-ai.66`       | 4.13.0        | Tagged `codi-v4.13.0-fazer-ai.66.1`. Safety tag: `codi-pre-upgrade2-2026-05-08`. **Current branch.** |
+    | 2026-05-09 | _(still on `.66` branch)_       | `fazerai/main` head (post-`.66`) | 4.13.0   | Merged 2 untagged upstream commits (#285, #286) — within the `.66` cycle until fazer-ai cuts `.67`. |
+
+    Pre-upgrade safety tags taken before each version bump (kept as
+    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`.
+
+  MILESTONES
+
+  current_month = nil
+  current_day   = nil
+
+  commits.each do |c|
+    month = c[:date].strftime('%Y-%m')
+    day   = c[:date].strftime('%Y-%m-%d')
+
+    if month != current_month
+      f.puts "\n## #{month}\n"
+      current_month = month
+    end
+    if day != current_day
+      f.puts "\n### #{day}\n"
+      current_day = day
+    end
+
+    f.puts "- **`#{c[:sha][0, 9]}`** — #{c[:subject]}"
+    next if c[:files].empty?
+
+    if c[:files].size <= 20
+      c[:files].each do |fi|
+        stats = "+#{fi[:add]}/-#{fi[:del]}"
+        stats = '(binary)' if fi[:add] == '-' && fi[:del] == '-'
+        f.puts "  - `#{fi[:path]}` #{stats}"
+      end
+    else
+      f.puts "  - _#{c[:files].size} files touched_:"
+      c[:files].first(15).each do |fi|
+        stats = "+#{fi[:add]}/-#{fi[:del]}"
+        stats = '(binary)' if fi[:add] == '-' && fi[:del] == '-'
+        f.puts "    - `#{fi[:path]}` #{stats}"
+      end
+      f.puts "    - … and #{c[:files].size - 15} more"
+    end
+  end
+end
+
+puts "wrote #{commits.size} commits to #{output}"

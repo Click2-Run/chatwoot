@@ -45,6 +45,19 @@ Rails.application.configure do
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
   config.force_ssl = ActiveModel::Type::Boolean.new.cast(ENV.fetch('FORCE_SSL', false))
 
+  # Exclude provider webhook routes from the force_ssl 301 redirect. In K8s
+  # we want whatsapp-api (and other webhook senders) to reach Chatwoot via
+  # the internal Service hostname over plain HTTP — the redirect-to-https
+  # path would turn the inbound POST into a GET (Go's http.Client default
+  # behavior on 301), losing the webhook body. Authenticity is enforced by
+  # the per-controller HMAC / token verification, not by transport SSL.
+  # HSTS headers are still emitted on these routes.
+  config.ssl_options = {
+    redirect: {
+      exclude: ->(request) { request.path.start_with?('/webhooks/') }
+    }
+  }
+
   # Use the lowest log level to ensure availability of diagnostic information
   # when problems arise.
   config.log_level = ENV.fetch('LOG_LEVEL', 'info').to_sym

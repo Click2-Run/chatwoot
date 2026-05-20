@@ -28,6 +28,16 @@ const hasNoSMSCampaigns = computed(
   () => SMSCampaigns.value?.length === 0 && !isFetchingCampaigns.value
 );
 
+// Check if any SMS inbox exists (Twilio SMS or Bandwidth SMS)
+const inboxes = useMapGetter('inboxes/getInboxes');
+const hasSMSInbox = computed(() => {
+  return inboxes.value.some(
+    inbox =>
+      inbox.channel_type === 'Channel::TwilioSms' ||
+      inbox.channel_type === 'Channel::Sms'
+  );
+});
+
 const handleDelete = campaign => {
   selectedCampaign.value = campaign;
   confirmDeleteCampaignDialogRef.value.dialogRef.open();
@@ -38,6 +48,7 @@ const handleDelete = campaign => {
   <CampaignLayout
     :header-title="t('CAMPAIGN.SMS.HEADER_TITLE')"
     :button-label="t('CAMPAIGN.SMS.NEW_CAMPAIGN')"
+    :is-button-disabled="!hasSMSInbox"
     @click="toggleSMSCampaignDialog()"
     @close="toggleSMSCampaignDialog(false)"
   >

@@ -65,12 +65,40 @@ class Inboxes extends CacheEnabledApiClient {
     );
   }
 
-  setupChannelProvider(inboxId) {
-    return axios.post(`${this.url}/${inboxId}/setup_channel_provider`);
+  setupChannelProvider(inboxId, params = {}) {
+    return axios.post(`${this.url}/${inboxId}/setup_channel_provider`, params);
   }
 
   disconnectChannelProvider(inboxId) {
     return axios.post(`${this.url}/${inboxId}/disconnect_channel_provider`);
+  }
+
+  pairQrcode(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/pair_qrcode`);
+  }
+
+  pairPhoneCode(inboxId, phone) {
+    return axios.post(`${this.url}/${inboxId}/pair_phone_code`, { phone });
+  }
+
+  refreshProviderStatus(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/refresh_provider_status`);
+  }
+
+  connectOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/connect_only`);
+  }
+
+  disconnectOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/disconnect_only`);
+  }
+
+  unpairOnly(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/unpair_only`);
+  }
+
+  syncAvatarFromProvider(inboxId) {
+    return axios.post(`${this.url}/${inboxId}/sync_avatar_from_provider`);
   }
 
   convertProvider(inboxId, { provider, providerConfig }) {

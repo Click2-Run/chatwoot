@@ -174,6 +174,21 @@
   locked: false
 # ------- End of WhatsApp Channel Related Config ------- #
 
+# ------- Própria Cloud (whatsapp-api) Channel Related Config ------- #
+- name: PROPRIACLOUD_API_URL
+  display_title: 'Própria Cloud API URL'
+  description: 'Base URL of the whatsapp-api service for the propriacloud provider. Must include the /api/v1 prefix (e.g. http://host.docker.internal:8080/api/v1).'
+  locked: false
+- name: PROPRIACLOUD_API_KEY
+  display_title: 'Própria Cloud API Key'
+  description: 'Bearer token (X-API-Key) sent to whatsapp-api on every request.'
+  locked: false
+- name: PROPRIACLOUD_WEBHOOK_BASE_URL
+  display_title: 'Própria Cloud Webhook Base URL'
+  description: 'Base URL whatsapp-api should call back into when delivering events. Use the cross-network hostname (e.g. http://chatwootgit-rails-1:3000) when whatsapp-api runs in a separate docker network. Falls back to FRONTEND_URL when blank.'
+  locked: false
+# ------- End of Própria Cloud Channel Related Config ------- #
+
 # MARK: Microsoft Email Channel Config
 - name: AZURE_APP_ID
   display_title: 'Azure App ID'
