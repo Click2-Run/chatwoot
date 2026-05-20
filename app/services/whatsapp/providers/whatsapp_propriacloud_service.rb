@@ -449,26 +449,23 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   # whatsapp-api Web mode does not consume Cloud-API templates — outgoing
   # text/media goes through /messages/send and /messages/send-media as
-  # regular WhatsApp messages, not templates. WABA mode mirrors the
-  # Cloud-API envelope on the wire and posts the Meta-shaped template
-  # body to whatsapp-api, which forwards to Graph on behalf of the
-  # tenant. The shape is intentionally identical to
-  # WhatsappCloudService#send_template so future contract drift on the
-  # whatsapp-api WABA endpoint can be diff'd against the upstream Cloud
-  # service.
+  # regular WhatsApp messages, not templates. WABA mode posts a Meta-shaped
+  # template body to the **same** /messages/send endpoint — whatsapp-api
+  # auto-routes by instance type (`waba: true` on the persisted instance
+  # record), forwards to Graph on behalf of the tenant, and surfaces
+  # Meta's response envelope. See
+  # https://github.com/fazer-ai/whatsapp-api docs/openapi.yaml `/messages/send`
+  # (dual-path routing description, "Template Messages — WABA instances only").
   def send_template(phone_number, template_info)
     return unless waba_mode?
 
     template_body = template_body_parameters(template_info)
     response = HTTParty.post(
-      "#{provider_url}/messages/send-template#{instance_query}",
+      "#{provider_url}/messages/send#{instance_query}",
       headers: api_headers,
       body: {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
         to: phone_number,
-        type: 'template',
-        template: template_body
+        message: { template: template_body }
       }.to_json
     )
 
@@ -478,23 +475,36 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     Array(body['results']).first&.dig('message_id') || body['message_id']
   end
 
-  # Sync Meta-approved templates for a WABA instance. whatsapp-api exposes a
-  # WABA-mode `/templates` lookup that returns Graph's
-  # `business_account_id/message_templates` payload verbatim (so the
-  # frontend's existing template renderer keeps working unchanged).
+  # Sync Meta-approved templates for a WABA instance via the Business API
+  # surface (`/meta/waba/templates`). whatsapp-api returns Meta's Graph
+  # `business_account_id/message_templates` payload paginated through
+  # cursor-based paging. We follow `paging.cursors.after` until the page
+  # set is exhausted, then persist the merged array so the Chatwoot
+  # template-renderer pulls templates from a single source of truth.
   def sync_templates
     return unless waba_mode?
 
     whatsapp_channel.mark_message_templates_updated
+    templates = fetch_waba_templates_paginated
+    whatsapp_channel.update!(message_templates: templates, message_templates_last_updated: Time.now.utc) if templates.present?
+  end
+
+  def fetch_waba_templates_paginated(after: nil, accumulated: [])
+    query = "#{instance_query}&limit=100"
+    query += "&after=#{CGI.escape(after)}" if after.present?
     response = HTTParty.get(
-      "#{provider_url}/templates#{instance_query}",
+      "#{provider_url}/meta/waba/templates#{query}",
       headers: api_headers
     )
-    return unless response.success?
+    return accumulated unless response.success?
 
     body = unwrap(response.parsed_response)
-    templates = body['data'] || body['templates'] || []
-    whatsapp_channel.update!(message_templates: templates, message_templates_last_updated: Time.now.utc) if templates.present?
+    page = body['data'] || body['templates'] || []
+    accumulated += page
+    next_cursor = body.dig('paging', 'cursors', 'after')
+    return accumulated if next_cursor.blank? || page.empty?
+
+    fetch_waba_templates_paginated(after: next_cursor, accumulated: accumulated)
   end
 
   # Meta Cloud-API template body builder, ported from

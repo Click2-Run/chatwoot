@@ -453,15 +453,14 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
     end
 
     describe '#send_template' do
-      it 'POSTs a Meta-shaped template body to /messages/send-template and returns the message_id' do
-        stub = stub_request(:post, %r{#{provider_url}/messages/send-template\?instance_id=inst-waba-1})
+      it 'POSTs a Meta-shaped template envelope to /messages/send and returns the message_id' do
+        stub = stub_request(:post, %r{#{provider_url}/messages/send\?instance_id=inst-waba-1})
                .with do |req|
                  body = JSON.parse(req.body)
-                 body['type'] == 'template' &&
-                   body['to'] == '5511999' &&
-                   body.dig('template', 'name') == 'order_update' &&
-                   body.dig('template', 'language', 'code') == 'en_US' &&
-                   body.dig('template', 'components').is_a?(Array)
+                 body['to'] == '5511999' &&
+                   body.dig('message', 'template', 'name') == 'order_update' &&
+                   body.dig('message', 'template', 'language', 'code') == 'en_US' &&
+                   body.dig('message', 'template', 'components').is_a?(Array)
                end
                .to_return(status: 200, body: { data: { message_id: 'WAID-T-1' } }.to_json)
 
@@ -476,8 +475,8 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
     end
 
     describe '#sync_templates' do
-      it 'fetches /templates and stores the data array on the channel' do
-        stub_request(:get, %r{#{provider_url}/templates\?instance_id=inst-waba-1})
+      it 'fetches /meta/waba/templates and persists the data array on the channel' do
+        stub_request(:get, %r{#{provider_url}/meta/waba/templates\?instance_id=inst-waba-1})
           .to_return(status: 200, body: { data: { data: [{ name: 't1' }, { name: 't2' }] } }.to_json)
 
         waba_service.sync_templates
@@ -485,6 +484,21 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
 
         expect(waba_channel.message_templates).to eq([{ 'name' => 't1' }, { 'name' => 't2' }])
         expect(waba_channel.message_templates_last_updated).to be_present
+      end
+
+      it 'follows paging.cursors.after across multiple pages' do
+        stub_request(:get, %r{#{provider_url}/meta/waba/templates\?instance_id=inst-waba-1&limit=100$})
+          .to_return(status: 200, body: { data: {
+            data: [{ name: 'p1a' }, { name: 'p1b' }],
+            paging: { cursors: { after: 'CURSOR_2' } }
+          } }.to_json)
+        stub_request(:get, %r{#{provider_url}/meta/waba/templates\?instance_id=inst-waba-1&limit=100&after=CURSOR_2})
+          .to_return(status: 200, body: { data: { data: [{ name: 'p2a' }] } }.to_json)
+
+        waba_service.sync_templates
+        waba_channel.reload
+
+        expect(waba_channel.message_templates.map { |t| t['name'] }).to eq(%w[p1a p1b p2a])
       end
     end
   end
