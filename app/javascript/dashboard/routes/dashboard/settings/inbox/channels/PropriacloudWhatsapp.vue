@@ -40,6 +40,16 @@ const providerUrl = ref('');
 const instanceId = ref('');
 const showAdvancedOptions = ref(false);
 const markAsRead = ref(true);
+// connectionType discriminates the two propriacloud modes:
+//   'web'  → WhatsApp Web pairing (QR / phone code), default
+//   'waba' → WhatsApp API (official Meta Business API via Própria Cloud
+//            tech-provider routing). When 'waba', phone_number_id and
+//            business_account_id replace the instance_id field.
+const connectionType = ref('web');
+const phoneNumberId = ref('');
+const businessAccountId = ref('');
+
+const isWabaMode = computed(() => connectionType.value === 'waba');
 
 const uiFlags = computed(() => store.getters['inboxes/getUIFlags']);
 
@@ -51,6 +61,8 @@ const rules = computed(() => ({
     requiredIf: requiredIf(apiKey),
   },
   apiKey: { requiredIf: requiredIf(providerUrl) },
+  phoneNumberId: { requiredIf: requiredIf(isWabaMode) },
+  businessAccountId: { requiredIf: requiredIf(isWabaMode) },
 }));
 
 const v$ = useVuelidate(rules, {
@@ -58,6 +70,8 @@ const v$ = useVuelidate(rules, {
   phoneNumber,
   providerUrl,
   apiKey,
+  phoneNumberId,
+  businessAccountId,
 });
 
 const createChannel = async () => {
@@ -69,6 +83,7 @@ const createChannel = async () => {
   try {
     const providerConfig = {
       mark_as_read: markAsRead.value,
+      connection_type: connectionType.value,
     };
 
     if (apiKey.value || providerUrl.value) {
@@ -76,10 +91,15 @@ const createChannel = async () => {
       providerConfig.provider_url = providerUrl.value;
     }
 
-    // Optional: bind this Chatwoot inbox to an EXISTING whatsapp-api
-    // instance instead of letting the model auto-generate a fresh UUID.
-    // Useful for adopting an instance already paired (e.g. "0119").
-    if (instanceId.value && instanceId.value.trim()) {
+    if (isWabaMode.value) {
+      // WABA mode is keyed by the Meta credentials supplied here; the
+      // whatsapp-api forwarder uses them to route Cloud-API traffic on
+      // behalf of the Própria Cloud tech provider.
+      providerConfig.phone_number_id = phoneNumberId.value.trim();
+      providerConfig.business_account_id = businessAccountId.value.trim();
+    } else if (instanceId.value && instanceId.value.trim()) {
+      // Web mode only: optional adoption of an EXISTING whatsapp-api
+      // instance instead of letting the model auto-generate a fresh UUID.
       providerConfig.instance_id = instanceId.value.trim();
     }
 
@@ -144,6 +164,38 @@ const setShowAdvancedOptions = () => {
     </div>
 
     <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
+      <label>
+        {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.CONNECTION_TYPE.LABEL') }}
+      </label>
+      <div class="flex flex-col gap-2 mb-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input
+            v-model="connectionType"
+            type="radio"
+            value="web"
+            class="m-0"
+          />
+          <span class="text-sm">
+            {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.CONNECTION_TYPE.WEB') }}
+          </span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input
+            v-model="connectionType"
+            type="radio"
+            value="waba"
+            class="m-0"
+          />
+          <span class="text-sm">
+            {{
+              $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.CONNECTION_TYPE.WABA')
+            }}
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
       <label :class="{ error: v$.inboxName.$error }">
         {{ $t('INBOX_MGMT.ADD.WHATSAPP.INBOX_NAME.LABEL') }}
         <input
@@ -174,6 +226,54 @@ const setShowAdvancedOptions = () => {
         </span>
       </label>
     </div>
+
+    <template v-if="isWabaMode">
+      <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
+        <label :class="{ error: v$.phoneNumberId.$error }">
+          {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER_ID.LABEL') }}
+          <input
+            v-model="phoneNumberId"
+            type="text"
+            :placeholder="
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER_ID.PLACEHOLDER'
+              )
+            "
+            @blur="v$.phoneNumberId.$touch"
+          />
+          <span v-if="v$.phoneNumberId.$error" class="message">
+            {{
+              $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.PHONE_NUMBER_ID.ERROR')
+            }}
+          </span>
+        </label>
+      </div>
+
+      <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
+        <label :class="{ error: v$.businessAccountId.$error }">
+          {{
+            $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.BUSINESS_ACCOUNT_ID.LABEL')
+          }}
+          <input
+            v-model="businessAccountId"
+            type="text"
+            :placeholder="
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.BUSINESS_ACCOUNT_ID.PLACEHOLDER'
+              )
+            "
+            @blur="v$.businessAccountId.$touch"
+          />
+          <span v-if="v$.businessAccountId.$error" class="message">
+            {{
+              $t(
+                'INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.BUSINESS_ACCOUNT_ID.ERROR'
+              )
+            }}
+          </span>
+        </label>
+      </div>
+    </template>
 
     <div
       v-if="!showAdvancedOptions"
@@ -221,7 +321,10 @@ const setShowAdvancedOptions = () => {
         </label>
       </div>
 
-      <div class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]">
+      <div
+        v-if="!isWabaMode"
+        class="w-[65%] flex-shrink-0 flex-grow-0 max-w-[65%]"
+      >
         <label>
           {{ $t('INBOX_MGMT.ADD.WHATSAPP.PROPRIACLOUD.INSTANCE_ID.LABEL') }}
           <input

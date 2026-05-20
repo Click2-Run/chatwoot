@@ -169,17 +169,21 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # influence this — setup_channel_provider only reads it off the
     # persisted record. Same value is sent regardless of the entry point
     # (UI inbox creation, future API onboarding, agent invite, etc.).
+    #
+    # `waba` flips the instance between Web mode (whatsmeow pair-mode
+    # session, the legacy default) and WABA mode (official Meta
+    # WhatsApp Business API, where the API forwards on behalf of the
+    # Própria Cloud tech provider). Sent explicitly so the wire
+    # contract is readable and future API-side default changes don't
+    # silently flip the mode.
     create_body = {
       instance_id: instance_id,
       name: whatsapp_channel.inbox.name,
       phone: normalized_phone_number,
       custom_id: whatsapp_channel.inbox.account_id.to_s,
-      # waba: false declares this instance is a Web (whatsmeow) pair-mode
-      # session, not a Meta WhatsApp Business API instance. The API
-      # defaults to false but we set it explicitly so the contract is
-      # readable on the wire and future API-side default changes don't
-      # silently flip our instances into WABA mode.
-      waba: false
+      waba: waba_mode?,
+      phone_number_id: waba_mode? ? whatsapp_channel.provider_config['phone_number_id'] : nil,
+      business_account_id: waba_mode? ? whatsapp_channel.provider_config['business_account_id'] : nil
     }.compact.to_json
 
     # whatsapp-api occasionally returns 500 on /instances/create when an
@@ -219,7 +223,11 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # has no QR to show. Pull the current QR explicitly so the user sees it
     # immediately. If the instance is already paired, this returns nothing
     # and the channel stays in whatever state the webhook last set.
-    fetch_and_publish_qr_code if fetch_qr
+    #
+    # WABA mode never pairs via QR — the Meta tech provider already holds
+    # the device registration server-side, so a QR pull would hit the
+    # WhatsApp pair rate-limit budget for nothing.
+    fetch_and_publish_qr_code if fetch_qr && !waba_mode?
 
     true
   end
@@ -235,6 +243,8 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # webhook tail can clear it on pairing.success without us having to
   # manage two sources of truth.
   def pair_qrcode
+    raise ProviderUnavailableError, 'QR pairing is not available for WABA-mode instances' if waba_mode?
+
     response = HTTParty.get(
       "#{provider_url}/instances/pair/qrcode#{instance_query}",
       headers: api_headers
@@ -437,11 +447,71 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     end
   end
 
-  # whatsapp-api Web mode does not consume Cloud-API templates. WABA mode handles
-  # templates via separate /templates/* endpoints (deferred to Phase 5b.2).
-  def send_template(_phone_number, _template_info); end
+  # whatsapp-api Web mode does not consume Cloud-API templates — outgoing
+  # text/media goes through /messages/send and /messages/send-media as
+  # regular WhatsApp messages, not templates. WABA mode mirrors the
+  # Cloud-API envelope on the wire and posts the Meta-shaped template
+  # body to whatsapp-api, which forwards to Graph on behalf of the
+  # tenant. The shape is intentionally identical to
+  # WhatsappCloudService#send_template so future contract drift on the
+  # whatsapp-api WABA endpoint can be diff'd against the upstream Cloud
+  # service.
+  def send_template(phone_number, template_info)
+    return unless waba_mode?
 
-  def sync_templates; end
+    template_body = template_body_parameters(template_info)
+    response = HTTParty.post(
+      "#{provider_url}/messages/send-template#{instance_query}",
+      headers: api_headers,
+      body: {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: phone_number,
+        type: 'template',
+        template: template_body
+      }.to_json
+    )
+
+    raise ProviderUnavailableError, "Failed to send template: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
+
+    body = unwrap(response.parsed_response)
+    Array(body['results']).first&.dig('message_id') || body['message_id']
+  end
+
+  # Sync Meta-approved templates for a WABA instance. whatsapp-api exposes a
+  # WABA-mode `/templates` lookup that returns Graph's
+  # `business_account_id/message_templates` payload verbatim (so the
+  # frontend's existing template renderer keeps working unchanged).
+  def sync_templates
+    return unless waba_mode?
+
+    whatsapp_channel.mark_message_templates_updated
+    response = HTTParty.get(
+      "#{provider_url}/templates#{instance_query}",
+      headers: api_headers
+    )
+    return unless response.success?
+
+    body = unwrap(response.parsed_response)
+    templates = body['data'] || body['templates'] || []
+    whatsapp_channel.update!(message_templates: templates, message_templates_last_updated: Time.now.utc) if templates.present?
+  end
+
+  # Meta Cloud-API template body builder, ported from
+  # Whatsapp::Providers::WhatsappCloudService#template_body_parameters.
+  # Kept identical so Chatwoot's component-based template UI (header,
+  # body, buttons) works against WABA-mode propriacloud channels with
+  # zero frontend changes.
+  def template_body_parameters(template_info)
+    {
+      name: template_info[:name],
+      language: {
+        policy: 'deterministic',
+        code: template_info[:lang_code]
+      },
+      components: template_info[:parameters] || []
+    }
+  end
 
   # Legacy callers expect a media URL; whatsapp-api uses POST /media/download
   # with the raw message body. Kept for interface parity but actual download
@@ -538,8 +608,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # already validates credentials via setup_channel_provider; on
   # routine saves we treat the config as valid as long as URL + API
   # key are present.
+  #
+  # WABA mode additionally requires `phone_number_id` and
+  # `business_account_id` — without them the upstream tech-provider
+  # forwarder cannot route messages or pull templates from Meta.
   def validate_provider_config?
     return false if provider_url.blank? || api_key.blank?
+    return false if waba_mode? && (whatsapp_channel.provider_config['phone_number_id'].blank? ||
+                                   whatsapp_channel.provider_config['business_account_id'].blank?)
 
     true
   end
@@ -862,6 +938,8 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   end
 
   def request_phone_pairing_code(phone_number)
+    raise ProviderUnavailableError, 'Phone-code pairing is not available for WABA-mode instances' if waba_mode?
+
     digits = phone_number.to_s.delete('+').gsub(/\D/, '')
     response = HTTParty.post(
       "#{provider_url}/instances/pair/phonecode#{instance_query}",
@@ -962,6 +1040,14 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   end
 
   private
+
+  # True when this channel was provisioned as a Meta WhatsApp Business
+  # API instance (Propria Cloud routing on behalf of the tech provider)
+  # rather than a Web/QR pairing session. Legacy rows without the key
+  # are treated as Web — that's what they always were.
+  def waba_mode?
+    whatsapp_channel.provider_config['connection_type'] == 'waba'
+  end
 
   def provider_url
     whatsapp_channel.provider_config['provider_url'].presence || self.class.default_url

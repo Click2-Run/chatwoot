@@ -85,6 +85,44 @@ RSpec.describe Channel::Whatsapp do
     end
   end
 
+  describe 'propriacloud connection_type defaults' do
+    it 'defaults connection_type to "web" on create when unset' do
+      channel = create(:channel_whatsapp,
+                       provider: 'propriacloud',
+                       provider_config: {
+                         'provider_url' => 'https://pc.example.com',
+                         'api_key' => 'pc-key'
+                       },
+                       account: create(:account),
+                       validate_provider_config: false,
+                       sync_templates: false,
+                       received_messages: false)
+
+      expect(channel.provider_config['connection_type']).to eq('web')
+      # Web mode auto-generates instance_id so the channel can be paired.
+      expect(channel.provider_config['instance_id']).to be_present
+    end
+
+    it 'preserves connection_type=waba and does NOT auto-generate instance_id' do
+      channel = create(:channel_whatsapp,
+                       provider: 'propriacloud',
+                       provider_config: {
+                         'provider_url' => 'https://pc.example.com',
+                         'api_key' => 'pc-key',
+                         'connection_type' => 'waba',
+                         'phone_number_id' => 'PNID-9',
+                         'business_account_id' => 'BAID-9'
+                       },
+                       account: create(:account),
+                       validate_provider_config: false,
+                       sync_templates: false,
+                       received_messages: false)
+
+      expect(channel.provider_config['connection_type']).to eq('waba')
+      expect(channel.provider_config['instance_id']).to be_nil
+    end
+  end
+
   describe 'webhook setup after creation' do
     let(:account) { create(:account) }
     let(:webhook_service) { instance_double(Whatsapp::WebhookSetupService) }

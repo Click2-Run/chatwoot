@@ -135,7 +135,7 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
 
   describe '#register_webhook! (PEND-09)' do
     let(:list_stub) do
-      stub_request(:get, /#{Regexp.escape(provider_url)}\/webhooks\?scope=instance/)
+      stub_request(:get, %r{#{Regexp.escape(provider_url)}/webhooks\?.*scope=instance})
         .to_return(status: 200, body: { data: { webhooks: [] } }.to_json)
     end
 
@@ -242,7 +242,7 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
 
       config = whatsapp_channel.reload.provider_config
       expect(config['pair_lock_code']).to eq('PAIR_RATE_LIMITED')
-      expect(Time.parse(config['pair_locked_until'])).to be_within(5.seconds).of(Time.current + 300)
+      expect(Time.zone.parse(config['pair_locked_until'])).to be_within(5.seconds).of(Time.current + 300)
     end
   end
 
@@ -372,6 +372,120 @@ describe Whatsapp::Providers::WhatsappPropriacloudService do
 
       expect(stub).to have_been_requested
       expect(result).to eq('WAID_1')
+    end
+  end
+
+  describe 'WABA mode (connection_type=waba)' do
+    let!(:waba_channel) do
+      create(:channel_whatsapp,
+             provider: 'propriacloud',
+             provider_config: {
+               provider_url: provider_url,
+               api_key: api_key,
+               instance_id: 'inst-waba-1',
+               webhook_verify_token: 'b' * 32,
+               connection_type: 'waba',
+               phone_number_id: 'PNID-123',
+               business_account_id: 'BAID-456'
+             },
+             validate_provider_config: false,
+             received_messages: false,
+             sync_templates: false)
+    end
+    let(:waba_service) { described_class.new(whatsapp_channel: waba_channel) }
+
+    describe '#setup_channel_provider' do
+      it 'sends waba:true with phone_number_id and business_account_id, and never pulls a QR' do
+        create_stub = stub_request(:post, "#{provider_url}/instances/create")
+                      .with do |req|
+                        body = JSON.parse(req.body)
+                        body['waba'] == true &&
+                          body['phone_number_id'] == 'PNID-123' &&
+                          body['business_account_id'] == 'BAID-456'
+                      end
+                      .to_return(status: 200, body: { data: {} }.to_json)
+        stub_request(:post, "#{provider_url}/webhooks").to_return(status: 201, body: { data: {} }.to_json)
+        stub_request(:get, %r{#{provider_url}/webhooks\?.*scope=instance}).to_return(status: 200, body: { data: { webhooks: [] } }.to_json)
+        connect_stub = stub_request(:post, %r{#{provider_url}/instances/connect\?instance_id=inst-waba-1}).to_return(status: 200,
+                                                                                                                     body: { data: {} }.to_json)
+        qr_stub = stub_request(:get, %r{#{provider_url}/instances/pair/qrcode})
+
+        waba_service.setup_channel_provider
+
+        expect(create_stub).to have_been_requested
+        expect(connect_stub).to have_been_requested
+        expect(qr_stub).not_to have_been_requested
+      end
+    end
+
+    describe '#pair_qrcode' do
+      it 'raises ProviderUnavailableError without hitting the API' do
+        qr_stub = stub_request(:get, %r{#{provider_url}/instances/pair/qrcode})
+        expect { waba_service.pair_qrcode }
+          .to raise_error(described_class::ProviderUnavailableError, /WABA-mode/i)
+        expect(qr_stub).not_to have_been_requested
+      end
+    end
+
+    describe '#request_phone_pairing_code' do
+      it 'raises ProviderUnavailableError without hitting the API' do
+        pc_stub = stub_request(:post, %r{#{provider_url}/instances/pair/phonecode})
+        expect { waba_service.request_phone_pairing_code('+5511999') }
+          .to raise_error(described_class::ProviderUnavailableError, /WABA-mode/i)
+        expect(pc_stub).not_to have_been_requested
+      end
+    end
+
+    describe '#validate_provider_config?' do
+      it 'returns true when provider_url, api_key, phone_number_id and business_account_id are all present' do
+        expect(waba_service.validate_provider_config?).to be(true)
+      end
+
+      it 'returns false when phone_number_id is missing' do
+        waba_channel.provider_config['phone_number_id'] = ''
+        expect(waba_service.validate_provider_config?).to be(false)
+      end
+
+      it 'returns false when business_account_id is missing' do
+        waba_channel.provider_config['business_account_id'] = nil
+        expect(waba_service.validate_provider_config?).to be(false)
+      end
+    end
+
+    describe '#send_template' do
+      it 'POSTs a Meta-shaped template body to /messages/send-template and returns the message_id' do
+        stub = stub_request(:post, %r{#{provider_url}/messages/send-template\?instance_id=inst-waba-1})
+               .with do |req|
+                 body = JSON.parse(req.body)
+                 body['type'] == 'template' &&
+                   body['to'] == '5511999' &&
+                   body.dig('template', 'name') == 'order_update' &&
+                   body.dig('template', 'language', 'code') == 'en_US' &&
+                   body.dig('template', 'components').is_a?(Array)
+               end
+               .to_return(status: 200, body: { data: { message_id: 'WAID-T-1' } }.to_json)
+
+        result = waba_service.send_template(
+          '5511999',
+          { name: 'order_update', lang_code: 'en_US', parameters: [{ type: 'body', parameters: [] }] }
+        )
+
+        expect(stub).to have_been_requested
+        expect(result).to eq('WAID-T-1')
+      end
+    end
+
+    describe '#sync_templates' do
+      it 'fetches /templates and stores the data array on the channel' do
+        stub_request(:get, %r{#{provider_url}/templates\?instance_id=inst-waba-1})
+          .to_return(status: 200, body: { data: { data: [{ name: 't1' }, { name: 't2' }] } }.to_json)
+
+        waba_service.sync_templates
+        waba_channel.reload
+
+        expect(waba_channel.message_templates).to eq([{ 'name' => 't1' }, { 'name' => 't2' }])
+        expect(waba_channel.message_templates_last_updated).to be_present
+      end
     end
   end
 end

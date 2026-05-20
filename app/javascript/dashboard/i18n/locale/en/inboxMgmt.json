@@ -440,10 +440,25 @@
             "TITLE": "Própria Cloud API",
             "DESCRIPTION": "Própria Cloud is a production-ready Go-based WhatsApp integration, full-featured, offering superior performance and stability compared to Baileys, Evolution API/Go/Cloud, Z-API and other Node.js based alternatives."
           },
+          "CONNECTION_TYPE": {
+            "LABEL": "Connection type",
+            "WEB": "WhatsApp Web (Pairing)",
+            "WABA": "WhatsApp API (Business API)"
+          },
           "PHONE_NUMBER": {
             "LABEL": "Phone number",
             "PLACEHOLDER": "e.g. 5511999998888 (with or without the leading \"+\")",
             "ERROR": "Enter the phone number digits including country code (e.g. 5511999998888). The \"+\" prefix is optional."
+          },
+          "PHONE_NUMBER_ID": {
+            "LABEL": "Phone Number ID",
+            "PLACEHOLDER": "Meta phone_number_id (from your WhatsApp Business Account)",
+            "ERROR": "Phone Number ID is required for WhatsApp Business API channels."
+          },
+          "BUSINESS_ACCOUNT_ID": {
+            "LABEL": "Business Account ID",
+            "PLACEHOLDER": "Meta business_account_id (WABA ID)",
+            "ERROR": "Business Account ID is required for WhatsApp Business API channels."
           },
           "INSTANCE_ID": {
             "LABEL": "Instance ID (optional)",

@@ -17,7 +17,7 @@
 # Indexes
 #
 #  index_channel_whatsapp_on_phone_number      (phone_number) UNIQUE
-#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY ((ARRAY['baileys'::character varying, 'zapi'::character varying, 'whatsmeow'::character varying, 'propriacloud'::character varying])::text[])) USING gin
+#  index_channel_whatsapp_provider_connection  (provider_connection) WHERE ((provider)::text = ANY (ARRAY[('baileys'::character varying)::text, ('zapi'::character varying)::text, ('whatsmeow'::character varying)::text, ('propriacloud'::character varying)::text])) USING gin
 #
 # rubocop:enable Layout/LineLength
 
@@ -52,11 +52,18 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
   # presence today; the toggle was carried over from an older fazer-ai
   # implementation that exposed contact-typing indicators. Re-introduce
   # the key only if/when we wire up POST /presence/subscribe.
+  #
+  # `connection_type` discriminates between the two propriacloud modes:
+  # `web` (QR/phone-code pairing, whatsmeow under the hood) and `waba`
+  # (official Meta WhatsApp Business API). Legacy rows predating the
+  # toggle keep behaving as Web — that's the only safe default for any
+  # existing inbox in the wild.
   def apply_propriacloud_defaults
     return unless provider == 'propriacloud'
 
     self.provider_config ||= {}
     provider_config['mark_as_read'] = true unless provider_config.key?('mark_as_read')
+    provider_config['connection_type'] = 'web' if provider_config['connection_type'].blank?
   end
 
   def name
@@ -334,7 +341,10 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
 
   def ensure_webhook_verify_token
     provider_config['webhook_verify_token'] ||= SecureRandom.hex(16) if provider.in?(%w[whatsapp_cloud baileys whatsmeow propriacloud])
-    provider_config['instance_id'] ||= SecureRandom.uuid if provider == 'propriacloud'
+    # Only Web-mode propriacloud channels need a generated instance_id —
+    # WABA-mode channels are keyed by the Meta phone_number_id supplied
+    # in provider_config and never originate a whatsmeow instance.
+    provider_config['instance_id'] ||= SecureRandom.uuid if provider == 'propriacloud' && provider_config['connection_type'] != 'waba'
   end
 
   def validate_provider_config

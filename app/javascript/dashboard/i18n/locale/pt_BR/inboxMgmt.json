@@ -440,10 +440,25 @@
             "TITLE": "API Própria Cloud",
             "DESCRIPTION": "Própria Cloud é uma integração WhatsApp baseada em Go pronta para produção, com recursos completos, oferecendo desempenho e estabilidade superiores em comparação com Baileys, Evolution API/Go/Cloud, Z-API e outras alternativas baseadas em Node.js."
           },
+          "CONNECTION_TYPE": {
+            "LABEL": "Tipo de conexão",
+            "WEB": "WhatsApp Web (Emparelhamento)",
+            "WABA": "WhatsApp API (Business API)"
+          },
           "PHONE_NUMBER": {
             "LABEL": "Número de telefone",
             "PLACEHOLDER": "Ex.: 5511999998888 (com ou sem o \"+\" no início)",
             "ERROR": "Informe apenas os dígitos do número, incluindo o DDI (ex.: 5511999998888). O \"+\" é opcional."
+          },
+          "PHONE_NUMBER_ID": {
+            "LABEL": "ID do Número (Phone Number ID)",
+            "PLACEHOLDER": "phone_number_id da Meta (da sua Conta WhatsApp Business)",
+            "ERROR": "ID do Número é obrigatório para canais WhatsApp Business API."
+          },
+          "BUSINESS_ACCOUNT_ID": {
+            "LABEL": "ID da Conta Comercial (Business Account ID)",
+            "PLACEHOLDER": "business_account_id da Meta (ID WABA)",
+            "ERROR": "ID da Conta Comercial é obrigatório para canais WhatsApp Business API."
           },
           "INSTANCE_ID": {
             "LABEL": "ID da instância (opcional)",
