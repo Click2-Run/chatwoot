@@ -99,7 +99,7 @@ class Whatsapp::PropriacloudEmbeddedSignupService
 
     session.update!(minha_session_id: url_data['session_id'], inbox_id: channel.inbox.id)
 
-    [session, url_data['signup_url'], channel.inbox]
+    [session, url_data['signup_url'], channel.inbox, url_data['expires_at']]
   end
 
   private

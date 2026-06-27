@@ -12,7 +12,7 @@
 class Api::V1::Accounts::Propriacloud::AuthorizationsController < Api::V1::Accounts::BaseController
   def create
     validate_params!
-    session, signup_url = Whatsapp::PropriacloudEmbeddedSignupService.start(
+    session, signup_url, _inbox, expires_at = Whatsapp::PropriacloudEmbeddedSignupService.start(
       account: Current.account,
       tenant_key: params[:tenant_key],
       intended_inbox_name: params[:inbox_name],
@@ -25,7 +25,8 @@ class Api::V1::Accounts::Propriacloud::AuthorizationsController < Api::V1::Accou
       session_id: session.id,
       minha_session_id: session.minha_session_id,
       signup_url: signup_url,
-      instance_id: session.instance_id
+      instance_id: session.instance_id,
+      expires_at: expires_at
     }
   rescue ArgumentError => e
     render json: { success: false, error: e.message }, status: :bad_request
