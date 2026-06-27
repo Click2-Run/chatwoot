@@ -41,10 +41,21 @@ Trigger any of these:
 
 ### 0. Safety net (before doing anything destructive)
 
+**Commit EVERYTHING first.** The working tree MUST be clean before you
+branch or merge. Any in-flight work is committed as a checkpoint on the
+*current* `codi-*` branch — split into atomic commits by logical change
+(`type(scope): subject`, no AI attribution). This preserves the work,
+carries it into the merge, and makes the safety tag a true rollback
+point. Do not stash-and-forget; commit.
+
 ```bash
-git status --short                       # working tree must be clean
-git fetch fazerai --tags
-git fetch upstream --tags                # chatwoot core (optional)
+git add <files>                          # stage by logical change (not `git add .`)
+git commit -m "type(scope): ..."         # one commit per logical change
+git status --short                       # MUST now be empty
+
+# "Bring all" — never trust a stale local view of what "latest" is.
+git fetch fazerai upstream origin --tags
+
 git tag codi-pre-upgrade-$(date +%Y-%m-%d)   # rollback anchor
 ```
 
@@ -54,15 +65,34 @@ one safety tag is taken on the same day.
 
 ### 1. Decide: same branch or new branch?
 
-| Situation                                                             | Action                                                              |
-| :-------------------------------------------------------------------- | :------------------------------------------------------------------ |
-| Upstream has new commits on `fazerai/main` but no new tag             | `git merge fazerai/main` on the current `codi-*` branch             |
-| A new `vX.Y.Z-fazer-ai.N+1` tag dropped (same chatwoot core version)  | Create `codi-vX.Y.Z-fazer-ai.N+1`, merge our work onto it           |
-| Chatwoot core bumped (e.g. 4.13 → 4.14, fazer-ai retags)              | Create `codi-v4.14.0-fazer-ai.N`, merge our work onto it            |
-| Cherry-picking a single fix                                           | Cherry-pick on current branch, no rename                            |
+| Situation                                                             | Action                                                                                |
+| :-------------------------------------------------------------------- | :------------------------------------------------------------------------------------ |
+| Upstream has new commits on `fazerai/main` but no new tag             | `git merge fazerai/main` on the current `codi-*` branch                               |
+| A new `vX.Y.Z-fazer-ai.N+1` tag dropped (same chatwoot core version)  | New branch `codi-vX.Y.Z-fazer-ai.N+1` cut **FROM the current `codi-*`**, then merge the new tag in |
+| Chatwoot core bumped (e.g. 4.14 → 4.15, fazer-ai retags)              | New branch `codi-v4.15.x-fazer-ai.N` cut **FROM the current `codi-*`**, then merge the new tag in  |
+| Cherry-picking a single fix                                           | Cherry-pick on current branch, no rename                                             |
 
-The convention: **branch name reflects the base upstream tag, not the
-HEAD commit**. Customizations on top are expected drift.
+#### Direction — do NOT get this backwards (this caused confusion before)
+
+The new branch is cut **FROM our current `codi-*` branch**, and the
+**new upstream tag is merged INTO it**. The branch is *named* after the
+new upstream tag, but it is *based on* our previous codi branch — never
+the reverse.
+
+- **HEAD / ours**  = our codi branch (the new `codi-vNEW`, cut from the old codi)
+- **MERGE_HEAD / theirs** = the new upstream tag `vX.Y.Z-fazer-ai.N`
+
+This keeps our customization history as the `--first-parent` mainline
+("what's ours" stays answerable), matching the `sync-fork` skill's
+stated preference. The branch name reflects the new upstream tag;
+customizations on top are expected drift.
+
+> Historical note: upgrades **through `.74`** were done the other way
+> (base = upstream tag, merging our codi *in* — e.g. commit
+> `312e114525` "Merge codi-v4.13.0-fazer-ai.66 customizations into
+> codi-v4.14.0-fazer-ai.74"). **From `.86` onward we standardize on
+> base = our codi**, per this section. Don't be misled by the old merge
+> commit messages.
 
 ### 2. Read the rebrand rules BEFORE resolving any conflict
 
@@ -88,15 +118,20 @@ Do **not** translate:
 ### 3. Merge
 
 ```bash
-# In-place merge:
+# In-place merge (untagged upstream commits, stay on the same branch):
 git merge fazerai/main --no-edit
 
-# OR new-branch flow:
-git checkout v4.13.0-fazer-ai.67
-git checkout -b codi-v4.13.0-fazer-ai.67
-git merge codi-v4.13.0-fazer-ai.66 --no-ff \
-  -m "Merge codi-v4.13.0-fazer-ai.66 customizations into codi-v4.13.0-fazer-ai.67"
+# Tagged upgrade — new-branch flow (base = OUR codi, merge the new tag IN):
+git checkout codi-v4.14.0-fazer-ai.74           # current codi = base
+git checkout -b codi-v4.15.1-fazer-ai.86        # new branch, named for the new upstream tag
+git merge v4.15.1-fazer-ai.86 --no-ff \
+  -m "Merge upstream v4.15.1-fazer-ai.86 into codi-v4.15.1-fazer-ai.86"
 ```
+
+In the new-branch flow HEAD is **our** codi branch and `MERGE_HEAD` is
+the **upstream tag**. Keep this straight when applying the `sync-fork`
+KC/AI/CO/DEL framework: **AI = accept the upstream tag**, **KC = keep
+our customization**.
 
 Resolve conflicts using the rebrand mapping. When in doubt, prefer
 keeping our customization side and translating any upstream strings
