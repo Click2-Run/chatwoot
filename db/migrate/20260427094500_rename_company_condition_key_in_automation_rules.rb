@@ -1,4 +1,6 @@
 class RenameCompanyConditionKeyInAutomationRules < ActiveRecord::Migration[7.1]
+  CONTACT_FILTER_TYPE = 1
+
   def up
     migrate_automation_rule_conditions
     migrate_contact_custom_filter_queries
@@ -9,7 +11,7 @@ class RenameCompanyConditionKeyInAutomationRules < ActiveRecord::Migration[7.1]
   private
 
   def migrate_automation_rule_conditions
-    AutomationRule.find_each do |rule|
+    automation_rule_class.find_each do |rule|
       conditions = rename_company_attribute_key(rule.conditions)
 
       next if conditions == rule.conditions
@@ -19,13 +21,27 @@ class RenameCompanyConditionKeyInAutomationRules < ActiveRecord::Migration[7.1]
   end
 
   def migrate_contact_custom_filter_queries
-    CustomFilter.contact.find_each do |filter|
+    custom_filter_class.where(filter_type: CONTACT_FILTER_TYPE).find_each do |filter|
       query = filter.query.deep_dup
       payload = rename_company_attribute_key(query['payload'])
       next if payload == query['payload']
 
       query['payload'] = payload
       filter.update_column(:query, query) # rubocop:disable Rails/SkipsModelValidations
+    end
+  end
+
+  def automation_rule_class
+    @automation_rule_class ||= Class.new(ActiveRecord::Base) do
+      self.table_name = 'automation_rules'
+      self.inheritance_column = :_type_disabled
+    end
+  end
+
+  def custom_filter_class
+    @custom_filter_class ||= Class.new(ActiveRecord::Base) do
+      self.table_name = 'custom_filters'
+      self.inheritance_column = :_type_disabled
     end
   end
 

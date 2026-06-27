@@ -77,7 +77,7 @@ gem 'faraday_middleware-aws-sigv4'
 ##--- gems for server & infra configuration ---##
 gem 'dotenv-rails', '>= 3.0.0'
 gem 'foreman'
-gem 'puma'
+gem 'puma', '~> 7.2', '>= 7.2.1'
 gem 'vite_rails'
 # Pin vite_ruby to 3.7.x — matches the vite-plugin-ruby 5.1.x npm we keep pinned
 # (5.2.x is ESM-only and cannot be loaded by our CommonJS vite.config.ts).
@@ -93,7 +93,7 @@ gem 'rails-i18n', '~> 7.0'
 # two-factor authentication
 gem 'devise-two-factor', '>= 5.0.0'
 # authorization
-gem 'jwt'
+gem 'jwt', '~> 2.10', '>= 2.10.3'
 gem 'pundit'
 
 # super admin
@@ -137,9 +137,9 @@ gem 'sentry-ruby', require: false
 gem 'sentry-sidekiq', '>= 5.19.0', require: false
 
 ##-- background job processing --##
-gem 'sidekiq', '>= 7.3.1'
+gem 'sidekiq', '~> 7.3', '>= 7.3.1'
 # We want cron jobs
-gem 'sidekiq-cron', '>= 1.12.0'
+gem 'sidekiq-cron', '>= 2.4.0'
 # for sidekiq healthcheck
 gem 'sidekiq_alive'
 
@@ -216,6 +216,8 @@ gem 'opentelemetry-exporter-otlp'
 gem 'shopify_api'
 
 gem 'resend', '~> 0.19.0'
+
+gem 'firecrawl-sdk', '~> 1.0', require: 'firecrawl'
 
 ### Gems required only in specific deployment environments ###
 ##############################################################

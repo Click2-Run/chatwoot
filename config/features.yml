@@ -200,7 +200,6 @@
   display_name: Advanced Search
   enabled: false
   premium: true
-  chatwoot_internal: true
 - name: saml
   display_name: SAML
   enabled: false
@@ -269,3 +268,12 @@
   display_name: Advanced Assignment
   enabled: false
   premium: true
+# conversation_unread_counts is appended here (not at upstream's position, right
+# after channel_facebook) on purpose: inserting it mid-list would shift the
+# FlagShihTzu bit index of every existing codi flag (channel_whatsapp_propriacloud
+# at bit 3, etc.) and silently corrupt every account's feature_flags bigint.
+# See CLAUDE.md "Account-level toggles" note.
+- name: conversation_unread_counts
+  display_name: Conversation Unread Counts
+  enabled: false
+  chatwoot_internal: true

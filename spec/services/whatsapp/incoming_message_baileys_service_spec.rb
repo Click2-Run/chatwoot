@@ -88,6 +88,35 @@ describe Whatsapp::IncomingMessageBaileysService do
       )
     end
 
+    context 'when processing message-capping.update event' do
+      it 'persists the UI-relevant cap keys and drops server_sent_timestamp' do
+        params = {
+          webhookVerifyToken: webhook_verify_token,
+          event: 'message-capping.update',
+          data: {
+            capping_status: 'FIRST_WARNING',
+            ote_status: 'ELIGIBLE',
+            mv_status: 'NOT_ELIGIBLE',
+            total_quota: 100,
+            used_quota: 80,
+            cycle_end_timestamp: '1781699999',
+            server_sent_timestamp: '1781645846'
+          }
+        }
+
+        described_class.new(inbox: inbox, params: params).perform
+
+        expect(inbox.channel.reload.provider_connection['new_chat_cap']).to eq(
+          'capping_status' => 'FIRST_WARNING',
+          'ote_status' => 'ELIGIBLE',
+          'mv_status' => 'NOT_ELIGIBLE',
+          'total_quota' => 100,
+          'used_quota' => 80,
+          'cycle_end_timestamp' => '1781699999'
+        )
+      end
+    end
+
     context 'when processing connection.update event' do
       let(:base_params) { { webhookVerifyToken: webhook_verify_token, event: 'connection.update' } }
 
@@ -161,6 +190,155 @@ describe Whatsapp::IncomingMessageBaileysService do
         described_class.new(inbox: inbox, params: params).perform
 
         expect(inbox.channel.provider_connection['error']).to be_nil
+      end
+
+      context 'with reach-out time-lock (error 463 / account restriction)' do
+        let(:reachout_data) do
+          { isActive: true, timeEnforcementEnds: '2026-06-19T21:52:39.000Z', enforcementType: 'RESTRICT_ALL_COMPANIONS' }
+        end
+
+        it 'persists the lock from a standalone reachoutTimeLock push and keeps the connection' do
+          inbox.channel.update_provider_connection!(connection: 'open')
+          params = base_params.merge(data: { reachoutTimeLock: reachout_data })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('open')
+          expect(inbox.channel.provider_connection['reachout_time_lock']).to eq(
+            'is_active' => true,
+            'time_enforcement_ends' => '2026-06-19T21:52:39.000Z',
+            'enforcement_type' => 'RESTRICT_ALL_COMPANIONS'
+          )
+        end
+
+        it 'preserves an existing lock when a connection-only update arrives' do
+          inbox.channel.update_provider_connection!(
+            connection: 'open',
+            reachout_time_lock: { is_active: true, time_enforcement_ends: '2026-06-19T21:52:39.000Z', enforcement_type: 'RESTRICT_ALL_COMPANIONS' }
+          )
+          params = base_params.merge(data: { connection: 'connecting' })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('connecting')
+          expect(inbox.channel.provider_connection['reachout_time_lock']).to include('is_active' => true)
+        end
+
+        it 'records the cleared state when isActive is false' do
+          params = base_params.merge(data: { reachoutTimeLock: { isActive: false, enforcementType: 'DEFAULT' } })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['reachout_time_lock']).to eq('is_active' => false, 'enforcement_type' => 'DEFAULT')
+        end
+
+        it 'persists only is_active when the deadline and type are absent' do
+          params = base_params.merge(data: { reachoutTimeLock: { isActive: true } })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['reachout_time_lock']).to eq('is_active' => true)
+        end
+
+        it 'discards a stale-epoch reachoutTimeLock push' do
+          inbox.channel.update_provider_connection!(connection: 'open', epoch: 7)
+          params = base_params.merge(data: { reachoutTimeLock: reachout_data, epoch: 6 })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['reachout_time_lock']).to be_nil
+        end
+      end
+
+      context 'with new-chat cap (quota)' do
+        it 'preserves an existing cap when a connection-only update arrives' do
+          inbox.channel.update_provider_connection!(
+            connection: 'open',
+            new_chat_cap: { capping_status: 'CAPPED', total_quota: 100, used_quota: 100 }
+          )
+          params = base_params.merge(data: { connection: 'connecting' })
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('connecting')
+          expect(inbox.channel.provider_connection['new_chat_cap']).to include('capping_status' => 'CAPPED')
+        end
+      end
+
+      context 'with lease epochs (multi-instance baileys-api)' do
+        it 'persists the epoch alongside the connection state' do
+          params = base_params.merge(
+            {
+              data: { connection: 'open', epoch: 7 }
+            }
+          )
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection).to include('connection' => 'open', 'epoch' => 7)
+        end
+
+        it 'discards events carrying an epoch older than the last seen' do
+          # A late retry from a previous owner (e.g. "reconnecting") must not
+          # overwrite the current owner's "open".
+          inbox.channel.update_provider_connection!(connection: 'open', epoch: 7)
+          params = base_params.merge(
+            {
+              data: { connection: 'reconnecting', epoch: 6 }
+            }
+          )
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('open')
+          expect(inbox.channel.provider_connection['epoch']).to eq(7)
+        end
+
+        it 'accepts events with the same epoch as the last seen' do
+          inbox.channel.update_provider_connection!(connection: 'reconnecting', epoch: 7)
+          params = base_params.merge(
+            {
+              data: { connection: 'open', epoch: 7 }
+            }
+          )
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('open')
+        end
+
+        it 'accepts events without an epoch (older baileys-api versions)' do
+          inbox.channel.update_provider_connection!(connection: 'reconnecting', epoch: 7)
+          params = base_params.merge(
+            {
+              data: { connection: 'open' }
+            }
+          )
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection['connection']).to eq('open')
+        end
+
+        it 'accepts any epoch when none has been seen yet' do
+          inbox.channel.update_provider_connection!(connection: 'reconnecting')
+          params = base_params.merge(
+            {
+              data: { connection: 'open', epoch: 3 }
+            }
+          )
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.channel.provider_connection).to include('connection' => 'open', 'epoch' => 3)
+        end
+
+        it 'acquires a row lock so the epoch check and update are atomic' do
+          params = base_params.merge({ data: { connection: 'open', epoch: 7 } })
+          expect(inbox.channel).to receive(:with_lock).and_call_original
+
+          described_class.new(inbox: inbox, params: params).perform
+        end
       end
     end
 
@@ -268,6 +446,37 @@ describe Whatsapp::IncomingMessageBaileysService do
       context 'when message is edited message' do
         it 'does not create contact inbox nor message' do
           raw_message[:message] = { editedMessage: { message: { protocolMessage: { editedMessage: { documentMessage: 1 } } } } }
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(inbox.messages).to be_empty
+          expect(inbox.contact_inboxes).to be_empty
+        end
+      end
+
+      context 'when message is a revoke (contact deleted for everyone)' do
+        let(:original_message) do
+          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678')
+          contact_inbox = create(:contact_inbox, contact: contact, inbox: inbox, source_id: '5511912345678')
+          conversation = create(:conversation, contact: contact, inbox: inbox, contact_inbox: contact_inbox)
+          create(:message, conversation: conversation, source_id: 'original_msg_id', content: 'secret message')
+        end
+
+        it 'flags the original message as deleted by the contact and keeps the content' do
+          original_message
+          raw_message[:message] = { protocolMessage: { key: { id: 'original_msg_id' }, type: 'REVOKE' } }
+
+          expect do
+            described_class.new(inbox: inbox, params: params).perform
+          end.not_to(change { inbox.messages.count })
+
+          original_message.reload
+          expect(original_message.content).to eq('secret message')
+          expect(original_message.content_attributes['deleted_by_contact']).to be(true)
+        end
+
+        it 'does nothing when the revoked message is unknown' do
+          raw_message[:message] = { protocolMessage: { key: { id: 'unknown_id' }, type: 'REVOKE' } }
 
           described_class.new(inbox: inbox, params: params).perform
 
@@ -552,6 +761,26 @@ describe Whatsapp::IncomingMessageBaileysService do
           reaction = message.conversation.messages.last
           expect(reaction.is_reaction).to be(true)
           expect(reaction.in_reply_to).to eq(message.id)
+          expect(reaction.in_reply_to_external_id).to eq(message.source_id)
+        end
+
+        it 'anchors the reaction to the target message conversation when it is resolved instead of opening a new one' do
+          message.conversation.update!(status: :resolved)
+          raw_message[:key][:id] = 'reaction_123'
+          raw_message[:message] = {
+            reactionMessage: {
+              key: { remoteJid: '12345678@lid', fromMe: true, id: 'msg_123' },
+              text: '👍'
+            }
+          }
+
+          expect do
+            described_class.new(inbox: inbox, params: params).perform
+          end.not_to change(Conversation, :count)
+
+          reaction = message.conversation.reload.messages.last
+          expect(reaction.is_reaction).to be(true)
+          expect(reaction.conversation_id).to eq(message.conversation.id)
           expect(reaction.in_reply_to_external_id).to eq(message.source_id)
         end
 
@@ -947,6 +1176,25 @@ describe Whatsapp::IncomingMessageBaileysService do
           expect(contact.phone_number).to eq('+5511912345678')
         end
 
+        it 'reuses a contact saved with the Brazilian ninth digit when the reply arrives without it' do
+          # Regression: the agent saved the number with the ninth digit and outbound
+          # normalization was skipped; the reply delivers the canonical number without
+          # it and must not spawn a duplicate contact in a new conversation.
+          raw_message[:key][:remoteJidAlt] = '551112345678@s.whatsapp.net'
+          contact = create(:contact, account: inbox.account, phone_number: '+5511912345678', identifier: nil)
+          contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '5511912345678')
+          conversation = create(:conversation, inbox: inbox, contact: contact, contact_inbox: contact_inbox)
+
+          expect do
+            described_class.new(inbox: inbox, params: params).perform
+          end.not_to change(Contact, :count)
+
+          expect(contact_inbox.reload.source_id).to eq('12345678')
+          expect(contact.reload.identifier).to eq('12345678@lid')
+          expect(contact.phone_number).to eq('+551112345678')
+          expect(conversation.reload.messages.last.content).to eq('Hello from Baileys')
+        end
+
         it 'does not update contact_inbox if source_id is already LID' do
           contact = create(:contact, account: inbox.account, phone_number: '+5511912345678', identifier: '12345678@lid')
           contact_inbox = create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
@@ -970,6 +1218,26 @@ describe Whatsapp::IncomingMessageBaileysService do
 
         it 'updates contact name if it matches phone number' do
           contact = create(:contact, account: inbox.account, name: '5511912345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(contact.reload.name).to eq('John Doe')
+        end
+
+        it 'updates contact name when stored name is a phone variant missing the Brazilian 9' do
+          # The contact was registered without the "9"; phone normalization later aligned
+          # phone_number to the canonical number, but the name kept the stale digits.
+          contact = create(:contact, account: inbox.account, name: '551112345678', phone_number: '+5511912345678', identifier: '12345678@lid')
+          create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(contact.reload.name).to eq('John Doe')
+        end
+
+        it 'updates contact name when stored name is a phone number with a leading +' do
+          contact = create(:contact, account: inbox.account, name: '+5511912345678', phone_number: '+5511912345678', identifier: '12345678@lid')
           create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
 
           described_class.new(inbox: inbox, params: params).perform
@@ -1002,6 +1270,15 @@ describe Whatsapp::IncomingMessageBaileysService do
           described_class.new(inbox: inbox, params: params).perform
 
           expect(contact.reload.name).to eq('Existing Name')
+        end
+
+        it 'does not overwrite a digit-only name that is not this contact phone or LID' do
+          contact = create(:contact, account: inbox.account, name: '99887766', phone_number: '+5511912345678', identifier: '12345678@lid')
+          create(:contact_inbox, inbox: inbox, contact: contact, source_id: '12345678')
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(contact.reload.name).to eq('99887766')
         end
       end
     end
@@ -1083,6 +1360,35 @@ describe Whatsapp::IncomingMessageBaileysService do
           end.not_to raise_error
 
           expect(Rails.logger).to have_received(:warn)
+        end
+
+        it 'marks the message as failed and stores the stub description with code' do
+          update_payload[:update][:status] = 0
+          update_payload[:update][:messageStubParameters] = ['463', 'Your account has been restricted']
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.status).to eq('failed')
+          expect(message.external_error).to eq('Your account has been restricted (463)')
+        end
+
+        it 'falls back to a generic message when only the error code is present on failure' do
+          update_payload[:update][:status] = 0
+          update_payload[:update][:messageStubParameters] = ['429']
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.status).to eq('failed')
+          expect(message.external_error).to eq('WhatsApp error 429')
+        end
+
+        it 'leaves external_error blank on failure when stub parameters are absent' do
+          update_payload[:update][:status] = 0
+
+          described_class.new(inbox: inbox, params: params).perform
+
+          expect(message.reload.status).to eq('failed')
+          expect(message.external_error).to be_blank
         end
       end
 

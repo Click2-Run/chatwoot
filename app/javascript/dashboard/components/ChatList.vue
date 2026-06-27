@@ -61,10 +61,10 @@ import {
   getUserPermissions,
   getUserRole,
   filterItemsByPermission,
+  getVisibleAssigneeTabPermissions,
 } from 'dashboard/helper/permissionsHelper.js';
 import { matchesFilters } from '../store/modules/conversations/helpers/filterHelpers';
 import { CONVERSATION_EVENTS } from '../helper/AnalyticsHelper/events';
-import { ASSIGNEE_TYPE_TAB_PERMISSIONS } from 'dashboard/constants/permissions.js';
 
 const props = defineProps({
   conversationInbox: { type: [String, Number], default: 0 },
@@ -166,6 +166,9 @@ const activeFolder = computed(() => {
   return undefined;
 });
 
+const getContact = useMapGetter('contacts/getContact');
+const folderContactId = useMapGetter('customViews/getActiveFolderContactId');
+
 const activeFolderName = computed(() => {
   return activeFolder.value?.name;
 });
@@ -201,23 +204,11 @@ const userPermissions = computed(() => {
 });
 
 const assigneeTabPermissions = computed(() => {
-  if (getUserRole(currentUser.value, currentAccountId.value) !== 'agent') {
-    return ASSIGNEE_TYPE_TAB_PERMISSIONS;
-  }
-
-  const accountSettings =
-    getAccount.value(currentAccountId.value)?.settings || {};
-  const hideUnassigned = Boolean(accountSettings.hide_agent_unassigned_tab);
-  const hideAll = hideUnassigned || Boolean(accountSettings.hide_agent_all_tab);
-
-  if (!hideUnassigned && !hideAll) return ASSIGNEE_TYPE_TAB_PERMISSIONS;
-
-  const { unassigned, all, ...rest } = ASSIGNEE_TYPE_TAB_PERMISSIONS;
-  return {
-    ...rest,
-    ...(hideUnassigned ? {} : { unassigned }),
-    ...(hideAll ? {} : { all }),
-  };
+  return getVisibleAssigneeTabPermissions({
+    conversationType: props.conversationType,
+    userRole: getUserRole(currentUser.value, currentAccountId.value),
+    accountSettings: getAccount.value(currentAccountId.value)?.settings || {},
+  });
 });
 
 const assigneeTabItems = computed(() => {
@@ -354,6 +345,15 @@ function filterByAssigneeTab(conversations) {
   return [...conversations];
 }
 
+function sortByUnreadStatus(conversations) {
+  return [...conversations].sort((a, b) => {
+    const unreadCountDiff = (b.unread_count || 0) - (a.unread_count || 0);
+    if (unreadCountDiff !== 0) return unreadCountDiff;
+
+    return (b.last_activity_at || 0) - (a.last_activity_at || 0);
+  });
+}
+
 const conversationList = computed(() => {
   let localConversationList = [];
 
@@ -381,6 +381,13 @@ const conversationList = computed(() => {
     localConversationList = localConversationList.filter(conversation => {
       return matchesFilters(conversation, payload);
     });
+  }
+
+  if (
+    !hasAppliedFiltersOrActiveFolders.value &&
+    activeSortBy.value === wootConstants.SORT_BY_TYPE.UNREAD
+  ) {
+    localConversationList = sortByUnreadStatus(localConversationList);
   }
 
   return localConversationList;
@@ -514,6 +521,7 @@ function setParamsForEditFolderModal() {
     inboxes: inboxesList.value,
     labels: labels.value,
     campaigns: campaigns.value,
+    contacts: [getContact.value(folderContactId.value)],
     languages: languages,
     countries: countries,
     priority: [

@@ -49,7 +49,10 @@ module Whatsapp::BaileysHandlers::Concerns::GroupContactMessageHandler # rubocop
       return mark_existing_reaction_as_removed(sender: @sender_contact)
     end
 
-    @conversation = find_or_create_group_conversation(@group_contact_inbox)
+    # A reaction must land in the conversation holding the target message, not
+    # follow the reopen policy: reacting to a message in a resolved group thread
+    # would otherwise spawn a stray blank group conversation.
+    @conversation = conversation_for_reaction || find_or_create_group_conversation(@group_contact_inbox)
     add_group_member(@group_contact, @sender_contact) if @sender_contact
 
     build_and_save_message(
@@ -94,7 +97,7 @@ module Whatsapp::BaileysHandlers::Concerns::GroupContactMessageHandler # rubocop
     update_params = {
       phone_number: ("+#{phone}" if should_update_contact_phone?(contact, phone)),
       identifier: (identifier if should_update_contact_identifier?(contact, identifier)),
-      name: (name if should_update_contact_name?(contact, name))
+      name: (name if should_update_contact_name?(contact, phone, identifier, name))
     }.compact
 
     contact.update!(update_params) if update_params.present?
@@ -109,8 +112,8 @@ module Whatsapp::BaileysHandlers::Concerns::GroupContactMessageHandler # rubocop
     identifier && contact.identifier.blank?
   end
 
-  def should_update_contact_name?(contact, name)
-    name && (contact.name.blank? || contact.name.match?(/^\d+/))
+  def should_update_contact_name?(contact, phone, identifier, name)
+    name && placeholder_contact_name?(contact.name, phone: phone, identifier: identifier)
   end
 
   def extract_lid_from_participant(participant)

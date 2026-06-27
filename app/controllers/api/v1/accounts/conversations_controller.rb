@@ -153,7 +153,7 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
 
   def destroy
     authorize @conversation, :destroy?
-    ::DeleteObjectJob.perform_later(@conversation, Current.user, request.ip)
+    ::Conversations::DeleteService.new(conversation: @conversation, user: Current.user, ip: request.ip).perform
     head :ok
   end
 
@@ -179,6 +179,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
     # rubocop:disable Rails/SkipsModelValidations
     @conversation.update_columns(updates)
     # rubocop:enable Rails/SkipsModelValidations
+
+    ::Conversations::UnreadCounts::Notifier.new(@conversation).perform
   end
 
   def unseen_activity?
@@ -247,7 +249,8 @@ class Api::V1::Accounts::ConversationsController < Api::V1::Accounts::BaseContro
       contact: @contact,
       inbox: @inbox,
       source_id: params[:source_id],
-      hmac_verified: hmac_verified?
+      hmac_verified: hmac_verified?,
+      validate_baileys_phone: true
     ).perform
   end
 
