@@ -113,3 +113,7 @@ CLAUDE.local.md
 .pnpm-store/*
 local/
 Procfile.worktree
+
+# Local-only docker compose override (per-host dev tweaks, e.g. port remaps)
+docker-compose.override.yaml
+docker-compose.override.yml
