@@ -1054,8 +1054,10 @@ GEM
     vite_rails (3.10.0)
       railties (>= 5.1, < 9)
       vite_ruby (~> 3.0, >= 3.2.2)
-    vite_ruby (3.7.0)
+    vite_ruby (3.10.2)
       dry-cli (>= 0.7, < 2)
+      logger (~> 1.6)
+      mutex_m
       rack-proxy (~> 0.6, >= 0.6.1)
       zeitwerk (~> 2.2)
     warden (1.2.9)
@@ -1247,7 +1249,6 @@ DEPENDENCIES
   uglifier
   valid_email2
   vite_rails
-  vite_ruby (~> 3.7.0)
   web-console (>= 4.2.1)
   web-push (>= 3.0.1)
   webmock
