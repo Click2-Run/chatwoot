@@ -82,11 +82,13 @@ File.open(output, 'w') do |f|
     | :--------- | :------------------------------ | :-------------------------- | :------------ | :------------------------------------------------------------------------------------------ |
     | 2025-11-03 | `codi-v4.7.0-fazer-ai.6`        | `v4.7.0-fazer-ai.6`         | 4.7.0         | Initial fork — Click2Run / OpenID Connect / WhatsApp baseline.                              |
     | 2026-05-07 | `codi-v4.9.0-fazer-ai.13`       | `v4.9.0-fazer-ai.13`        | 4.9.0         | Tagged `codi-v4.9.0-fazer-ai.13.1` after intermediate upgrade. Safety tag: `codi-pre-upgrade-2026-05-07`. |
-    | 2026-05-08 | `codi-v4.13.0-fazer-ai.66`      | `v4.13.0-fazer-ai.66`       | 4.13.0        | Tagged `codi-v4.13.0-fazer-ai.66.1`. Safety tag: `codi-pre-upgrade2-2026-05-08`. **Current branch.** |
+    | 2026-05-08 | `codi-v4.13.0-fazer-ai.66`      | `v4.13.0-fazer-ai.66`       | 4.13.0        | Tagged `codi-v4.13.0-fazer-ai.66.1`. Safety tag: `codi-pre-upgrade2-2026-05-08`. |
     | 2026-05-09 | _(still on `.66` branch)_       | `fazerai/main` head (post-`.66`) | 4.13.0   | Merged 2 untagged upstream commits (#285, #286) — within the `.66` cycle until fazer-ai cuts `.67`. |
+    | 2026-05-20 | `codi-v4.14.0-fazer-ai.74`      | `v4.14.0-fazer-ai.74`       | 4.14.0        | First core bump (4.13 → 4.14). New branch off the upstream tag; merged 159 commits from `codi-v4.13.0-fazer-ai.66`. Safety tag: `codi-pre-upgrade-2026-05-20`. |
+    | 2026-06-28 | `codi-v4.15.1-fazer-ai.86`      | `v4.15.1-fazer-ai.86`       | 4.15.1        | Minor bump (4.14 → 4.15). New branch cut FROM current `codi-v4.14.0-fazer-ai.74` (base = our codi), upstream tag merged in — 178 commits. Safety tag: `codi-pre-upgrade-2026-06-27`. **Current branch.** |
 
     Pre-upgrade safety tags taken before each version bump (kept as
-    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`.
+    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`, `codi-pre-upgrade-2026-05-11`, `codi-pre-upgrade-2026-05-14`, `codi-pre-upgrade-2026-05-20`, `codi-pre-upgrade-2026-06-27`.
 
   MILESTONES
 
