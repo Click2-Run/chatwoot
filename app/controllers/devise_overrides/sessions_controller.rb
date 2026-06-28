@@ -1,4 +1,4 @@
-class DeviseOverrides::SessionsController < DeviseTokenAuth::SessionsController
+class DeviseOverrides::SessionsController < DeviseTokenAuth::SessionsController # rubocop:disable Metrics/ClassLength
   MAX_SESSIONS = ENV.fetch('MAX_USER_SESSIONS', 25).to_i
 
   # Prevent session parameter from being passed

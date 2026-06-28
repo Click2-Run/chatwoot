@@ -211,7 +211,7 @@ class Channel::Whatsapp < ApplicationRecord # rubocop:disable Metrics/ClassLengt
     end
   end
 
-  def provider_connection_data
+  def provider_connection_data # rubocop:disable Metrics/AbcSize
     data = { connection: provider_connection['connection'] }
     data[:reachout_time_lock] = provider_connection['reachout_time_lock'] if provider_connection['reachout_time_lock'].present?
     data[:new_chat_cap] = provider_connection['new_chat_cap'] if provider_connection['new_chat_cap'].present?
