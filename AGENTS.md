@@ -1,5 +1,24 @@
 # Chatwoot Development Guidelines
 
+## Fork context — read this first
+
+This is the **Própria Cloud** fork (`Click2-Run/chatwoot`), downstream of
+`fazer-ai/chatwoot`, itself downstream of `chatwoot/chatwoot`. Much of this
+file is inherited from upstream and is periodically **overwritten** by
+upgrade merges. Our fork-specific rules live in the `CUSTOM-*.md` family and
+take precedence over anything inherited here:
+
+| File | Read it when |
+| :--- | :--- |
+| `CUSTOM-MERGES-GUIDE.md` | **Before any fetch / merge / sync / upgrade.** The authoritative ritual. |
+| `CUSTOM-FAZER-AI.md` | Before resolving any merge conflict — the fazer-ai → Própria Cloud translation table. |
+| `CUSTOM-CHANGELOG.md` | Every commit + the version milestones table. |
+| `CUSTOM-WHATSAPP-API.md` | Anything touching the `propriacloud` WhatsApp provider. |
+| `CUSTOM-AUTH.md` / `CUSTOM-BRANDING.md` / `CUSTOM-DEFAULT-LANGUAGE.md` / `CUSTOM-CADDY.md` | Their respective domains. |
+
+Local dev here runs on **docker compose**, not overmind — prefix Ruby commands
+with `docker compose exec -T rails`. Fork-local tooling lives in `.codi/`.
+
 ## Build / Test / Lint
 
 - **Setup**: `bundle install && pnpm install`
@@ -81,19 +100,25 @@ Automate this with your worktree tool's create hook (e.g. worktrunk's `pre-start
 
 ## Git Remotes & PRs
 
-This repo is a fork of `chatwoot/chatwoot`. Remotes and their roles:
+> ⚠️ This section is **ours**, not upstream's. Every fazer-ai merge tries to
+> overwrite it with fazer-ai's own topology (`origin` → `fazer-ai/chatwoot`).
+> That is wrong for this clone and must be kept — see the KC list in
+> `CUSTOM-MERGES-GUIDE.md`.
 
-- **origin** → `fazer-ai/chatwoot` (our CE fork). Feature/fix PRs from `main` target this repo.
-- **chatwoot-pro** → `fazer-ai/chatwoot-pro` (Pro fork). `chatwoot-pro-main` is merged directly (no PR) and carries the `vX.Y.Z-fazer-ai-pro.N` tags/releases.
-- **upstream** → `chatwoot/chatwoot` (Chatwoot OSS). Read-only / sync only (merge `develop` via the `sync-fork` skill). **Never open a PR against upstream.**
+This repo (`Click2-Run/chatwoot`) is a fork of `fazer-ai/chatwoot`, which is
+itself a fork of `chatwoot/chatwoot`. Remotes and their roles:
 
-⚠️ **`gh` fork gotcha:** because `origin` is a fork of `chatwoot/chatwoot`, `gh` resolves the PR base repo to the **parent (upstream)** when no default is set — so `gh pr create` silently opens the PR on `chatwoot/chatwoot`. Pin the base repo once per clone:
+- **origin** → `Click2-Run/chatwoot` (our fork — the ONLY writable remote). All `codi-*` branches, tags and PRs go here.
+- **fazerai** → `fazer-ai/chatwoot` (the fork we track). Fetch-only (`pushurl = no_push`); we merge its `vX.Y.Z-fazer-ai.N` tags in via the ritual in `CUSTOM-MERGES-GUIDE.md`. **Never push, never open a PR here.**
+- **upstream** → `chatwoot/chatwoot` (Chatwoot OSS). Fetch-only (`pushurl = no_push`). **Never open a PR against upstream.**
+
+⚠️ **`gh` fork gotcha:** because `origin` is itself a fork, `gh` resolves the PR base repo to a **parent** (`fazer-ai/chatwoot` or `chatwoot/chatwoot`) when no default is set — so `gh pr create` can silently open the PR on somebody else's repository, publishing this fork's diff to an org we do not control. The `no_push` guard on `fazerai`/`upstream` does **not** protect you: `gh` resolves the base repo from the fetch URL. Pin the base repo once per clone:
 
 ```sh
-gh repo set-default fazer-ai/chatwoot   # writes remote.origin.gh-resolved=base
+gh repo set-default Click2-Run/chatwoot
 ```
 
-When unsure, be explicit: `gh pr create --repo fazer-ai/chatwoot` (for Pro PRs, `--repo fazer-ai/chatwoot-pro`).
+When unsure, be explicit: `gh pr create --repo Click2-Run/chatwoot`. Never pass `--repo fazer-ai/chatwoot` or `--repo chatwoot/chatwoot`.
 
 ## PR Description Format
 
