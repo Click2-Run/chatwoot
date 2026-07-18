@@ -8,7 +8,23 @@
 #   docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \
 #     <input.txt> <output.md>
 #
-# See CUSTOM-CHANGELOG.md header for the full regen recipe.
+# ⚠️ DESTRUCTIVE — do NOT point this at the live CUSTOM-CHANGELOG.md.
+#
+# This script REWRITES its output file from scratch. It does not merge, and
+# despite older wording in CUSTOM-MERGES-GUIDE.md it does NOT preserve the
+# milestones block: it emits the table hard-coded below, which has drifted
+# from the real one in CUSTOM-CHANGELOG.md (missing the 2026-05-11 and
+# 2026-05-14 rows). It also replaces every hand-written per-release
+# narrative with auto-generated "path +N/-M" lists.
+#
+# Running it during the .88 upgrade rewrote 453 lines and destroyed the
+# .86 / .74 / WABA write-ups; the change was reverted and the changelog is
+# now maintained BY HAND. Keep this script for one-off scaffolding into a
+# scratch file only:
+#
+#   ... build-changelog.rb <input.txt> /app/.llm/temporary/scaffold.md
+#
+# See CUSTOM-MERGES-GUIDE.md step 6.
 
 require 'date'
 
@@ -85,10 +101,11 @@ File.open(output, 'w') do |f|
     | 2026-05-08 | `codi-v4.13.0-fazer-ai.66`      | `v4.13.0-fazer-ai.66`       | 4.13.0        | Tagged `codi-v4.13.0-fazer-ai.66.1`. Safety tag: `codi-pre-upgrade2-2026-05-08`. |
     | 2026-05-09 | _(still on `.66` branch)_       | `fazerai/main` head (post-`.66`) | 4.13.0   | Merged 2 untagged upstream commits (#285, #286) — within the `.66` cycle until fazer-ai cuts `.67`. |
     | 2026-05-20 | `codi-v4.14.0-fazer-ai.74`      | `v4.14.0-fazer-ai.74`       | 4.14.0        | First core bump (4.13 → 4.14). New branch off the upstream tag; merged 159 commits from `codi-v4.13.0-fazer-ai.66`. Safety tag: `codi-pre-upgrade-2026-05-20`. |
-    | 2026-06-28 | `codi-v4.15.1-fazer-ai.86`      | `v4.15.1-fazer-ai.86`       | 4.15.1        | Minor bump (4.14 → 4.15). New branch cut FROM current `codi-v4.14.0-fazer-ai.74` (base = our codi), upstream tag merged in — 178 commits. Safety tag: `codi-pre-upgrade-2026-06-27`. **Current branch.** |
+    | 2026-06-28 | `codi-v4.15.1-fazer-ai.86`      | `v4.15.1-fazer-ai.86`       | 4.15.1        | Minor bump (4.14 → 4.15). New branch cut FROM current `codi-v4.14.0-fazer-ai.74` (base = our codi), upstream tag merged in — 178 commits. Safety tag: `codi-pre-upgrade-2026-06-27`. |
+    | 2026-07-18 | `codi-v4.15.1-fazer-ai.88`      | `v4.15.1-fazer-ai.88`       | 4.15.1        | Iteration bump only (core unchanged). Branch cut FROM `codi-v4.15.1-fazer-ai.86`, tag `.88` merged in — 22 commits, 36 files. `.87` skipped (contained in `.88`); `.88` == `fazerai/main` HEAD. Chatwoot core `v4.16.0` existed upstream but fazer-ai had not adopted it. 4 conflicts, all additive unions. Safety tag: `codi-pre-upgrade-2026-07-18`. **Current branch.** |
 
     Pre-upgrade safety tags taken before each version bump (kept as
-    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`, `codi-pre-upgrade-2026-05-11`, `codi-pre-upgrade-2026-05-14`, `codi-pre-upgrade-2026-05-20`, `codi-pre-upgrade-2026-06-27`.
+    rollback anchors): `codi-pre-upgrade-2026-05-07`, `codi-pre-upgrade2-2026-05-08`, `codi-pre-upgrade-2026-05-11`, `codi-pre-upgrade-2026-05-14`, `codi-pre-upgrade-2026-05-20`, `codi-pre-upgrade-2026-06-27`, `codi-pre-upgrade-2026-07-18`.
 
   MILESTONES
 

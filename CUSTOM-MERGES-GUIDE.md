@@ -328,18 +328,37 @@ Every commit lands in the changelog. Every milestone (new branch,
 new tag, new upstream version adopted) lands in the **Version
 milestones** table at the top of the doc.
 
-Per-commit refresh:
+**⚠️ Do NOT run `build-changelog.rb` against `CUSTOM-CHANGELOG.md`. Edit the
+changelog by hand.**
 
-```bash
-git log --all --reverse --pretty=format:'COMMIT %H|%aI|%s' --numstat \
-  --author='robson@robson.com.br' > .llm/temporary/our-history.txt
-docker compose exec -T rails ruby /app/.codi/scripts/build-changelog.rb \
-  .llm/temporary/our-history.txt CUSTOM-CHANGELOG.md
-```
+The regen is **destructive**, contrary to what this guide used to claim:
 
-Milestones table edit: directly in
-`.codi/scripts/build-changelog.rb` (search for `## Version
-milestones`). The script preserves the block on regen.
+- It **overwrites the Version milestones table** with the copy embedded in
+  `.codi/scripts/build-changelog.rb`, which has drifted and is missing rows
+  (the `2026-05-11` and `2026-05-14` entries, and the bolded core-version
+  bumps). It does *not* "preserve the block".
+- It **replaces the hand-written per-release narrative** — the paragraphs
+  explaining *why* each conflict was resolved the way it was — with
+  auto-generated `path +N/-M` file-stat lists. Running it in the `.88`
+  upgrade rewrote 453 lines and destroyed the entire `.86`, `.74` and WABA
+  write-ups before being reverted.
+
+That narrative is the actual value of this file: it is where "why is this
+line like that?" gets answered on the next upgrade. Machine-generated file
+stats are already in `git log`.
+
+So, by hand:
+
+1. Add a row to the **Version milestones** table (move `**Current branch.**`
+   off the previous row).
+2. Append the safety tag to the rollback-anchors line beneath it.
+3. Add a `### YYYY-MM-DD (…)` section under the month heading — one bullet
+   per commit, explaining decisions and rationale, not file lists.
+4. Mirror the new milestone row into the table inside
+   `.codi/scripts/build-changelog.rb`, so the script's copy stops drifting
+   further if anyone ever repairs the regen path.
+
+If the regen is ever fixed to merge rather than overwrite, update this step.
 
 Pre-commit hook will lint the i18n bare-string check; if a merge
 landed new untranslated UI strings, add them to
