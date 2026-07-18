@@ -283,8 +283,21 @@ grep -n 'add_foreign_key "internal_chat' db/schema.rb   # example from .88
 ### 5. Verify the runtime
 
 ```bash
-docker compose restart rails sidekiq
+docker compose restart rails sidekiq vite
 # Wait for "Listening on http"
+#
+# Restart ALL THREE, not just rails. Every service bind-mounts the repo
+# (`./:/app`), so a long-running container keeps serving stale in-memory
+# classes while the files change underneath it. In the .88 upgrade sidekiq
+# had been up 2 weeks; the moment the merge hit the working tree it started
+# throwing, on every scheduled job:
+#
+#   NoMethodError: undefined method 'jid=' for an instance of <SomeJob>
+#
+# That is a stale-process symptom, NOT a regression in the merge — a plain
+# `docker compose restart sidekiq` clears it. Confirm recovery by watching
+# for start/done pairs rather than assuming:
+#   docker compose logs --since 2m sidekiq | grep -E "INFO: (start|done)"
 docker compose exec -T rails curl -s http://localhost:3000/health
 # Expect: {"status":"woot","platform":"propriacloud","version":"<VERSION_CW>"}
 # `platform` MUST be "propriacloud" — "fazer.ai" here means the rebrand sweep
