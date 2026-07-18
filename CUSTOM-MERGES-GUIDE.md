@@ -252,19 +252,24 @@ docker compose exec -T rails bundle exec rails db:migrate:status | grep '^ *down
 docker compose exec -T rails bundle exec rails db:migrate
 ```
 
-⚠️ **`db:migrate` also regenerates `db/schema.rb` and re-runs the annotator,
-and BOTH produce false diffs on this dev box.** Inspect and revert them —
-do not commit either:
+⚠️ **These two false diffs regenerate on this dev box.** Inspect and revert
+them — do not commit either:
 
 | False diff | Why it appears | Action |
 | :--- | :--- | :--- |
 | `db/schema.rb` — the `index_channel_whatsapp_provider_connection` `where:` clause reformats (`ANY ((ARRAY[…])::text[])` ↔ `ANY (ARRAY[(…)::text, …])`) | The local PostgreSQL renders the same predicate differently than the box that generated the committed schema. **Semantically identical.** | `git checkout -- db/schema.rb` |
 | `app/models/conversation.rb` — annotation block loses `kanban_task_id`, its index and its FK | The annotator rewrites from the **live dev DB**, which has no kanban tables (kanban lives on `chatwoot-pro-main`). It deletes annotations for columns this DB lacks. | `git checkout -- app/models/conversation.rb` |
 
+**They come back.** Not just on `db:migrate` — *any* rails invocation
+re-triggers them, including a read-only `rails runner` used to smoke-test.
+So this is not a one-time cleanup: re-check `git status` after **every**
+rails command, and always immediately before committing or tagging.
+
 ```bash
-git diff --stat                       # after migrate: expect ONLY the two above
+git diff --stat                       # expect ONLY the two above
 git checkout -- db/schema.rb app/models/conversation.rb
 grep -c propriacloud db/schema.rb     # MUST still be >= 1 (our provider index)
+git status --short                    # MUST be empty before commit/tag/push
 ```
 
 The upstream tag normally already contains the correctly regenerated
