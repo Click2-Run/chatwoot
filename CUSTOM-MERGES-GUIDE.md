@@ -54,9 +54,29 @@ git commit -m "type(scope): ..."         # one commit per logical change
 git status --short                       # MUST now be empty
 
 # "Bring all" — never trust a stale local view of what "latest" is.
-git fetch fazerai upstream origin --tags
+# NOTE the --multiple flag. `git fetch fazerai upstream origin --tags` is WRONG:
+# git reads the trailing names as REFSPECS of the first remote and dies with
+# "fatal: couldn't find remote ref upstream".
+git fetch --multiple fazerai upstream origin --tags
 
 git tag codi-pre-upgrade-$(date +%Y-%m-%d)   # rollback anchor
+```
+
+**All Ruby runs through docker.** There is no `ruby`/`bundle` on the host
+PATH in this environment — every Ruby command in this guide must be prefixed:
+
+```bash
+docker compose exec -T rails bundle exec <rspec|rails|rubocop> ...
+docker compose exec -T rails ruby -c <file.rb>          # syntax check
+```
+
+**JS tests run in the `vite` container**, not on the host — the host
+`node_modules/` is stale and vitest dies with
+`Cannot find module '@rollup/plugin-yaml'`. `npx eslint` *does* work on the
+host.
+
+```bash
+docker compose exec -T vite npx vitest run <spec files>
 ```
 
 The `codi-pre-upgrade-*` tag pattern is established (`codi-pre-upgrade-2026-05-07`,
@@ -71,6 +91,26 @@ one safety tag is taken on the same day.
 | A new `vX.Y.Z-fazer-ai.N+1` tag dropped (same chatwoot core version)  | New branch `codi-vX.Y.Z-fazer-ai.N+1` cut **FROM the current `codi-*`**, then merge the new tag in |
 | Chatwoot core bumped (e.g. 4.14 → 4.15, fazer-ai retags)              | New branch `codi-v4.15.x-fazer-ai.N` cut **FROM the current `codi-*`**, then merge the new tag in  |
 | Cherry-picking a single fix                                           | Cherry-pick on current branch, no rename                                             |
+
+#### Picking the target tag
+
+```bash
+git tag --list 'v*fazer-ai*' --sort=-creatordate | head -5   # newest first
+git rev-parse v4.15.1-fazer-ai.88^{commit}; git rev-parse fazerai/main
+```
+
+- **Several tags can land between upgrades.** In the `.86 → .88` upgrade both
+  `.87` and `.88` were waiting. Merge **only the newest** — the tags are
+  cumulative points on the same `main` line, so `.88` already contains `.87`.
+  Name the branch after the tag you actually merged.
+- **Prefer the tag over `fazerai/main`** — but check whether they are the same
+  commit. When the newest tag == `fazerai/main` HEAD (as in `.88`) there is no
+  difference. When `main` is *ahead* of the newest tag, those extra commits are
+  unreleased; take the tag unless you specifically want them.
+- **fazer-ai lags chatwoot core, and that is normal.** At the `.88` upgrade,
+  chatwoot core had already tagged `v4.16.0` while fazer-ai was still on
+  `4.15.1`. **A new core release is NOT our trigger** — we follow fazer-ai's
+  tags. Do not try to pull `chatwoot/upstream` core releases in directly.
 
 #### Direction — do NOT get this backwards (this caused confusion before)
 
@@ -149,13 +189,124 @@ grep -rEn "fazer[._-]?ai|Click2Run|click2run|\\bc2r\\b" \
 Apply the translation table from `CUSTOM-FAZER-AI.md`. Changes go in
 their own commit (`chore(brand): ...`).
 
+#### 4a. Semantic drift — what the grep sweep CANNOT catch
+
+The sweep above finds *strings*. The more dangerous class is upstream prose or
+UI that is **factually true for fazer-ai and false for us**, in files that
+merge cleanly with no conflict. Grep will not flag it, because the words are
+supposed to be there. Check these by hand every upgrade:
+
+**1. `AGENTS.md` — our agent memory, and upstream edits it.**
+`CLAUDE.md` is a **symlink** to `AGENTS.md`, so whatever upstream writes there
+is loaded as authoritative directive memory by every future agent session.
+
+The `.88` merge cleanly imported a `## Git Remotes & PRs` section stating
+`origin` → `fazer-ai/chatwoot` plus a runnable
+`gh repo set-default fazer-ai/chatwoot`. For **this** clone `origin` is
+`Click2-Run/chatwoot`; following that text would open PRs — publishing our
+diff — on a repository we do not control. **This is a disclosure risk, not a
+broken command.** Our corrected section is now marked `KC` in-file.
+
+```bash
+git diff HEAD -- AGENTS.md .claude/   # ALWAYS read this diff in full
+git remote -v                         # ground truth to check the prose against
+```
+
+**KC (keep-ours) list — re-assert these after every merge:**
+
+| File / section | Why |
+| :--- | :--- |
+| `AGENTS.md` → "Fork context — read this first" | Points at the `CUSTOM-*.md` family; upstream has no such section |
+| `AGENTS.md` → "Git Remotes & PRs" | Upstream's version names the wrong repos (see above) |
+| `.claude/skills/sync-fork/SKILL.md` | **Exempt — leave upstream's text alone.** It documents fazer-ai's own chatwoot→fazer-ai→pro flow and its org names are real. Our flow is *this* guide. |
+
+**2. Provider-gated UI.** Upstream ships features for the `baileys` provider;
+our inboxes run `propriacloud`. A new CTA whose backend rejects non-baileys
+with 422 will still render for our users unless gated. In `.88`, upstream's
+"import an already-linked session" CTA had `v-if="connection !== 'open'"`; it
+needed `v-if="!isPropriacloud && connection !== 'open'"`. Grep found nothing —
+the bug was an *absent* condition.
+
+After any upstream WhatsApp feature, ask: *does this reach a propriacloud
+inbox, and does the backend actually support it there?*
+
+```bash
+# find the provider guard the backend applies, then mirror it in the UI
+grep -rn "provider == '" app/controllers app/models app/services | grep -i whatsapp
+```
+
+**3. External branded URLs.** New upstream links may point at fazer-ai-owned
+properties (`.88` added a `fazerai-whatsapp-connecto` Chrome Web Store link).
+**Do not string-replace these** — the slug/extension ID is a live external
+identifier and rewriting it yields a dead link. Decide per case: accept,
+suppress, or publish our own. Record the decision in `CUSTOM-FAZER-AI.md`
+under "Areas explicitly NOT translated" so later sweeps stop re-flagging it.
+
+### 4b. Run migrations the merge brought in (and revert the local-DB artifacts)
+
+Upstream tags routinely ship migrations. Run them, or the app boots against a
+stale schema and specs fail in confusing ways.
+
+```bash
+docker compose exec -T rails bundle exec rails db:migrate:status | grep '^ *down'
+docker compose exec -T rails bundle exec rails db:migrate
+```
+
+⚠️ **`db:migrate` also regenerates `db/schema.rb` and re-runs the annotator,
+and BOTH produce false diffs on this dev box.** Inspect and revert them —
+do not commit either:
+
+| False diff | Why it appears | Action |
+| :--- | :--- | :--- |
+| `db/schema.rb` — the `index_channel_whatsapp_provider_connection` `where:` clause reformats (`ANY ((ARRAY[…])::text[])` ↔ `ANY (ARRAY[(…)::text, …])`) | The local PostgreSQL renders the same predicate differently than the box that generated the committed schema. **Semantically identical.** | `git checkout -- db/schema.rb` |
+| `app/models/conversation.rb` — annotation block loses `kanban_task_id`, its index and its FK | The annotator rewrites from the **live dev DB**, which has no kanban tables (kanban lives on `chatwoot-pro-main`). It deletes annotations for columns this DB lacks. | `git checkout -- app/models/conversation.rb` |
+
+```bash
+git diff --stat                       # after migrate: expect ONLY the two above
+git checkout -- db/schema.rb app/models/conversation.rb
+grep -c propriacloud db/schema.rb     # MUST still be >= 1 (our provider index)
+```
+
+The upstream tag normally already contains the correctly regenerated
+`schema.rb`, so reverting loses nothing — verify the new tables/FKs are present
+in the committed file rather than regenerating them locally:
+
+```bash
+grep -n 'add_foreign_key "internal_chat' db/schema.rb   # example from .88
+```
+
 ### 5. Verify the runtime
 
 ```bash
 docker compose restart rails sidekiq
 # Wait for "Listening on http"
 docker compose exec -T rails curl -s http://localhost:3000/health
-# Expect: {"status":"woot","platform":"propriacloud","version":"4.13.0"}
+# Expect: {"status":"woot","platform":"propriacloud","version":"<VERSION_CW>"}
+# `platform` MUST be "propriacloud" — "fazer.ai" here means the rebrand sweep
+# missed lib/middleware/fazer_ai_platform_header.rb or health_controller.rb.
+# `version` tracks VERSION_CW (4.15.1 at the .88 upgrade), NOT the fazer-ai
+# tag number.
+```
+
+#### Run the specs covering what the merge touched
+
+```bash
+docker compose exec -T rails bundle exec rspec $(git diff --name-only HEAD | grep '^spec/' | tr '\n' ' ')
+```
+
+**Known-failing baseline — do NOT chase these.** They fail identically on the
+previous codi branch; they are our customizations diverging from upstream's
+English-assuming specs, not merge regressions:
+
+| Spec | Failure | Cause |
+| :--- | :--- | :--- |
+| `spec/controllers/api/v1/accounts/inboxes_controller_spec.rb` "deletes inbox" | expects `"Your inbox deletion request will be processed in some time."`, gets the pt_BR string | `User#set_default_ui_locale` (`before_create`) forces `pt_BR` on every user incl. spec fixtures — see `CUSTOM-DEFAULT-LANGUAGE.md` |
+
+Before blaming the merge for ANY spec failure, prove it is new:
+
+```bash
+git diff HEAD -- <spec_file>                  # did the merge even touch it?
+git show HEAD:<spec_file> | sed -n 'N,Mp'     # was the assertion already there?
 ```
 
 Smoke-test the propriacloud provider stack:

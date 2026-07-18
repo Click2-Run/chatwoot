@@ -51,6 +51,13 @@ fighting upstream or breaking the docker hub namespace.
   the file would cascade into `config/application.rb`.
 - `lib/global_config_service.rb` and other upstream-owned `lib/`
   files — translate the strings inside, accept everything else.
+- **Chrome Web Store URL for the WhatsApp session-import extension**
+  (`WhatsappLinkDeviceModal.vue`, `chromewebstore.google.com/detail/fazerai-whatsapp-connecto/…`)
+  — the slug and extension ID are a live external identifier; rewriting them
+  produces a dead link. Arrived in `v4.15.1-fazer-ai.88`. Not user-visible for
+  us: the surrounding CTA is gated `v-if="!isPropriacloud && …"`, because
+  session import is baileys-only (the controller rejects other providers with
+  422). Revisit only if we ship our own branded extension.
 
 ### Files that recur on every upstream merge
 
