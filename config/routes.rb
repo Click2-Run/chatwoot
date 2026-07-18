@@ -55,6 +55,7 @@ Rails.application.routes.draw do
             resource :contact_merge, only: [:create]
           end
           resource :bulk_actions, only: [:create]
+          resources :redirect_tokens, only: [:create]
           resource :onboarding, only: [:update] do
             get :help_center_generation
           end
@@ -314,6 +315,7 @@ Rails.application.routes.draw do
             get :agent_bot, on: :member
             post :set_agent_bot, on: :member
             post :setup_channel_provider, on: :member
+            post :import_whatsapp_session, on: :member
             post :disconnect_channel_provider, on: :member
             post :connect_only, on: :member
             post :disconnect_only, on: :member
@@ -524,6 +526,7 @@ Rails.application.routes.draw do
       namespace :widget do
         resource :direct_uploads, only: [:create]
         resource :config, only: [:create]
+        resource :redirect_token, only: [:create]
         resources :campaigns, only: [:index]
         resources :events, only: [:create]
         resources :messages, only: [:index, :create, :update]
