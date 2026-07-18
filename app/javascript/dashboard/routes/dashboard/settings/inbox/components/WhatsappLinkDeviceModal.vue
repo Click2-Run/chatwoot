@@ -563,9 +563,13 @@ watchEffect(() => {
           </template>
 
           <!-- Fallback kept available in every non-open state, including while the
-               QR is shown: import an already-linked session via the extension. -->
+               QR is shown: import an already-linked session via the extension.
+               Baileys-only by design: `import_session` is defined solely on the
+               baileys provider service, and the controller rejects every other
+               provider with 422 — so hide the CTA for propriacloud inboxes
+               instead of offering an action that cannot succeed. -->
           <div
-            v-if="connection !== 'open'"
+            v-if="!isPropriacloud && connection !== 'open'"
             class="flex flex-col gap-1 items-center pt-4 mt-2 w-full border-t border-n-weak"
           >
             <p class="text-sm font-medium text-center text-n-slate-12">
