@@ -254,7 +254,7 @@
           "WHATSMEOW": "Whatsmeow",
           "WHATSMEOW_DESC": "Conectar vía API no oficial Whatsmeow",
           "PROPRIACLOUD": "Própria Cloud",
-          "PROPRIACLOUD_DESC": "WhatsApp Web",
+          "PROPRIACLOUD_DESC": "WhatsApp",
           "ZAPI": "Z-API",
           "ZAPI_DESC": "Conectar vía API no oficial Z-API"
         },
