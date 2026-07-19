@@ -77,6 +77,29 @@ describe Whatsapp::Propriacloud::HistoryBackfillService do
     end
   end
 
+  describe 'contact phone resolution (LID mis-keying regression)' do
+    it 'uses phone_number / pn_jid and skips lid_mapping rows that carry only a LID' do
+      stub_request(:get, %r{#{Regexp.escape(provider_url)}/sync/contacts})
+        .to_return(
+          { status: 200, body: { data: { contacts: [
+            { jid: '5511999@s.whatsapp.net', full_name: 'Real Phone' },
+            { jid: '5511888@s.whatsapp.net', pn_jid: '5511888@s.whatsapp.net', full_name: 'Via Pn' },
+            { jid: '999888777@lid', source: 'lid_mapping', full_name: 'LID Only' }
+          ] } }.to_json },
+          { status: 200, body: { data: { contacts: [] } }.to_json }
+        )
+
+      service.perform
+
+      account = whatsapp_channel.inbox.account
+      expect(account.contacts.find_by(phone_number: '+5511999')).to be_present
+      expect(account.contacts.find_by(phone_number: '+5511888')).to be_present
+      # The pure-LID row must NOT mint a fabricated "+<lid>" contact.
+      expect(account.contacts.where(phone_number: '+999888777')).to be_empty
+      expect(account.contacts.where("name = 'LID Only'")).to be_empty
+    end
+  end
+
   describe 'PEND-05 — idempotency / force flag' do
     it 'stamps history_backfill_completed_at' do
       service.perform

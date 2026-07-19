@@ -73,24 +73,47 @@ class Whatsapp::Propriacloud::HistoryBackfillService
   def backfill_contacts
     @push_name_index ||= {}
     each_page(:sync_contacts) do |row|
-      jid = row[:jid] || row['jid']
-      next if jid.blank?
-
-      phone = jid.to_s.split('@').first.split(':').first.gsub(/\D/, '')
+      phone = contact_phone_from_row(row)
+      # Skip rows that resolve to no phone JID (source=lid_mapping carries a
+      # LID in `jid`). Minting a "+<lid-digits>" contact here would create a
+      # junk record that duplicates the real contact once a message arrives
+      # with the person's true phone digits as source_id.
       next if phone.blank?
-
-      name = row[:name] || row['name'] || row[:push_name] || row['push_name'] ||
-             @push_name_index[phone] || phone
 
       ::ContactInboxWithContactBuilder.new(
         source_id: phone,
         inbox: @inbox,
-        contact_attributes: {
-          name: name,
-          phone_number: "+#{phone}"
-        }
+        contact_attributes: { name: contact_name_from_row(row, phone), phone_number: "+#{phone}" }
       ).perform
     end
+  end
+
+  def contact_name_from_row(row, phone)
+    %i[full_name name push_name].filter_map { |k| (row[k] || row[k.to_s]).presence }.first ||
+      @push_name_index[phone] || phone
+  end
+
+  # Resolve real phone digits from a /sync/contacts row. Prefer the dedicated
+  # `phone_number` field, then `pn_jid` (phone-number JID), and only fall back
+  # to the primary `jid` when it is itself a phone JID — never a @lid.
+  def contact_phone_from_row(row)
+    explicit = (row[:phone_number] || row['phone_number']).to_s.gsub(/\D/, '')
+    return explicit if explicit.present?
+
+    pn = (row[:pn_jid] || row['pn_jid']).to_s
+    jid = (row[:jid] || row['jid']).to_s
+    return jid_digits(pn) if phone_jid?(pn)
+    return jid_digits(jid) if phone_jid?(jid)
+
+    nil
+  end
+
+  def phone_jid?(jid)
+    jid.include?('@s.whatsapp.net') || (jid.present? && jid.exclude?('@'))
+  end
+
+  def jid_digits(jid)
+    jid.split('@').first.split(':').first.gsub(/\D/, '').presence
   end
 
   def backfill_conversations_and_messages
