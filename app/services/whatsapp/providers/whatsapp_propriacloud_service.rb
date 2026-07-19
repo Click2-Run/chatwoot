@@ -267,7 +267,9 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     if response.code == 404 && instance_not_found?(response)
       Rails.logger.info "Propriacloud pair_qrcode: instance not found (instance_id=#{instance_id}); rebuilding via setup_channel_provider then retrying"
       setup_channel_provider_without_error_handling(fetch_qr: false)
-      response = HTTParty.post(
+      # /instances/pair/qrcode is GET-only (auto-connects if needed); the
+      # rebuild retry must re-issue a GET, not a POST (which 404/405s).
+      response = HTTParty.get(
         "#{provider_url}/instances/pair/qrcode#{instance_query}",
         headers: api_headers
       )
@@ -331,6 +333,13 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/instances/delete#{instance_query}",
       headers: api_headers
     )
+
+    # 428 PRECONDITION_REQUIRED — a still-paired WABA instance must be
+    # unpaired from Meta before it can be deleted. Unpair, then retry once.
+    if delete_response.code == 428
+      HTTParty.post("#{provider_url}/instances/unpair#{instance_query}", headers: api_headers)
+      delete_response = HTTParty.post("#{provider_url}/instances/delete#{instance_query}", headers: api_headers)
+    end
 
     return true if delete_response.code == 404 # already gone, treat as success
     raise ProviderUnavailableError, "Failed to delete whatsapp-api instance: HTTP #{delete_response.code} — #{delete_response.body.to_s[0..200]}" unless process_response(delete_response)
@@ -656,7 +665,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     response = HTTParty.post(
       "#{provider_url}/presence/chat#{instance_query}",
       headers: api_headers,
-      body: { chat: jid_param(phone_number), state: presence_map[typing_status] }.to_json
+      body: { chat: jid_param(@phone_number), state: presence_map[typing_status] }.to_json
     )
 
     raise ProviderUnavailableError, 'Failed to update presence' unless process_response(response)
@@ -676,7 +685,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/messages/mark-read#{instance_query}",
       headers: api_headers,
       body: {
-        chat: jid_param(phone_number),
+        chat: jid_param(@phone_number),
         message_ids: messages.map(&:source_id).compact
       }.to_json
     )
@@ -1280,7 +1289,10 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
 
   def apply_group_metadata_to_contact!(group_contact, metadata)
     attrs = (group_contact.additional_attributes || {}).dup
-    attrs['description'] = metadata['topic'] if metadata.key?('topic')
+    # GroupInfoResponse carries only `topic` (a distinct field from the
+    # long `description`, which the API never reads back). Store it under
+    # `topic` so a reconcile never clobbers a user-set `description`.
+    attrs['topic'] = metadata['topic'] if metadata.key?('topic')
     attrs['announce'] = metadata['is_announce'] if metadata.key?('is_announce')
     attrs['restrict'] = metadata['is_locked'] if metadata.key?('is_locked')
     attrs['owner'] = jid_to_s(metadata['owner_jid']) if metadata['owner_jid'].present?
