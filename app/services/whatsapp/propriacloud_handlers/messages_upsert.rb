@@ -49,7 +49,15 @@ module Whatsapp::PropriacloudHandlers::MessagesUpsert
     end
   end
 
-  def handle_message # rubocop:disable Metrics/CyclomaticComplexity
+  def handle_message # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity
+    # Route @g.us messages into group conversations when the feature is on.
+    # When off, group messages are ignored exactly as before.
+    if jid_type == 'group'
+      return unless Whatsapp::Providers::WhatsappPropriacloudService.groups_enabled?
+
+      return handle_group_message
+    end
+
     return unless %w[lid user].include?(jid_type)
     return if jid_type == 'lid' && !phone_number_from_jid
     return if ignore_message?

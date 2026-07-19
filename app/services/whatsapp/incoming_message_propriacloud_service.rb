@@ -19,12 +19,14 @@ class Whatsapp::IncomingMessagePropriacloudService < Whatsapp::IncomingMessageBa
   include Events::Types
   include Whatsapp::PropriacloudHandlers::ConnectionUpdate
   include Whatsapp::PropriacloudHandlers::MessagesUpsert
+  include Whatsapp::PropriacloudHandlers::GroupMessage
   include Whatsapp::PropriacloudHandlers::MessagesUpdate
   include Whatsapp::PropriacloudHandlers::MessagesFailure
   include Whatsapp::PropriacloudHandlers::UserChanged
   include Whatsapp::PropriacloudHandlers::Appstate
   include Whatsapp::PropriacloudHandlers::HistorySync
   include Whatsapp::PropriacloudHandlers::InstanceRecovery
+  include Whatsapp::PropriacloudHandlers::GroupUpdate
 
   class InvalidWebhookVerifyToken < StandardError; end
   class InvalidWebhookCustomId < StandardError; end
@@ -147,6 +149,11 @@ class Whatsapp::IncomingMessagePropriacloudService < Whatsapp::IncomingMessageBa
     'user.push_name_changed' => :process_user_changed,
     'user.business_name_changed' => :process_user_changed,
     'user.picture_changed' => :process_user_changed,
+    # Group metadata/membership. whatsapp-api emits only these two group
+    # events (no per-participant events), so both trigger a /groups/info
+    # reconcile of an already-surfaced group conversation.
+    'group.joined' => :process_group_update,
+    'group.info_changed' => :process_group_update,
     # AppState (read/archive/delete). Labels are intentionally NOT
     # mapped — Chatwoot labels and WhatsApp labels are unrelated
     # taxonomies and bridging them was wrong.

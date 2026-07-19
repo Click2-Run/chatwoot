@@ -31,7 +31,7 @@ class Api::V1::Accounts::Contacts::GroupMembersController < Api::V1::Accounts::C
     channel.update_group_participants(@contact.identifier, format_participants(participants), 'add')
     add_group_members(participants)
     head :ok
-  rescue Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError => e
+  rescue Whatsapp::Providers::GroupOperationError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
@@ -47,7 +47,7 @@ class Api::V1::Accounts::Contacts::GroupMembersController < Api::V1::Accounts::C
     head :ok
   rescue Whatsapp::Providers::WhatsappBaileysService::GroupParticipantNotAllowedError
     render json: { error: 'group_creator_not_modifiable' }, status: :unprocessable_entity
-  rescue Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError => e
+  rescue Whatsapp::Providers::GroupOperationError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
 
@@ -60,7 +60,7 @@ class Api::V1::Accounts::Contacts::GroupMembersController < Api::V1::Accounts::C
     head :ok
   rescue Whatsapp::Providers::WhatsappBaileysService::GroupParticipantNotAllowedError
     render json: { error: 'group_creator_not_modifiable' }, status: :unprocessable_entity
-  rescue Whatsapp::Providers::WhatsappBaileysService::ProviderUnavailableError => e
+  rescue Whatsapp::Providers::GroupOperationError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
 

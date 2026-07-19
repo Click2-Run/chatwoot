@@ -77,10 +77,16 @@ class Whatsapp::SendOnWhatsappService < Base::SendOnChannelService
   end
 
   def recipient_id
+    contact = message.conversation.contact
+    # Group conversations route by the full "<id>@g.us" JID (Contact#identifier)
+    # so the provider can target g.us; the group ContactInbox#source_id only
+    # holds the bare id. Applies to every group-capable provider.
+    return contact.identifier if contact.group_type_group? && contact.identifier.present?
+
     return message.conversation.contact_inbox.source_id unless %w[baileys zapi].include?(channel.provider)
 
     # NOTE: `identifier` must be in the WhatsApp LID format
-    message.conversation.contact.phone_number&.gsub(/[^\d]/, '') || message.conversation.contact.identifier
+    contact.phone_number&.gsub(/[^\d]/, '') || contact.identifier
   end
 
   def template_params

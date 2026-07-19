@@ -2,8 +2,8 @@ class Whatsapp::Providers::WhatsappBaileysService < Whatsapp::Providers::BaseSer
   include BaileysHelper
 
   class MessageContentTypeNotSupported < StandardError; end
-  class ProviderUnavailableError < StandardError; end
-  class GroupParticipantNotAllowedError < StandardError; end
+  class ProviderUnavailableError < StandardError; include Whatsapp::Providers::GroupOperationError; end
+  class GroupParticipantNotAllowedError < StandardError; include Whatsapp::Providers::GroupOperationError; end
   class MessageAlreadyProcessingError < StandardError; end
 
   DEFAULT_CLIENT_NAME = ENV.fetch('BAILEYS_PROVIDER_DEFAULT_CLIENT_NAME', nil)

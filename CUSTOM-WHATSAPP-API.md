@@ -321,3 +321,61 @@ record is kept tolerant in the env-var resolution chain
 `CLICK2RUN_PROVIDER_DEFAULT_URL`) so existing dev environments keep
 working while migrations roll out. New installs should use
 `provider: 'propriacloud'`.
+
+## Groups
+
+WhatsApp **group** conversations and management for `propriacloud`, gated
+by `PROPRIACLOUD_WHATSAPP_GROUPS_ENABLED` (default `false`, DB-config
+cascade → env, mirrors the baileys `BAILEYS_WHATSAPP_GROUPS_ENABLED`
+switch). The feature reuses Chatwoot's channel-agnostic group model —
+`Contact#group_type` / `Conversation#group_type`, the `GroupMember`
+join table, the `GroupConversationHandler` concern — and the existing
+provider-agnostic group controllers/UI, so **no new frontend components
+are needed**: once the flag is on, the same panel baileys uses lights up
+for propriacloud inboxes.
+
+### What "on" enables
+
+| Capability | How | whatsapp-api endpoint(s) |
+| :--- | :--- | :--- |
+| Ingest group messages | `messages_upsert` routes `jid_type == 'group'` → `PropriacloudHandlers::GroupMessage#handle_group_message` (reuses `GroupConversationHandler`) | `message.received` webhook (`remote_jid` ends `@g.us`, sender in `key.participant`) |
+| Reply in a group thread | `SendOnWhatsappService#recipient_id` returns the group `Contact#identifier` (`<id>@g.us`); the send path routes to `server: g.us` via `jid_param` | `POST /messages/send` · `/messages/send-media` |
+| Sync members + metadata | `sync_group(conversation, soft:)` pulls the roster and reconciles `GroupMember` rows (admin/member), name, settings, invite, avatar | `GET /groups/info` |
+| Membership drift | `group.joined` / `group.info_changed` webhooks → `GroupUpdate#process_group_update` → `Contacts::SyncGroupJob` (force). whatsapp-api emits **no per-participant events**, so `/groups/info` is the source of truth | `group.joined`, `group.info_changed` |
+| Create group | `Groups::CreateService` → `create_group(subject, participants)` (returns `{ id: "<jid>@g.us" }`) | `POST /groups/create` |
+| Add/remove/promote/demote | `update_group_participants(jid, participants, action)` | `POST /groups/participants` |
+| Rename / describe / photo | `update_group_subject` · `update_group_description` · `update_group_picture` | `PUT /groups/name` · `/groups/description` · `/groups/photo` |
+| Invite link | `group_invite_code` / `revoke_group_invite` (returns the **bare code**; `reset=true` rotates) | `GET /groups/invite-link` |
+| Announce / locked | `group_setting_update(jid, 'announce'|'restrict', enabled)` | `PUT /groups/announce` · `/groups/locked` |
+| Join approval / member-add mode | `group_join_approval_mode` · `group_member_add_mode` | `PUT /groups/join-approval` · `/groups/member-add-mode` |
+| Pending join requests | `group_join_requests` / `handle_group_join_requests` | `GET`/`POST /groups/pending` |
+| Leave | `group_leave(jid)` | `POST /groups/leave` |
+
+### JID modeling (important)
+
+- **Group `Contact#identifier`** = full `"<id>@g.us"` — this is the JID the
+  group-management controllers pass to the provider, and what the send
+  path routes on.
+- **Group `ContactInbox#source_id`** = the **bare id** (digits only) — the
+  WhatsApp `source_id` validation regex rejects `@g.us`.
+- `jid_param` is server-aware: phone JIDs normalize to digits on
+  `s.whatsapp.net`; group JIDs keep their id verbatim on `g.us`.
+
+### Error handling
+
+Group failures raise the provider's `ProviderUnavailableError`, which
+includes the shared `Whatsapp::Providers::GroupOperationError` marker
+module (baileys' errors include it too). The group controllers rescue the
+marker, so a provider hiccup surfaces as a friendly 422 regardless of
+which provider backs the inbox.
+
+### Files
+
+| File | Role |
+| :--- | :--- |
+| `app/services/whatsapp/providers/whatsapp_propriacloud_service.rb` | `/groups/*` interface + `sync_group` + `groups_enabled?` / `allow_group_creation?` |
+| `app/services/whatsapp/propriacloud_handlers/group_message.rb` | Inbound `@g.us` message ingestion (reuses `GroupConversationHandler`) |
+| `app/services/whatsapp/propriacloud_handlers/group_update.rb` | `group.joined` / `group.info_changed` → reconcile via `SyncGroupJob` |
+| `app/services/whatsapp/providers/group_operation_error.rb` | Shared error marker for provider-agnostic 422s |
+| `app/services/whatsapp/send_on_whatsapp_service.rb` | Group-aware `recipient_id` (route by identifier) |
+| `app/controllers/dashboard_controller.rb` | `BAILEYS_WHATSAPP_GROUPS_ENABLED` flag OR-s in propriacloud |

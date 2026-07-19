@@ -79,7 +79,12 @@ class DashboardController < ActionController::Base
       WHATSAPP_APP_ID: GlobalConfigService.load('WHATSAPP_APP_ID', ''),
       WHATSAPP_CONFIGURATION_ID: GlobalConfigService.load('WHATSAPP_CONFIGURATION_ID', ''),
       IS_ENTERPRISE: ChatwootApp.enterprise?,
-      BAILEYS_WHATSAPP_GROUPS_ENABLED: Whatsapp::Providers::WhatsappBaileysService.groups_enabled?,
+      # Drives the provider-agnostic group UI (MessagesView/ReplyBox/
+      # ConversationItem/ComposeConversation). Enabled when EITHER the baileys
+      # or the propriacloud provider has group support switched on, so a
+      # propriacloud-only install lights up the same group experience.
+      BAILEYS_WHATSAPP_GROUPS_ENABLED: Whatsapp::Providers::WhatsappBaileysService.groups_enabled? ||
+        Whatsapp::Providers::WhatsappPropriacloudService.groups_enabled?,
       AZURE_APP_ID: GlobalConfigService.load('AZURE_APP_ID', ''),
       GIT_SHA: GIT_HASH,
       ALLOWED_LOGIN_METHODS: allowed_login_methods,

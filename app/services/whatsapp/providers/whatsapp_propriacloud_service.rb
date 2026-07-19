@@ -30,7 +30,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   include BaileysHelper
 
   class MessageContentTypeNotSupported < StandardError; end
-  class ProviderUnavailableError < StandardError; end
+  class ProviderUnavailableError < StandardError; include Whatsapp::Providers::GroupOperationError; end
 
   # Resolution order (highest priority first):
   #   1. per-channel `provider_config['provider_url' / 'api_key']` overrides
@@ -61,6 +61,18 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       'PROPRIACLOUD_WEBHOOK_BASE_URL',
       %w[WHATSAPP_WEBHOOK_BASE_URL FRONTEND_URL]
     ) || 'http://localhost:3000'
+  end
+
+  # Group support is gated behind a flag, mirroring the baileys provider's
+  # BAILEYS_WHATSAPP_GROUPS_ENABLED switch. When on: (1) inbound @g.us
+  # messages are ingested as group conversations, (2) the provider exposes
+  # the base_service group interface (create/participants/metadata/invite/
+  # settings), and (3) `allow_group_creation?` is true so the dashboard shows
+  # the group UI. The DB-config cascade (Super Admin → env) lets an operator
+  # flip it without a redeploy; the env fallback keeps parity with baileys.
+  def self.groups_enabled?
+    value = GlobalConfigService.load('PROPRIACLOUD_WHATSAPP_GROUPS_ENABLED', ENV.fetch('PROPRIACLOUD_WHATSAPP_GROUPS_ENABLED', 'false'))
+    ActiveModel::Type::Boolean.new.cast(value) || false
   end
 
   # Resolve `canonical_key` from DB first; if blank, walk env (canonical
@@ -116,6 +128,8 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     user.push_name_changed
     user.picture_changed
     user.business_name_changed
+    group.joined
+    group.info_changed
     appstate.mark_chat_as_read
     appstate.archive
     appstate.delete_chat
@@ -1049,7 +1063,298 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     whatsapp_channel.update!(provider_config: config)
   end
 
+  # ============================ WhatsApp Groups ============================
+  # Implements the base_service group interface (delegated from
+  # Channel::Whatsapp, consumed by the provider-agnostic Groups::CreateService
+  # and Api::V1::Accounts::Contacts::Group* controllers) on the whatsapp-api
+  # /groups/* surface. Gated by groups_enabled?; the inbound @g.us ingestion
+  # path shares the same gate. Group JIDs arrive as "<id>@g.us" strings (the
+  # group Contact#identifier); participants as "<phone>@s.whatsapp.net" strings.
+  # jid_param converts either into the OpenAPI JIDParam { user, server } shape.
+
+  # Gate consumed by Channel::Whatsapp#allow_group_creation? (which the inbox
+  # serializer exposes as `allow_group_creation`) and Groups::CreateService.
+  def allow_group_creation?
+    self.class.groups_enabled?
+  end
+
+  # GET /groups — joined groups (paginated). Returns the raw array of
+  # GroupInfoResponse rows (deep-symbolized) or [].
+  def list_groups(page: 1, page_size: 100)
+    paged_get('/groups', page: page, page_size: page_size)
+  end
+
+  # GET /groups/info?jid= — full GroupInfoResponse for one group.
+  def group_info(group_jid)
+    response = HTTParty.get(
+      "#{provider_url}/groups/info#{instance_query}&jid=#{CGI.escape(group_jid.to_s)}",
+      headers: api_headers
+    )
+    raise ProviderUnavailableError, "Failed to fetch group info: HTTP #{response.code}" unless process_response(response)
+
+    unwrap(response.parsed_response)
+  end
+
+  # POST /groups/create — Groups::CreateService reads `:id` off the return,
+  # so we surface the created group's JID string there.
+  def create_group(subject, participants)
+    response = HTTParty.post(
+      "#{provider_url}/groups/create#{instance_query}",
+      headers: api_headers,
+      body: { name: subject, participants: Array(participants).map { |p| jid_param(p) } }.to_json
+    )
+    raise ProviderUnavailableError, "Failed to create group: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
+
+    body = unwrap(response.parsed_response)
+    { id: jid_to_s(body['jid']), subject: body['name'], participants: body['participants'] }.compact.deep_symbolize_keys
+  end
+
+  def update_group_subject(group_jid, subject)
+    put_group('/groups/name', group_jid, name: subject)
+  end
+
+  def update_group_description(group_jid, description)
+    put_group('/groups/description', group_jid, description: description)
+  end
+
+  def update_group_picture(group_jid, image_base64)
+    put_group('/groups/photo', group_jid, photo: image_base64)
+  end
+
+  # POST /groups/participants — action ∈ add|remove|promote|demote.
+  def update_group_participants(group_jid, participants, action)
+    response = HTTParty.post(
+      "#{provider_url}/groups/participants#{instance_query}",
+      headers: api_headers,
+      body: {
+        group_jid: jid_param(group_jid),
+        participants: Array(participants).map { |p| jid_param(p) },
+        action: action
+      }.to_json
+    )
+    raise ProviderUnavailableError, "Failed to #{action} participants: HTTP #{response.code}" unless process_response(response)
+
+    true
+  end
+
+  # GET /groups/invite-link — returns the BARE invite code (the controllers
+  # wrap it into https://chat.whatsapp.com/<code>). `reset: true` rotates it.
+  def group_invite_code(group_jid, reset: false)
+    response = HTTParty.get(
+      "#{provider_url}/groups/invite-link#{instance_query}&jid=#{CGI.escape(group_jid.to_s)}&reset=#{reset}",
+      headers: api_headers
+    )
+    raise ProviderUnavailableError, "Failed to fetch invite link: HTTP #{response.code}" unless process_response(response)
+
+    invite_code_from(unwrap(response.parsed_response))
+  end
+
+  def revoke_group_invite(group_jid)
+    group_invite_code(group_jid, reset: true)
+  end
+
+  # GET /groups/pending — users awaiting admin approval. 403 (not an admin)
+  # degrades to an empty list so the panel renders without erroring.
+  def group_join_requests(group_jid)
+    response = HTTParty.get(
+      "#{provider_url}/groups/pending#{instance_query}&jid=#{CGI.escape(group_jid.to_s)}",
+      headers: api_headers
+    )
+    return [] if response.code == 403
+
+    raise ProviderUnavailableError, "Failed to fetch join requests: HTTP #{response.code}" unless process_response(response)
+
+    body = unwrap(response.parsed_response)
+    Array(body['pending']).map { |req| { 'jid' => jid_to_s(req['jid']), 'requested_at' => req['requested_at'] } }
+  end
+
+  # POST /groups/pending — approve|reject pending requests.
+  def handle_group_join_requests(group_jid, participants, action)
+    response = HTTParty.post(
+      "#{provider_url}/groups/pending#{instance_query}",
+      headers: api_headers,
+      body: {
+        group_jid: jid_param(group_jid),
+        participants: Array(participants).map { |p| jid_param(p) },
+        action: action
+      }.to_json
+    )
+    raise ProviderUnavailableError, "Failed to #{action} join requests: HTTP #{response.code}" unless process_response(response)
+
+    true
+  end
+
+  # POST /groups/leave.
+  def group_leave(group_jid)
+    response = HTTParty.post(
+      "#{provider_url}/groups/leave#{instance_query}",
+      headers: api_headers,
+      body: { group_jid: jid_param(group_jid) }.to_json
+    )
+    raise ProviderUnavailableError, "Failed to leave group: HTTP #{response.code}" unless process_response(response)
+
+    true
+  end
+
+  # PUT /groups/announce | /groups/locked — property ∈ announce|restrict
+  # (Chatwoot's vocabulary). `restrict` maps to the API's `locked` flag.
+  def group_setting_update(group_jid, property, enabled)
+    case property.to_s
+    when 'announce'
+      put_group('/groups/announce', group_jid, announce: enabled)
+    when 'restrict'
+      put_group('/groups/locked', group_jid, locked: enabled)
+    else
+      raise ProviderUnavailableError, "Unknown group setting: #{property}"
+    end
+  end
+
+  # PUT /groups/join-approval — mode 'on'|'off'.
+  def group_join_approval_mode(group_jid, mode)
+    put_group('/groups/join-approval', group_jid, enabled: mode.to_s == 'on')
+  end
+
+  # PUT /groups/member-add-mode — mode 'all_member_add'|'admin_add'.
+  def group_member_add_mode(group_jid, mode)
+    put_group('/groups/member-add-mode', group_jid, admins_only: mode.to_s == 'admin_add')
+  end
+
+  # Reconcile a Chatwoot group Contact/Conversation with whatsapp-api truth:
+  # name, settings, membership (roles), and — unless `soft` — invite code,
+  # pending join requests and avatar. Called by Contacts::SyncGroupService
+  # (Channel::Whatsapp#sync_group delegates here) on group.info_changed /
+  # group.joined webhook events and from the on-demand contact sync action.
+  def sync_group(conversation, soft: false)
+    group_contact = conversation.contact
+    return true if group_contact.additional_attributes&.dig('group_left')
+
+    metadata = group_info(group_contact.identifier)
+    raise ProviderUnavailableError, 'Could not fetch group metadata' if metadata.blank?
+
+    apply_group_metadata_to_contact!(group_contact, metadata)
+    reconcile_group_members!(group_contact, conversation.inbox, Array(metadata['participants']))
+
+    unless soft
+      persist_group_invite_code!(group_contact)
+      persist_group_join_requests!(group_contact)
+      enqueue_group_avatar_sync(group_contact, metadata)
+    end
+
+    stamp_group_synced!(group_contact)
+    true
+  end
+
   private
+
+  # ------------------------- group helpers (private) -------------------------
+
+  # Shared PUT for the single-field group setting endpoints (name,
+  # description, photo, announce, locked, join-approval, member-add-mode).
+  def put_group(path, group_jid, extra)
+    response = HTTParty.put(
+      "#{provider_url}#{path}#{instance_query}",
+      headers: api_headers,
+      body: { group_jid: jid_param(group_jid) }.merge(extra).to_json
+    )
+    raise ProviderUnavailableError, "Failed #{path}: HTTP #{response.code} — #{response.body.to_s[0..240]}" unless process_response(response)
+
+    true
+  end
+
+  # Flatten a JIDParam { user, server } (or already-string jid) to the
+  # "<user>@<server>" string form Chatwoot stores as Contact#identifier.
+  def jid_to_s(jid)
+    return jid.to_s unless jid.is_a?(Hash)
+
+    user = jid['user'] || jid[:user]
+    server = jid['server'] || jid[:server] || 's.whatsapp.net'
+    "#{user}@#{server}"
+  end
+
+  # /groups/invite-link returns { invite_link: "https://chat.whatsapp.com/<code>" };
+  # the group controllers want the bare code so they can render their own URL.
+  def invite_code_from(body)
+    link = body['invite_link'] || body['inviteLink'] || body['link'] || body['code']
+    link.to_s.sub(%r{\Ahttps?://chat\.whatsapp\.com/}, '')
+  end
+
+  def apply_group_metadata_to_contact!(group_contact, metadata)
+    attrs = (group_contact.additional_attributes || {}).dup
+    attrs['description'] = metadata['topic'] if metadata.key?('topic')
+    attrs['announce'] = metadata['is_announce'] if metadata.key?('is_announce')
+    attrs['restrict'] = metadata['is_locked'] if metadata.key?('is_locked')
+    attrs['owner'] = jid_to_s(metadata['owner_jid']) if metadata['owner_jid'].present?
+    attrs['group_created_at'] = metadata['created_at'] if metadata['created_at'].present?
+
+    updates = { additional_attributes: attrs }
+    name = metadata['name']
+    updates[:name] = name if name.present? && group_contact.name != name
+    group_contact.update!(updates)
+  end
+
+  # Upsert a GroupMember row per participant (admin/member role) and
+  # deactivate any member no longer in the group. Participant contacts are
+  # keyed on phone digits — the same source_id 1:1 propriacloud contacts use —
+  # so a person appears as a single contact whether messaging 1:1 or in a group.
+  def reconcile_group_members!(group_contact, inbox, participants)
+    seen_contact_ids = []
+
+    participants.each do |participant|
+      jid = jid_to_s(participant['jid'])
+      phone = jid.split('@').first.to_s.gsub(/\D/, '')
+      next if phone.blank?
+
+      contact = ::ContactInboxWithContactBuilder.new(
+        source_id: phone,
+        inbox: inbox,
+        contact_attributes: {
+          name: participant['display_name'].presence || phone,
+          phone_number: "+#{phone}"
+        }
+      ).perform.contact
+
+      role = participant['is_admin'] || participant['is_super_admin'] ? :admin : :member
+      member = GroupMember.find_or_initialize_by(group_contact: group_contact, contact: contact)
+      member.update!(role: role, is_active: true) if member.new_record? || !member.is_active? || member.role != role.to_s
+      seen_contact_ids << contact.id
+    end
+
+    group_contact.group_memberships.active.where.not(contact_id: seen_contact_ids).find_each do |member|
+      member.update!(is_active: false)
+    end
+  end
+
+  def persist_group_invite_code!(group_contact)
+    code = group_invite_code(group_contact.identifier)
+    return if code.blank?
+
+    attrs = (group_contact.additional_attributes || {}).merge('invite_code' => code)
+    group_contact.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: group invite sync skipped (#{e.class}: #{e.message[0..120]})"
+  end
+
+  def persist_group_join_requests!(group_contact)
+    requests = group_join_requests(group_contact.identifier)
+    attrs = (group_contact.additional_attributes || {}).merge('pending_join_requests' => requests)
+    group_contact.update!(additional_attributes: attrs)
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: group join-requests sync skipped (#{e.class}: #{e.message[0..120]})"
+  end
+
+  def enqueue_group_avatar_sync(group_contact, _metadata)
+    return if group_contact.avatar.attached?
+
+    url = get_profile_pic(group_contact.identifier)
+    ::Avatar::AvatarFromUrlJob.perform_later(group_contact, url) if url.present?
+  rescue StandardError => e
+    Rails.logger.warn "Propriacloud: group avatar sync skipped (#{e.class}: #{e.message[0..120]})"
+  end
+
+  def stamp_group_synced!(group_contact)
+    attrs = (group_contact.additional_attributes || {}).merge('group_last_synced_at' => Time.current.to_i)
+    group_contact.update!(additional_attributes: attrs)
+  end
 
   # True when this channel was provisioned as a Meta WhatsApp Business
   # API instance (Propria Cloud routing on behalf of the tech provider)
@@ -1080,7 +1385,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   #   { data: [...] } or [...]
   # paged_get walks through every plausible shape and returns the
   # array of records (deep-symbolized) or [] when nothing applies.
-  RESOURCE_KEYS = %w[contacts conversations messages labels push_names call_logs items results data].freeze
+  RESOURCE_KEYS = %w[contacts conversations messages labels push_names call_logs groups items results data].freeze
 
   def paged_get(path, page: 1, page_size: 200, extra: {}, scope: :instance)
     qs = { page: page, page_size: page_size }
@@ -1161,10 +1466,19 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
   # JIDParam structured form { user, server } as the OpenAPI components expect.
   # Some endpoints accept the string variant in examples; the structured form
   # works everywhere and matches the schema strictly.
+  #
+  # Server-aware: phone JIDs (s.whatsapp.net) are normalized to digits, but
+  # group JIDs (g.us) and newsletter JIDs keep their user part verbatim — the
+  # OpenAPI `JIDParam` spec states group/newsletter ids are NOT normalized,
+  # and stripping non-digits would corrupt legacy `<creator>-<ts>@g.us` ids.
+  # The device suffix (`<phone>:<device>`) is always dropped.
   def jid_param(phone_or_jid)
-    digits = phone_or_jid.to_s.split('@').first.to_s.delete('+').gsub(/\D/, '')
-    server = phone_or_jid.to_s.split('@')[1].presence || 's.whatsapp.net'
-    { user: digits, server: server }
+    raw_user, raw_server = phone_or_jid.to_s.split('@')
+    server = raw_server.presence || 's.whatsapp.net'
+    # Drop the device suffix (`<phone>:<device>`) before normalizing.
+    base_user = raw_user.to_s.split(':').first
+    user = server == 's.whatsapp.net' ? base_user.to_s.delete('+').gsub(/\D/, '') : base_user
+    { user: user, server: server }
   end
 
   def register_webhook!
@@ -1282,7 +1596,10 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/messages/send#{instance_query}",
       headers: api_headers,
       body: {
-        to: { user: normalized_to_user, server: 's.whatsapp.net' },
+        # jid_param routes 1:1 chats to s.whatsapp.net and group chats
+        # (recipient == "<id>@g.us") to g.us, so agents can reply inside
+        # group threads with the same send path.
+        to: jid_param(@phone_number),
         message: { conversation: @message.content },
         context_info: ({ stanza_id: quoted_id } if quoted_id)
       }.compact.to_json
@@ -1312,7 +1629,7 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
       "#{provider_url}/messages/send-media#{instance_query}",
       headers: api_headers,
       body: {
-        to: { user: normalized_to_user, server: 's.whatsapp.net' },
+        to: jid_param(@phone_number),
         media: media_payload
       }.to_json
     )
@@ -1378,10 +1695,6 @@ class Whatsapp::Providers::WhatsappPropriacloudService < Whatsapp::Providers::Ba
     # only `message_id`. The `reaction_id` fallback was dead code from
     # an earlier API draft; dropped for clarity.
     unwrap(response.parsed_response)['message_id']
-  end
-
-  def normalized_to_user
-    @phone_number.to_s.delete('+')
   end
 
   def quoted_message_source_id
